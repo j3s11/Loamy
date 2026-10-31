@@ -1,0 +1,6 @@
+{
+  "name": "Garden & Weather Sentinel",
+  "description": "Horticultural weather sentinel and microclimate advisor featuring UK Met Office warnings, 7-day forecast, soil saturation trend logs, 32-plant botanical master guide, and seasonal task checklists.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
