@@ -244,6 +244,7 @@ export default function SoilSaturationD3Chart({ logs = [], locationName = '' }) 
       return '#047857';
     };
 
+    // Visible nodes
     g.selectAll('.saturation-node')
       .data(series)
       .join('circle')
@@ -254,8 +255,22 @@ export default function SoilSaturationD3Chart({ logs = [], locationName = '' }) 
       .attr('fill', pointColor)
       .attr('stroke', '#FFFFFF')
       .attr('stroke-width', 2)
+      .style('pointer-events', 'none');
+
+    // Larger 28px diameter transparent touch/click targets for mobile thumb accuracy
+    g.selectAll('.saturation-touch-target')
+      .data(series)
+      .join('circle')
+      .attr('class', 'saturation-touch-target')
+      .attr('cx', (d) => xScale(d.date))
+      .attr('cy', (d) => yScale(d.soilSaturationPct))
+      .attr('r', 14)
+      .attr('fill', 'transparent')
       .style('cursor', 'pointer')
       .on('mouseenter', (_event, d) => {
+        setSelectedPoint(d);
+      })
+      .on('touchstart', (_event, d) => {
         setSelectedPoint(d);
       })
       .on('click', (_event, d) => {

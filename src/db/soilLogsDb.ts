@@ -563,7 +563,12 @@ interface PersistedSoilDbState {
 
 const DB_FILE_PATH = path.resolve(os.tmpdir(), 'garden_soil_rainfall_logs_v5.json');
 
+let cachedPersistedState: PersistedSoilDbState | null = null;
+
 function loadPersistedState(): PersistedSoilDbState {
+  if (cachedPersistedState) {
+    return cachedPersistedState;
+  }
   try {
     const dir = path.dirname(DB_FILE_PATH);
     if (!fs.existsSync(dir)) {
@@ -576,24 +581,28 @@ function loadPersistedState(): PersistedSoilDbState {
         deletedIds: []
       };
       fs.writeFileSync(DB_FILE_PATH, JSON.stringify(initial, null, 2), 'utf8');
+      cachedPersistedState = initial;
       return initial;
     }
     const raw = JSON.parse(fs.readFileSync(DB_FILE_PATH, 'utf8'));
-    return {
+    cachedPersistedState = {
       schema: SOIL_RAINFALL_SCHEMA_SQL,
       customLogs: Array.isArray(raw?.customLogs) ? raw.customLogs : [],
       deletedIds: Array.isArray(raw?.deletedIds) ? raw.deletedIds : []
     };
+    return cachedPersistedState;
   } catch {
-    return {
+    cachedPersistedState = {
       schema: SOIL_RAINFALL_SCHEMA_SQL,
       customLogs: [],
       deletedIds: []
     };
+    return cachedPersistedState;
   }
 }
 
 function savePersistedState(state: PersistedSoilDbState): void {
+  cachedPersistedState = state;
   try {
     const dir = path.dirname(DB_FILE_PATH);
     if (!fs.existsSync(dir)) {

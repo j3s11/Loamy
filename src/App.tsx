@@ -6,8 +6,9 @@
  * and the 5-Section Master Horticulturist Guide.
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense, lazy } from 'react';
 import { PixelSunflowerLogo } from './components/PixelSunflowerLogo';
+import { PWAInstallButton, OfflineIndicator } from './components/PWAInstallButton';
 import {
   Wind,
   Thermometer,
@@ -27,12 +28,9 @@ import {
   RotateCcw,
   Search,
   X,
-  Sun,
   Compass,
-  ClipboardCheck,
   TrendingUp,
   BookOpen,
-  Sparkles,
   SlidersHorizontal,
   ChevronRight
 } from 'lucide-react';
@@ -40,13 +38,14 @@ import {
   useGardenAdvisor,
   ADVISOR_CONFIG,
   resolveGardenLocationProfile,
+  getGardenLocationSuggestions,
+  convertGeocodeResultToSuggestion,
   saveGardenProfileToStorage,
   loadSavedGardenProfileFromStorage,
   GARDEN_PROFILE_STORAGE_KEY
 } from './gardenAdvisorService';
-import SoilSaturationLogPanel from './components/SoilSaturationLogPanel';
-import MonthlyClayChecklistPanel from './components/MonthlyClayChecklistPanel';
-import HadstonMasterGuidePanel from './components/HadstonMasterGuidePanel';
+import SevenDayRainfallRecharts from './components/SevenDayRainfallRecharts';
+import PlantThumbnailWithModal from './components/PlantThumbnailWithModal';
 import {
   searchRhsPlantCatalog,
   CatalogPlantItem,
@@ -56,6 +55,22 @@ import {
 } from './utils/rhsPlantCatalog';
 import { HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR } from './utils/hadstonMasterGuide';
 import { getCurrentUkMonthIndex } from './utils/monthlyClayChecklist';
+
+// Lazy-load secondary workspace panels to reduce initial mobile JS parse time
+const SoilSaturationLogPanel = lazy(() => import('./components/SoilSaturationLogPanel'));
+const MonthlyClayChecklistPanel = lazy(() => import('./components/MonthlyClayChecklistPanel'));
+const HadstonMasterGuidePanel = lazy(() => import('./components/HadstonMasterGuidePanel'));
+
+// Pre-index the 32 master plants once at module load for O(1) lookup per card render
+const HADSTON_BY_REF_MAP = new Map<number, RhsCatalogPlant>();
+const HADSTON_BY_LOWER_NAME_MAP = new Map<string, RhsCatalogPlant>();
+for (const masterPlant of HADSTON_GARDEN_COLLECTION_32) {
+  if (typeof masterPlant.photoRef === 'number') {
+    HADSTON_BY_REF_MAP.set(masterPlant.photoRef, masterPlant);
+  }
+  HADSTON_BY_LOWER_NAME_MAP.set(masterPlant.name.toLowerCase(), masterPlant);
+  HADSTON_BY_LOWER_NAME_MAP.set(masterPlant.commonName.toLowerCase(), masterPlant);
+}
 
 // ============================================================================
 // 1. TYPES & UI CONFIGURATION
@@ -322,9 +337,69 @@ export default function App() {
     initialSavedProfile.locationName || ''
   );
 
+  // Partial location search autocomplete suggestions state
+  const [isLocationSuggestionsOpen, setIsLocationSuggestionsOpen] = useState<boolean>(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState<number>(-1);
+  const [remoteLocationSuggestions, setRemoteLocationSuggestions] = useState<any[]>([]);
+
   // Clean progressive disclosure for location settings on mobile/desktop
   const [showLocationEditor, setShowLocationEditor] = useState<boolean>(false);
   const [locationValidationNotice, setLocationValidationNotice] = useState<string>('');
+
+  // Combine instant local UK directory matches with optional live geocoded UK matches
+  const locationSuggestions = useMemo(() => {
+    const query = locationInputText.trim();
+    if (!query) return [];
+    const localMatches = getGardenLocationSuggestions(query, 8);
+    if (remoteLocationSuggestions.length === 0) {
+      return localMatches;
+    }
+    const seenNames = new Set(localMatches.map((m: any) => m.locationName.toLowerCase()));
+    const seenTowns = new Set(localMatches.map((m: any) => (m.town || '').toLowerCase()));
+    const merged = [...localMatches];
+    for (const remoteItem of remoteLocationSuggestions) {
+      const rName = (remoteItem.locationName || '').toLowerCase();
+      const rTown = (remoteItem.town || '').toLowerCase();
+      if (!seenNames.has(rName) && !seenTowns.has(rTown)) {
+        seenNames.add(rName);
+        merged.push(remoteItem);
+      }
+      if (merged.length >= 8) break;
+    }
+    return merged;
+  }, [locationInputText, remoteLocationSuggestions]);
+
+  // Fetch live UK geocoding suggestions for partial queries (2+ chars) to augment local directory
+  useEffect(() => {
+    const query = locationInputText.trim();
+    if (!isLocationSuggestionsOpen || query.length < 2) {
+      setRemoteLocationSuggestions([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+          query
+        )}&count=6&language=en&format=json&countryCode=GB`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) return;
+        const data = await res.json();
+        const converted = (data?.results || [])
+          .map((item: any) => convertGeocodeResultToSuggestion(item))
+          .filter(Boolean);
+        setRemoteLocationSuggestions(converted);
+      } catch {
+        // Ignore abort or offline errors; local UK directory suggestions remain available
+      }
+    }, 200);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [locationInputText, isLocationSuggestionsOpen]);
 
   // Inventory search & care modal state
   const [inventoryFilterText, setInventoryFilterText] = useState<string>('');
@@ -360,6 +435,11 @@ export default function App() {
     [catalogSearchQuery, catalogCategory]
   );
 
+  const activeInventoryNameSet = useMemo(
+    () => new Set(plantInventory.map((p: PlantRecord) => p.name.toLowerCase())),
+    [plantInventory]
+  );
+
   const filteredPlotInventory = useMemo(() => {
     const q = inventoryFilterText.trim().toLowerCase();
     if (!q) return plantInventory;
@@ -370,6 +450,16 @@ export default function App() {
         p.rhsRating.toLowerCase().includes(q)
     );
   }, [plantInventory, inventoryFilterText]);
+
+  // Close Plant Care modal on Escape key
+  useEffect(() => {
+    if (!activeCareModalPlant) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setActiveCareModalPlant(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeCareModalPlant]);
 
   // Current month & week focus from the Hadston Master Guide
   const currentUkMonthIdx = useMemo(() => getCurrentUkMonthIndex(new Date()), []);
@@ -426,8 +516,59 @@ export default function App() {
     saveGardenProfileToStorage(resolved);
     setLocationValidationNotice('');
     setLocationInputText(resolved.locationName);
+    setIsLocationSuggestionsOpen(false);
+    setActiveSuggestionIndex(-1);
     setGardenProfile(resolved);
+    setShowLocationEditor(false);
     runGardenAnalysis(false, resolved);
+  };
+
+  // Partial location suggestion selection handler
+  const handleSelectLocationSuggestion = (suggestion: any) => {
+    const resolved = resolveGardenLocationProfile(suggestion, gardenProfile) as GardenProfile | null;
+    if (!resolved) return;
+
+    hasAutoAnalyzedOnMountRef.current = true;
+    saveGardenProfileToStorage(resolved);
+    setLocationValidationNotice('');
+    setLocationInputText(resolved.locationName);
+    setIsLocationSuggestionsOpen(false);
+    setActiveSuggestionIndex(-1);
+    setGardenProfile(resolved);
+    setShowLocationEditor(false);
+    runGardenAnalysis(false, resolved);
+  };
+
+  // Keyboard navigation for partial location suggestions dropdown
+  const handleLocationInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isLocationSuggestionsOpen || locationSuggestions.length === 0) {
+      if (e.key === 'ArrowDown' && locationInputText.trim().length > 0) {
+        setIsLocationSuggestionsOpen(true);
+        setActiveSuggestionIndex(0);
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveSuggestionIndex((prev) =>
+        prev < locationSuggestions.length - 1 ? prev + 1 : 0
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveSuggestionIndex((prev) =>
+        prev > 0 ? prev - 1 : locationSuggestions.length - 1
+      );
+    } else if (e.key === 'Enter' && activeSuggestionIndex >= 0) {
+      const chosen = locationSuggestions[activeSuggestionIndex];
+      if (chosen) {
+        e.preventDefault();
+        handleSelectLocationSuggestion(chosen);
+      }
+    } else if (e.key === 'Escape') {
+      setIsLocationSuggestionsOpen(false);
+      setActiveSuggestionIndex(-1);
+    }
   };
 
   // Custom location text input submit handler
@@ -439,14 +580,22 @@ export default function App() {
       return;
     }
 
-    const updatedProfile = resolveGardenLocationProfile(trimmed, gardenProfile) as GardenProfile | null;
+    const chosenSuggestion =
+      activeSuggestionIndex >= 0 && locationSuggestions[activeSuggestionIndex]
+        ? locationSuggestions[activeSuggestionIndex]
+        : trimmed;
+
+    const updatedProfile = resolveGardenLocationProfile(chosenSuggestion, gardenProfile) as GardenProfile | null;
     if (!updatedProfile) return;
 
     hasAutoAnalyzedOnMountRef.current = true;
     saveGardenProfileToStorage(updatedProfile);
     setLocationValidationNotice('');
     setLocationInputText(updatedProfile.locationName);
+    setIsLocationSuggestionsOpen(false);
+    setActiveSuggestionIndex(-1);
     setGardenProfile(updatedProfile);
+    setShowLocationEditor(false);
     runGardenAnalysis(false, updatedProfile);
   };
 
@@ -547,24 +696,24 @@ export default function App() {
     }
   };
 
-  const handleQuickAddCatalogPlant = (catalogPlant: CatalogPlantItem) => {
-    const alreadyExists = plantInventory.some(
-      (p: PlantRecord) => p.name.toLowerCase() === catalogPlant.name.toLowerCase()
-    );
-    if (alreadyExists) return;
+  const handleQuickAddCatalogPlant = useCallback(
+    (catalogPlant: CatalogPlantItem) => {
+      if (activeInventoryNameSet.has(catalogPlant.name.toLowerCase())) return;
 
-    const newPlant: PlantRecord = {
-      id: catalogPlant.photoRef
-        ? `hadston-plt-${String(catalogPlant.photoRef).padStart(2, '0')}`
-        : `plt-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-      name: catalogPlant.name,
-      rhsRating: catalogPlant.rhsRating,
-      location: catalogPlant.recommendedLocation,
-      growthStage: catalogPlant.defaultOctGrowthStage,
-      vulnerabilities: [...catalogPlant.vulnerabilities]
-    };
-    setPlantInventory((prev: PlantRecord[]) => [newPlant, ...prev]);
-  };
+      const newPlant: PlantRecord = {
+        id: catalogPlant.photoRef
+          ? `hadston-plt-${String(catalogPlant.photoRef).padStart(2, '0')}`
+          : `plt-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        name: catalogPlant.name,
+        rhsRating: catalogPlant.rhsRating,
+        location: catalogPlant.recommendedLocation,
+        growthStage: catalogPlant.defaultOctGrowthStage,
+        vulnerabilities: [...catalogPlant.vulnerabilities]
+      };
+      setPlantInventory((prev: PlantRecord[]) => [newPlant, ...prev]);
+    },
+    [activeInventoryNameSet, setPlantInventory]
+  );
 
   const toggleTaskCompleted = (taskTitle: string) => {
     setCompletedTasks((prev) => ({
@@ -573,30 +722,31 @@ export default function App() {
     }));
   };
 
-  // Match an inventory plant to its rich Hadston Master Guide record if available
-  const findMatchingMasterPlant = (plant: PlantRecord): RhsCatalogPlant | null => {
+  // Match an inventory plant to its rich Hadston Master Guide record in O(1) via pre-indexed Maps
+  const findMatchingMasterPlant = useCallback((plant: PlantRecord): RhsCatalogPlant | null => {
     const refFromName = plant.name.match(/^#(\d+)\b/);
     if (refFromName) {
-      const refNum = Number(refFromName[1]);
-      const byRef = HADSTON_GARDEN_COLLECTION_32.find((c) => c.photoRef === refNum);
+      const byRef = HADSTON_BY_REF_MAP.get(Number(refFromName[1]));
       if (byRef) return byRef;
     }
 
     const refFromId = plant.id.match(/hadston-plt-0*(\d+)/i);
     if (refFromId) {
-      const refNum = Number(refFromId[1]);
-      const byIdRef = HADSTON_GARDEN_COLLECTION_32.find((c) => c.photoRef === refNum);
+      const byIdRef = HADSTON_BY_REF_MAP.get(Number(refFromId[1]));
       if (byIdRef) return byIdRef;
     }
 
-    const byName = HADSTON_GARDEN_COLLECTION_32.find(
+    const lowerName = plant.name.toLowerCase();
+    const directHit = HADSTON_BY_LOWER_NAME_MAP.get(lowerName);
+    if (directHit) return directHit;
+
+    const bySubstring = HADSTON_GARDEN_COLLECTION_32.find(
       (c) =>
-        c.name.toLowerCase() === plant.name.toLowerCase() ||
-        plant.name.toLowerCase().includes(c.name.toLowerCase()) ||
-        plant.name.toLowerCase().includes(c.commonName.toLowerCase())
+        lowerName.includes(c.name.toLowerCase()) ||
+        lowerName.includes(c.commonName.toLowerCase())
     );
-    return byName || null;
-  };
+    return bySubstring || null;
+  }, []);
 
   // Extract current conditions in UK units (°C, mph, mm)
   const hazardSummary = weatherData?.hazardSummary || {};
@@ -677,24 +827,24 @@ export default function App() {
     'Heavy clay to moisture-retentive garden loam (pH 6.0–6.8)';
 
   return (
-    <div className="min-h-screen bg-[#F6F5F0] text-slate-900 font-sans pb-24 sm:pb-16 overflow-x-hidden">
+    <div className="min-h-screen bg-[#F6F5F0] text-slate-900 font-sans safe-page-bottom overflow-x-hidden">
       {/* =====================================================================
-          CLEAN STICKY TOP HEADER WITH TABS DIRECTLY UNDER THE TITLE
+          CLEAN STICKY TOP HEADER WITH SAFE-AREA CLEARANCE & TOP TABS
       ===================================================================== */}
-      <header className="border-b border-stone-200/90 bg-white/95 backdrop-blur sticky top-0 z-30">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-3.5 pb-2.5 space-y-3">
+      <header className="border-b border-stone-200/90 bg-white sticky top-0 z-30 safe-top-header">
+        <div className="max-w-6xl mx-auto px-3.5 sm:px-6 lg:px-8 pt-2 sm:pt-3.5 pb-2.5 space-y-2.5">
           {/* Top Row: Title, Subtitle & Quick Actions */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-stone-900 border border-stone-700/80 flex items-center justify-center shrink-0 shadow-2xs">
-                  <PixelSunflowerLogo className="w-7 h-7" />
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-stone-900 border border-stone-700/80 flex items-center justify-center shrink-0 shadow-2xs">
+                  <PixelSunflowerLogo className="w-6 h-6 sm:w-7 sm:h-7" />
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2 flex-wrap">
                     <h1
                       data-testid="app-brand-title"
-                      className="text-lg sm:text-2xl font-extrabold tracking-tight text-slate-900 truncate"
+                      className="text-base sm:text-2xl font-extrabold tracking-tight text-slate-900 truncate"
                     >
                       Loamy
                     </h1>
@@ -702,64 +852,88 @@ export default function App() {
                       Garden &amp; Weather Companion
                     </span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-600">
-                    <span className="inline-flex items-center gap-1 font-semibold text-slate-800">
-                      <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                      <span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (hasConfiguredLocation) {
+                        setShowLocationEditor((prev) => !prev);
+                      }
+                    }}
+                    className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] sm:text-xs text-slate-600 text-left hover:text-slate-900 transition cursor-pointer"
+                    title="Tap to change garden location or direction"
+                  >
+                    <span className="inline-flex items-center gap-1 font-semibold text-slate-800 truncate max-w-[135px] sm:max-w-none">
+                      <MapPin className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-700 shrink-0" />
+                      <span className="truncate">
                         {hasConfiguredLocation
                           ? gardenProfile.locationName
                           : 'Set your garden location below'}
                       </span>
                     </span>
-                    {hasConfiguredLocation && (
-                      <>
-                        <span aria-hidden="true">·</span>
-                        <span className="text-emerald-800 font-semibold">
-                          RHS {gardenProfile.rhsHardinessZone}
-                        </span>
-                      </>
-                    )}
-                    <span aria-hidden="true">·</span>
-                    <span className="text-amber-800 font-medium">
-                      {currentAspectShortName} Plot
+                    <span className="inline-flex items-center gap-1">
+                      {hasConfiguredLocation && (
+                        <>
+                          <span className="text-emerald-800 font-semibold">
+                            RHS {gardenProfile.rhsHardinessZone}
+                          </span>
+                          <span aria-hidden="true">·</span>
+                        </>
+                      )}
+                      <span className="text-amber-800 font-medium truncate">
+                        {currentAspectShortName}
+                      </span>
                     </span>
-                  </div>
+                  </button>
                 </div>
               </div>
             </div>
 
-            {hasConfiguredLocation && (
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowLocationEditor((prev) => !prev)}
-                  className="inline-flex items-center justify-center gap-1.5 min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-semibold bg-stone-100 hover:bg-stone-200 text-slate-800 border border-stone-300 transition cursor-pointer"
-                >
-                  <SlidersHorizontal className="w-3.5 h-3.5 text-slate-600" />
-                  <span>{showLocationEditor ? 'Hide Location' : 'Location & Direction'}</span>
-                </button>
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <PWAInstallButton />
+              {hasConfiguredLocation && (
+                <>
+                  <button
+                    type="button"
+                    data-testid="toggle-location-editor-button"
+                    onClick={() => setShowLocationEditor((prev) => !prev)}
+                    className={`inline-flex items-center justify-center gap-1.5 min-h-[36px] sm:min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                      showLocationEditor
+                        ? 'bg-emerald-50 border-emerald-600 text-emerald-900'
+                        : 'bg-stone-100 hover:bg-stone-200 text-slate-800 border-stone-300'
+                    }`}
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                    <span className="sm:hidden">{showLocationEditor ? 'Done' : 'Location'}</span>
+                    <span className="hidden sm:inline">
+                      {showLocationEditor ? 'Hide Location' : 'Location & Direction'}
+                    </span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => exportGardenReportToCsv(plantInventory, advice, gardenProfile)}
-                  className="hidden sm:inline-flex items-center justify-center gap-1.5 min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-medium bg-white hover:bg-stone-50 text-slate-700 border border-stone-300 transition cursor-pointer"
-                  title="Export Inventory, Alerts & Tasks to CSV"
-                >
-                  <Download className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Export CSV</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => exportGardenReportToCsv(plantInventory, advice, gardenProfile)}
+                    className="hidden md:inline-flex items-center justify-center gap-1.5 min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-medium bg-white hover:bg-stone-50 text-slate-700 border border-stone-300 transition cursor-pointer"
+                    title="Export Inventory, Alerts & Tasks to CSV"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Export CSV</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => runGardenAnalysis(true)}
-                  disabled={isLoading}
-                  className="inline-flex items-center justify-center gap-1.5 min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-800 hover:bg-emerald-700 disabled:bg-emerald-800/60 text-white shadow-2xs transition cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isLoading ? 'animate-spin' : ''}`} />
-                  <span>{isLoading ? 'Refreshing...' : 'Refresh Weather'}</span>
-                </button>
-              </div>
-            )}
+                  <button
+                    type="button"
+                    onClick={() => runGardenAnalysis(true)}
+                    disabled={isLoading}
+                    className="inline-flex items-center justify-center gap-1.5 min-h-[36px] sm:min-h-[38px] px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-800 hover:bg-emerald-700 disabled:bg-emerald-800/60 text-white shadow-2xs transition cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isLoading ? 'animate-spin' : ''}`} />
+                    <span className="sm:hidden">{isLoading ? '...' : 'Refresh'}</span>
+                    <span className="hidden sm:inline">
+                      {isLoading ? 'Refreshing...' : 'Refresh Weather'}
+                    </span>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Primary Top Navigation Tabs Directly Under the Title */}
@@ -768,20 +942,20 @@ export default function App() {
               id="workspace-tabs-anchor"
               data-testid="workspace-tabs"
               aria-label="Garden dashboard sections"
-              className="pt-1 border-t border-stone-100"
+              className="pt-1.5 border-t border-stone-100"
             >
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 w-full">
                 <button
                   type="button"
                   data-testid="tab-overview"
                   onClick={() => setActiveWorkspaceTab('OVERVIEW')}
-                  className={`inline-flex items-center justify-center gap-2 min-h-[40px] px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
+                  className={`inline-flex items-center justify-center gap-1.5 sm:gap-2 min-h-[38px] sm:min-h-[40px] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
                     activeWorkspaceTab === 'OVERVIEW' || activeWorkspaceTab === 'SOIL_TREND'
                       ? 'bg-emerald-800 text-white shadow-2xs'
                       : 'text-slate-700 bg-stone-50 hover:bg-stone-100 border border-stone-200/80'
                   }`}
                 >
-                  <Thermometer className="w-4 h-4 shrink-0" />
+                  <Thermometer className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                   <span className="truncate">Weather &amp; Soil</span>
                 </button>
 
@@ -789,13 +963,13 @@ export default function App() {
                   type="button"
                   data-testid="tab-master-guide"
                   onClick={() => setActiveWorkspaceTab('MASTER_GUIDE')}
-                  className={`inline-flex items-center justify-center gap-2 min-h-[40px] px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
+                  className={`inline-flex items-center justify-center gap-1.5 sm:gap-2 min-h-[38px] sm:min-h-[40px] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
                     activeWorkspaceTab === 'MASTER_GUIDE'
                       ? 'bg-emerald-800 text-white shadow-2xs'
                       : 'text-slate-700 bg-stone-50 hover:bg-stone-100 border border-stone-200/80'
                   }`}
                 >
-                  <BookOpen className="w-4 h-4 shrink-0" />
+                  <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                   <span className="truncate">Master Guide</span>
                 </button>
 
@@ -803,13 +977,13 @@ export default function App() {
                   type="button"
                   data-testid="tab-checklist"
                   onClick={() => setActiveWorkspaceTab('CHECKLIST')}
-                  className={`inline-flex items-center justify-center gap-2 min-h-[40px] px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
+                  className={`inline-flex items-center justify-center gap-1.5 sm:gap-2 min-h-[38px] sm:min-h-[40px] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
                     activeWorkspaceTab === 'CHECKLIST'
                       ? 'bg-emerald-800 text-white shadow-2xs'
                       : 'text-slate-700 bg-stone-50 hover:bg-stone-100 border border-stone-200/80'
                   }`}
                 >
-                  <Calendar className="w-4 h-4 shrink-0" />
+                  <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                   <span className="truncate">Calendar &amp; Checklist</span>
                 </button>
 
@@ -817,13 +991,13 @@ export default function App() {
                   type="button"
                   data-testid="tab-plants"
                   onClick={() => setActiveWorkspaceTab('PLANTS')}
-                  className={`inline-flex items-center justify-center gap-2 min-h-[40px] px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
+                  className={`inline-flex items-center justify-center gap-1.5 sm:gap-2 min-h-[38px] sm:min-h-[40px] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
                     activeWorkspaceTab === 'PLANTS'
                       ? 'bg-emerald-800 text-white shadow-2xs'
                       : 'text-slate-700 bg-stone-50 hover:bg-stone-100 border border-stone-200/80'
                   }`}
                 >
-                  <Sprout className="w-4 h-4 shrink-0" />
+                  <Sprout className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                   <span className="truncate">My Plants ({plantInventory.length})</span>
                 </button>
               </div>
@@ -835,7 +1009,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 space-y-6">
+      <main className="max-w-6xl mx-auto px-3.5 sm:px-6 lg:px-8 pt-4 sm:pt-5 space-y-4 sm:space-y-6">
         {!hasConfiguredLocation ? (
           /* ===================================================================
              FIRST-USE LOCATION SETUP PROMPT
@@ -861,7 +1035,7 @@ export default function App() {
             </div>
 
             <form onSubmit={handleLocationInputSubmit} className="space-y-5">
-              <div className="space-y-2">
+              <div className="space-y-2 relative">
                 <label
                   htmlFor="garden-location-input"
                   className="block text-xs font-bold uppercase tracking-wider text-slate-700"
@@ -869,19 +1043,110 @@ export default function App() {
                   Your Garden Location
                 </label>
                 <div className="flex flex-col sm:flex-row gap-2.5">
-                  <input
-                    id="garden-location-input"
-                    data-testid="garden-location-input"
-                    type="text"
-                    autoFocus
-                    value={locationInputText}
-                    onChange={(e) => {
-                      setLocationInputText(e.target.value);
-                      if (locationValidationNotice) setLocationValidationNotice('');
-                    }}
-                    placeholder="Enter town, city, village, or postcode (e.g. York, Edinburgh, Bristol)..."
-                    className="flex-1 min-w-0 min-h-[44px] px-4 py-2 text-sm rounded-xl bg-stone-50 border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
-                  />
+                  <div className="relative flex-1 min-w-0">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      id="garden-location-input"
+                      data-testid="garden-location-input"
+                      type="text"
+                      autoFocus
+                      autoComplete="off"
+                      role="combobox"
+                      aria-expanded={isLocationSuggestionsOpen && locationSuggestions.length > 0}
+                      aria-autocomplete="list"
+                      aria-controls="first-use-location-suggestions"
+                      value={locationInputText}
+                      onFocus={() => {
+                        if (locationInputText.trim().length > 0) {
+                          setIsLocationSuggestionsOpen(true);
+                        }
+                      }}
+                      onBlur={() => {
+                        window.setTimeout(() => setIsLocationSuggestionsOpen(false), 150);
+                      }}
+                      onKeyDown={handleLocationInputKeyDown}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setLocationInputText(val);
+                        setIsLocationSuggestionsOpen(val.trim().length > 0);
+                        setActiveSuggestionIndex(-1);
+                        if (locationValidationNotice) setLocationValidationNotice('');
+                      }}
+                      placeholder="Start typing town, village, or postcode (e.g. York, Morpeth, NE65)..."
+                      className="w-full min-h-[44px] pl-10 pr-9 py-2 text-sm rounded-xl bg-stone-50 border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
+                    />
+                    {locationInputText && (
+                      <button
+                        type="button"
+                        data-testid="clear-location-input-button"
+                        onClick={() => {
+                          setLocationInputText('');
+                          setIsLocationSuggestionsOpen(false);
+                          setActiveSuggestionIndex(-1);
+                        }}
+                        aria-label="Clear location search"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-stone-200/70 transition cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    {/* Partial Location Suggestions Dropdown */}
+                    {isLocationSuggestionsOpen && locationSuggestions.length > 0 && (
+                      <ul
+                        id="first-use-location-suggestions"
+                        data-testid="location-suggestions-list"
+                        role="listbox"
+                        aria-label="Matching UK garden locations"
+                        className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-white border border-stone-200 rounded-xl shadow-lg max-h-64 overflow-y-auto divide-y divide-stone-100"
+                      >
+                        {locationSuggestions.map((suggestion: any, idx: number) => {
+                          const isHighlighted = idx === activeSuggestionIndex;
+                          return (
+                            <li key={suggestion.id || suggestion.locationName} role="option" aria-selected={isHighlighted}>
+                              <button
+                                type="button"
+                                data-testid="location-suggestion-item"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  handleSelectLocationSuggestion(suggestion);
+                                }}
+                                onClick={() => handleSelectLocationSuggestion(suggestion)}
+                                className={`w-full text-left px-3.5 py-2.5 flex items-start justify-between gap-2 transition cursor-pointer ${
+                                  isHighlighted
+                                    ? 'bg-emerald-50 text-emerald-950'
+                                    : 'hover:bg-stone-50 text-slate-800'
+                                }`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                                    <span className="text-xs sm:text-sm font-semibold text-slate-900 truncate">
+                                      {suggestion.locationName}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-500 truncate mt-0.5 pl-5">
+                                    {suggestion.shortLabel || suggestion.county || 'UK'}
+                                    {suggestion.soilProfile ? ` · ${suggestion.soilProfile}` : ''}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                                  {suggestion.postcodePrefix && (
+                                    <span className="text-[11px] font-medium text-slate-600 bg-stone-100 px-1.5 py-0.5 rounded-md">
+                                      {suggestion.postcodePrefix}
+                                    </span>
+                                  )}
+                                  <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
+                                    RHS {suggestion.rhsHardinessZone || 'H4'}
+                                  </span>
+                                </div>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
                   <button
                     type="submit"
                     data-testid="set-location-button"
@@ -982,14 +1247,17 @@ export default function App() {
 
             {/* ===================================================================
                 GARDEN LOCATION & DIRECTION BAR
-                Shown automatically on Weather & Soil tab, or whenever toggled via Header
+                Collapsed by default on mobile once location is remembered so weather cards
+                appear immediately; expands when 'Location' is tapped in header.
             =================================================================== */}
             {(activeWorkspaceTab === 'OVERVIEW' ||
               activeWorkspaceTab === 'SOIL_TREND' ||
               showLocationEditor) && (
               <section
                 data-testid="garden-location-aspect-bar"
-                className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4"
+                className={`${
+                  showLocationEditor ? 'block' : 'hidden md:block'
+                } bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4`}
               >
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
                   {/* Location Input & Quick Region Preset */}
@@ -1035,16 +1303,53 @@ export default function App() {
                       </div>
                     </div>
 
-                    <form onSubmit={handleLocationInputSubmit} className="flex flex-row gap-2">
-                      <input
-                        id="garden-location-input"
-                        data-testid="garden-location-input"
-                        type="text"
-                        value={locationInputText}
-                        onChange={(e) => setLocationInputText(e.target.value)}
-                        placeholder="Enter town, city, or postcode (e.g. York, Edinburgh, Bristol)..."
-                        className="flex-1 min-w-0 min-h-[40px] px-3.5 py-1.5 text-sm rounded-xl bg-stone-50 border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
-                      />
+                    <form onSubmit={handleLocationInputSubmit} className="flex flex-row gap-2 relative">
+                      <div className="relative flex-1 min-w-0">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          id="garden-location-input"
+                          data-testid="garden-location-input"
+                          type="text"
+                          autoComplete="off"
+                          role="combobox"
+                          aria-expanded={isLocationSuggestionsOpen && locationSuggestions.length > 0}
+                          aria-autocomplete="list"
+                          aria-controls="bar-location-suggestions"
+                          value={locationInputText}
+                          onFocus={() => {
+                            if (locationInputText.trim().length > 0) {
+                              setIsLocationSuggestionsOpen(true);
+                            }
+                          }}
+                          onBlur={() => {
+                            window.setTimeout(() => setIsLocationSuggestionsOpen(false), 150);
+                          }}
+                          onKeyDown={handleLocationInputKeyDown}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setLocationInputText(val);
+                            setIsLocationSuggestionsOpen(val.trim().length > 0);
+                            setActiveSuggestionIndex(-1);
+                          }}
+                          placeholder="Start typing town, village, or postcode (e.g. York, Morpeth, NE65)..."
+                          className="w-full min-h-[40px] pl-9 pr-8 py-1.5 text-sm rounded-xl bg-stone-50 border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
+                        />
+                        {locationInputText && (
+                          <button
+                            type="button"
+                            data-testid="clear-location-input-button"
+                            onClick={() => {
+                              setLocationInputText('');
+                              setIsLocationSuggestionsOpen(false);
+                              setActiveSuggestionIndex(-1);
+                            }}
+                            aria-label="Clear location search"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-stone-200/70 transition cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                       <button
                         type="submit"
                         data-testid="set-location-button"
@@ -1052,6 +1357,62 @@ export default function App() {
                       >
                         Set Location
                       </button>
+
+                      {/* Partial Location Suggestions Dropdown (Full Form Row Width) */}
+                      {isLocationSuggestionsOpen && locationSuggestions.length > 0 && (
+                        <ul
+                          id="bar-location-suggestions"
+                          data-testid="location-suggestions-list"
+                          role="listbox"
+                          aria-label="Matching UK garden locations"
+                          className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-white border border-stone-200 rounded-xl shadow-lg max-h-64 overflow-y-auto divide-y divide-stone-100"
+                        >
+                          {locationSuggestions.map((suggestion: any, idx: number) => {
+                            const isHighlighted = idx === activeSuggestionIndex;
+                            return (
+                              <li key={suggestion.id || suggestion.locationName} role="option" aria-selected={isHighlighted}>
+                                <button
+                                  type="button"
+                                  data-testid="location-suggestion-item"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    handleSelectLocationSuggestion(suggestion);
+                                  }}
+                                  onClick={() => handleSelectLocationSuggestion(suggestion)}
+                                  className={`w-full text-left px-3 py-2 flex items-start justify-between gap-2 transition cursor-pointer ${
+                                    isHighlighted
+                                      ? 'bg-emerald-50 text-emerald-950'
+                                      : 'hover:bg-stone-50 text-slate-800'
+                                  }`}
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5">
+                                      <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                                      <span className="text-xs sm:text-sm font-semibold text-slate-900 truncate">
+                                        {suggestion.locationName}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 truncate mt-0.5 pl-5">
+                                      {suggestion.shortLabel || suggestion.county || 'UK'}
+                                      {suggestion.soilProfile ? ` · ${suggestion.soilProfile}` : ''}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                                    {suggestion.postcodePrefix && (
+                                      <span className="text-[10px] font-medium text-slate-600 bg-stone-100 px-1.5 py-0.5 rounded-md">
+                                        {suggestion.postcodePrefix}
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
+                                      RHS {suggestion.rhsHardinessZone || 'H4'}
+                                    </span>
+                                  </div>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
                     </form>
                   </div>
 
@@ -1114,51 +1475,61 @@ export default function App() {
             TAB 1: WEATHER & SOIL (Grouped Weather Forecast, Alerts & Soil Trend)
         =================================================================== */}
         {(activeWorkspaceTab === 'OVERVIEW' || activeWorkspaceTab === 'SOIL_TREND') && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Sub-options Switcher Inside Weather & Soil Tab */}
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-stone-200/90 rounded-2xl p-3 shadow-xs">
-              <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-white border border-stone-200/90 rounded-2xl p-2 sm:p-3 shadow-xs">
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setActiveWorkspaceTab('OVERVIEW')}
-                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
+                  className={`inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
                     activeWorkspaceTab === 'OVERVIEW'
                       ? 'bg-emerald-800 text-white'
                       : 'bg-stone-100 text-slate-700 hover:bg-stone-200'
                   }`}
                 >
-                  <Thermometer className="w-4 h-4" />
-                  <span>Current Weather, 7-Day Outlook &amp; Alerts</span>
+                  <Thermometer className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                  <span className="truncate sm:hidden">Weather &amp; Outlook</span>
+                  <span className="hidden sm:inline">Current Weather, 7-Day Outlook &amp; Alerts</span>
                 </button>
 
                 <button
                   type="button"
                   data-testid="tab-soil-trend"
                   onClick={() => setActiveWorkspaceTab('SOIL_TREND')}
-                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
+                  className={`inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
                     activeWorkspaceTab === 'SOIL_TREND'
                       ? 'bg-emerald-800 text-white'
                       : 'bg-stone-100 text-slate-700 hover:bg-stone-200'
                   }`}
                 >
-                  <TrendingUp className="w-4 h-4" />
-                  <span>Soil Moisture &amp; 30-Day Trend</span>
+                  <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                  <span className="truncate sm:hidden">Soil &amp; 30-Day Trend</span>
+                  <span className="hidden sm:inline">Soil Moisture &amp; 30-Day Trend</span>
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-slate-500">
+              <div className="hidden md:flex items-center gap-2 text-xs text-slate-500">
                 <span>ukv_2km + Open-Meteo</span>
               </div>
             </div>
 
             {activeWorkspaceTab === 'SOIL_TREND' ? (
-              <SoilSaturationLogPanel
-                weatherData={weatherData}
-                gardenProfile={gardenProfile}
-                locationPresets={UI_CONFIG.LOCATION_PRESETS as any}
-              />
+              <Suspense
+                fallback={
+                  <div className="bg-white border border-stone-200/90 rounded-2xl p-6 text-center text-sm text-slate-500 animate-pulse">
+                    Loading 30-day soil moisture trend &amp; rainfall log...
+                  </div>
+                }
+              >
+                <SoilSaturationLogPanel
+                  weatherData={weatherData}
+                  gardenProfile={gardenProfile}
+                  locationPresets={UI_CONFIG.LOCATION_PRESETS as any}
+                />
+              </Suspense>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 {/* 3 Clean Weather Cards (°C, mph, mm) */}
                 <section
                   data-testid="primary-weather-metrics"
@@ -1410,6 +1781,13 @@ export default function App() {
                   )}
                 </section>
 
+                {/* Daily Rainfall Forecast Bar Chart (Recharts) directly below 7-Day Outlook Strip */}
+                <SevenDayRainfallRecharts
+                  dailyForecast={dailyForecast}
+                  locationName={gardenProfile.locationName}
+                  formatDayFn={formatUkDay}
+                />
+
                 {/* Plant-Specific Weather Alerts */}
                 <section className="bg-white border border-stone-200/90 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1491,13 +1869,21 @@ export default function App() {
             TAB 2: MASTER GUIDE (5-Section Botanical Playbook & 32 Plants)
         =================================================================== */}
         {activeWorkspaceTab === 'MASTER_GUIDE' && (
-          <HadstonMasterGuidePanel
-            plantInventory={plantInventory}
-            locationName={gardenProfile.locationName}
-            rhsHardinessZone={gardenProfile.rhsHardinessZone}
-            onAddSingleCatalogPlant={(item) => handleQuickAddCatalogPlant(item)}
-            onLoadAllHadston32={handleLoadAllHadston32Plants}
-          />
+          <Suspense
+            fallback={
+              <div className="bg-white border border-stone-200/90 rounded-2xl p-6 text-center text-sm text-slate-500 animate-pulse">
+                Loading Master Horticulturist Guide &amp; 32 Plant Care Matrix...
+              </div>
+            }
+          >
+            <HadstonMasterGuidePanel
+              plantInventory={plantInventory}
+              locationName={gardenProfile.locationName}
+              rhsHardinessZone={gardenProfile.rhsHardinessZone}
+              onAddSingleCatalogPlant={(item) => handleQuickAddCatalogPlant(item)}
+              onLoadAllHadston32={handleLoadAllHadston32Plants}
+            />
+          </Suspense>
         )}
 
         {/* ===================================================================
@@ -1744,7 +2130,15 @@ export default function App() {
                   </div>
                 </section>
 
-                <MonthlyClayChecklistPanel />
+                <Suspense
+                  fallback={
+                    <div className="bg-white border border-stone-200/90 rounded-2xl p-6 text-center text-sm text-slate-500 animate-pulse">
+                      Loading monthly clay checklist...
+                    </div>
+                  }
+                >
+                  <MonthlyClayChecklistPanel />
+                </Suspense>
               </div>
             )}
           </div>
@@ -1889,38 +2283,44 @@ export default function App() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
                     {matchingCatalogPlants.map((item) => {
-                      const isAlreadyInPlot = plantInventory.some(
-                        (p: PlantRecord) => p.name.toLowerCase() === item.name.toLowerCase()
-                      );
+                      const isAlreadyInPlot = activeInventoryNameSet.has(item.name.toLowerCase());
                       return (
                         <div
                           key={item.catalogId}
-                          className="p-3 rounded-xl bg-white border border-stone-200 flex items-center justify-between gap-2"
+                          className="p-3 rounded-xl bg-white border border-stone-200 flex items-center justify-between gap-2.5"
                         >
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              {item.photoRef && (
-                                <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] font-mono font-bold text-emerald-900">
-                                  #{item.photoRef}
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <PlantThumbnailWithModal
+                              plantId={item.catalogId}
+                              plantName={item.name}
+                              photoRef={item.photoRef}
+                              size="sm"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {item.photoRef && (
+                                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] font-mono font-bold text-emerald-900">
+                                    #{item.photoRef}
+                                  </span>
+                                )}
+                                <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                                  {item.name}
                                 </span>
-                              )}
-                              <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
-                                {item.name}
-                              </span>
-                              <span className="text-xs font-semibold text-emerald-800">
-                                · RHS {item.rhsRating}
-                              </span>
+                                <span className="text-xs font-semibold text-emerald-800">
+                                  · RHS {item.rhsRating}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-500 mt-0.5 truncate">
+                                {item.recommendedLocation}
+                              </p>
                             </div>
-                            <p className="text-xs text-slate-500 mt-0.5 truncate">
-                              {item.recommendedLocation}
-                            </p>
                           </div>
 
                           <button
                             type="button"
                             disabled={isAlreadyInPlot}
                             onClick={() => handleQuickAddCatalogPlant(item)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition cursor-pointer ${
+                            className={`min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition cursor-pointer ${
                               isAlreadyInPlot
                                 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-default'
                                 : 'bg-emerald-800 hover:bg-emerald-700 text-white'
@@ -2040,38 +2440,46 @@ export default function App() {
                         masterMatch ? 'cursor-pointer' : ''
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {masterMatch?.photoRef && (
-                              <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[11px] font-mono font-bold text-emerald-900">
-                                #{masterMatch.photoRef}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <PlantThumbnailWithModal
+                            plantId={plant.id}
+                            plantName={masterMatch?.photoRef ? plant.name.replace(/^#\d+\s+/, '') : plant.name}
+                            photoRef={masterMatch?.photoRef}
+                            size="md"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {masterMatch?.photoRef && (
+                                <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[11px] font-mono font-bold text-emerald-900">
+                                  #{masterMatch.photoRef}
+                                </span>
+                              )}
+                              <h3 className="text-sm font-bold text-slate-900">
+                                {masterMatch?.photoRef
+                                  ? plant.name.replace(/^#\d+\s+/, '')
+                                  : plant.name}
+                              </h3>
+                              <span
+                                className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
+                                  isTender
+                                    ? 'bg-amber-50 text-amber-900 border border-amber-200'
+                                    : 'bg-white text-slate-700 border border-stone-200'
+                                }`}
+                              >
+                                RHS {plant.rhsRating}
                               </span>
-                            )}
-                            <h3 className="text-sm font-bold text-slate-900">
-                              {masterMatch?.photoRef
-                                ? plant.name.replace(/^#\d+\s+/, '')
-                                : plant.name}
-                            </h3>
-                            <span
-                              className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
-                                isTender
-                                  ? 'bg-amber-50 text-amber-900 border border-amber-200'
-                                  : 'bg-white text-slate-700 border border-stone-200'
-                              }`}
-                            >
-                              RHS {plant.rhsRating}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-600 mt-1">
-                            {plant.location}
-                          </p>
-                          {masterMatch && (
-                            <p className="text-[11px] font-semibold text-emerald-800 mt-1.5 inline-flex items-center gap-0.5">
-                              <span>View Feed ({masterMatch.feedWindowUk}) &amp; Prune ({masterMatch.pruneMonthsUk})</span>
-                              <ChevronRight className="w-3.5 h-3.5" />
+                            </div>
+                            <p className="text-xs text-slate-600 mt-1">
+                              {plant.location}
                             </p>
-                          )}
+                            {masterMatch && (
+                              <p className="text-[11px] font-semibold text-emerald-800 mt-1.5 inline-flex items-center gap-0.5">
+                                <span>View Feed ({masterMatch.feedWindowUk}) &amp; Prune ({masterMatch.pruneMonthsUk})</span>
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </p>
+                            )}
+                          </div>
                         </div>
 
                         <div
@@ -2082,7 +2490,7 @@ export default function App() {
                             type="button"
                             onClick={() => openEditPlantModal(plant)}
                             aria-label={`Edit ${plant.name}`}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-stone-200/60 transition"
+                            className="min-h-[40px] min-w-[40px] sm:min-h-[36px] sm:min-w-[36px] inline-flex items-center justify-center rounded-xl text-slate-500 hover:text-slate-800 hover:bg-stone-200/60 active:bg-stone-200 transition cursor-pointer"
                           >
                             <Edit3 className="w-4 h-4" />
                           </button>
@@ -2090,7 +2498,7 @@ export default function App() {
                             type="button"
                             onClick={() => handleDeletePlant(plant)}
                             aria-label={`Delete ${plant.name}`}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                            className="min-h-[40px] min-w-[40px] sm:min-h-[36px] sm:min-w-[36px] inline-flex items-center justify-center rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 active:bg-rose-100 transition cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -2108,43 +2516,56 @@ export default function App() {
       </main>
 
       {/* =====================================================================
-          PLANT CARE MODAL (When clicking any plant in your active inventory)
+          PLANT CARE MODAL (Mobile Bottom Sheet + Desktop Centered Dialog)
       ===================================================================== */}
       {activeCareModalPlant && (
         <div
           role="dialog"
           aria-modal="true"
           aria-label={`Care details for ${activeCareModalPlant.commonName}`}
-          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+          className="fixed inset-0 z-50 bg-slate-900/55 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto"
           onClick={() => setActiveCareModalPlant(null)}
         >
           <div
-            className="bg-white border border-stone-200 rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-xl space-y-4 my-8"
+            className="bg-white border-t sm:border border-stone-200 rounded-t-3xl sm:rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Mobile bottom-sheet grab handle */}
+            <div className="sm:hidden flex justify-center -mt-1 pb-1">
+              <div className="w-10 h-1.5 rounded-full bg-stone-300" />
+            </div>
+
             <div className="flex items-start justify-between gap-3 border-b border-stone-200 pb-3.5">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-mono font-bold text-emerald-900">
-                    #{activeCareModalPlant.photoRef}
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-lg bg-stone-100 text-slate-800 text-xs font-bold">
-                    RHS {activeCareModalPlant.rhsRating}
-                  </span>
+              <div className="flex items-start gap-3 min-w-0">
+                <PlantThumbnailWithModal
+                  plantId={activeCareModalPlant.catalogId}
+                  plantName={activeCareModalPlant.commonName}
+                  photoRef={activeCareModalPlant.photoRef}
+                  size="lg"
+                />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-mono font-bold text-emerald-900">
+                      #{activeCareModalPlant.photoRef}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-lg bg-stone-100 text-slate-800 text-xs font-bold">
+                      RHS {activeCareModalPlant.rhsRating}
+                    </span>
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-bold text-slate-900 mt-1">
+                    {activeCareModalPlant.commonName}
+                  </h3>
+                  <p className="text-xs sm:text-sm italic text-slate-500">
+                    {activeCareModalPlant.botanicalName}
+                  </p>
                 </div>
-                <h3 className="text-xl font-bold text-slate-900 mt-1">
-                  {activeCareModalPlant.commonName}
-                </h3>
-                <p className="text-xs sm:text-sm italic text-slate-500">
-                  {activeCareModalPlant.botanicalName}
-                </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => setActiveCareModalPlant(null)}
                 aria-label="Close care card"
-                className="p-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-slate-700 cursor-pointer"
+                className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center p-2 rounded-xl bg-stone-100 hover:bg-stone-200 active:bg-stone-300 text-slate-700 shrink-0 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2184,13 +2605,13 @@ export default function App() {
       )}
 
       {/* =====================================================================
-          CLEAN MOBILE BOTTOM NAVIGATION BAR (< 640px)
+          MOBILE THUMB-ZONE BOTTOM NAVIGATION BAR
+          Provides one-handed tab switching on mobile screens when scrolled down
       ===================================================================== */}
       {hasConfiguredLocation && (
         <nav
-          data-testid="mobile-bottom-nav"
-          aria-label="Mobile quick workspace navigation"
-          className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-stone-200 px-2 py-1.5"
+          aria-label="Mobile quick navigation"
+          className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-stone-200/90 px-2 pt-1.5 safe-bottom-nav shadow-lg"
         >
           <div className="grid grid-cols-4 gap-1 max-w-md mx-auto">
             <button
@@ -2199,14 +2620,14 @@ export default function App() {
                 setActiveWorkspaceTab('OVERVIEW');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className={`flex flex-col items-center justify-center min-h-[46px] py-1 px-1 rounded-xl text-[10px] font-semibold transition ${
+              className={`min-h-[46px] flex flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-semibold transition cursor-pointer ${
                 activeWorkspaceTab === 'OVERVIEW' || activeWorkspaceTab === 'SOIL_TREND'
-                  ? 'bg-emerald-800 text-white'
-                  : 'text-slate-600 hover:bg-stone-100'
+                  ? 'text-emerald-800 bg-emerald-50/90'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Thermometer className="w-4 h-4 mb-0.5" />
-              <span>Weather</span>
+              <Thermometer className="w-4 h-4 shrink-0" />
+              <span className="truncate">Weather</span>
             </button>
 
             <button
@@ -2215,14 +2636,14 @@ export default function App() {
                 setActiveWorkspaceTab('MASTER_GUIDE');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className={`flex flex-col items-center justify-center min-h-[46px] py-1 px-1 rounded-xl text-[10px] font-semibold transition ${
+              className={`min-h-[46px] flex flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-semibold transition cursor-pointer ${
                 activeWorkspaceTab === 'MASTER_GUIDE'
-                  ? 'bg-emerald-800 text-white'
-                  : 'text-slate-600 hover:bg-stone-100'
+                  ? 'text-emerald-800 bg-emerald-50/90'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <BookOpen className="w-4 h-4 mb-0.5" />
-              <span>Master Guide</span>
+              <BookOpen className="w-4 h-4 shrink-0" />
+              <span className="truncate">Guide</span>
             </button>
 
             <button
@@ -2231,14 +2652,14 @@ export default function App() {
                 setActiveWorkspaceTab('CHECKLIST');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className={`flex flex-col items-center justify-center min-h-[46px] py-1 px-1 rounded-xl text-[10px] font-semibold transition ${
+              className={`min-h-[46px] flex flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-semibold transition cursor-pointer ${
                 activeWorkspaceTab === 'CHECKLIST'
-                  ? 'bg-emerald-800 text-white'
-                  : 'text-slate-600 hover:bg-stone-100'
+                  ? 'text-emerald-800 bg-emerald-50/90'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Calendar className="w-4 h-4 mb-0.5" />
-              <span>Calendar</span>
+              <Calendar className="w-4 h-4 shrink-0" />
+              <span className="truncate">Calendar</span>
             </button>
 
             <button
@@ -2247,18 +2668,20 @@ export default function App() {
                 setActiveWorkspaceTab('PLANTS');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className={`flex flex-col items-center justify-center min-h-[46px] py-1 px-1 rounded-xl text-[10px] font-semibold transition ${
+              className={`min-h-[46px] flex flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-semibold transition cursor-pointer ${
                 activeWorkspaceTab === 'PLANTS'
-                  ? 'bg-emerald-800 text-white'
-                  : 'text-slate-600 hover:bg-stone-100'
+                  ? 'text-emerald-800 bg-emerald-50/90'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Sprout className="w-4 h-4 mb-0.5" />
-              <span>My Plants</span>
+              <Sprout className="w-4 h-4 shrink-0" />
+              <span className="truncate">Plants ({plantInventory.length})</span>
             </button>
           </div>
         </nav>
       )}
+
+      <OfflineIndicator />
     </div>
   );
 }

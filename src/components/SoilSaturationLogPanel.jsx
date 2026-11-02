@@ -462,12 +462,13 @@ export default function SoilSaturationLogPanel({
               <input
                 id="rain-24h-input"
                 type="number"
+                inputMode="decimal"
                 step="0.1"
                 min="0"
                 required
                 value={formState.rainfall24hMm}
                 onChange={(e) => setFormState({ ...formState, rainfall24hMm: e.target.value })}
-                className="w-full min-h-[40px] px-3 py-1.5 text-sm rounded-xl bg-white border border-stone-300 text-slate-900 tabular-nums"
+                className="w-full min-h-[44px] sm:min-h-[40px] px-3 py-1.5 text-sm rounded-xl bg-white border border-stone-300 text-slate-900 tabular-nums"
               />
             </div>
 
@@ -478,12 +479,13 @@ export default function SoilSaturationLogPanel({
               <input
                 id="rain-48h-input"
                 type="number"
+                inputMode="decimal"
                 step="0.1"
                 min="0"
                 required
                 value={formState.rainfall48hMm}
                 onChange={(e) => setFormState({ ...formState, rainfall48hMm: e.target.value })}
-                className="w-full min-h-[40px] px-3 py-1.5 text-sm rounded-xl bg-white border border-stone-300 text-slate-900 tabular-nums"
+                className="w-full min-h-[44px] sm:min-h-[40px] px-3 py-1.5 text-sm rounded-xl bg-white border border-stone-300 text-slate-900 tabular-nums"
               />
             </div>
           </div>

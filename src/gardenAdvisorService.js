@@ -4,8 +4,13 @@
  * Dependencies: npm install @google/genai
  */
 
-import { useState, useCallback } from 'react';
-import { Type } from '@google/genai';
+import { useState, useCallback, useRef } from 'react';
+
+const SchemaType = {
+  OBJECT: 'OBJECT',
+  ARRAY: 'ARRAY',
+  STRING: 'STRING'
+};
 
 // ============================================================================
 // 1. EDITABLE CONFIGURATION BLOCK
@@ -188,8 +193,985 @@ export const ADVISOR_CONFIG = {
   ]
 };
 
+export const UK_GARDEN_LOCATION_DIRECTORY = [
+  {
+    id: 'york',
+    town: 'York',
+    county: 'North Yorkshire',
+    regionName: 'Yorkshire & the Humber',
+    postcodePrefix: 'YO1',
+    locationName: 'York, North Yorkshire, UK',
+    shortLabel: 'York (Vale of York)',
+    latitude: 53.9591,
+    longitude: -1.0815,
+    regionCode: 'yh',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Vale alluvial clay & moisture-retentive loam (pH 6.4–7.0)',
+    microclimateNotes: 'Flat lowland vale prone to winter waterlogging and overnight radiation frost.'
+  },
+  {
+    id: 'edinburgh',
+    town: 'Edinburgh',
+    county: 'Lothian, Scotland',
+    regionName: 'Scotland',
+    postcodePrefix: 'EH1',
+    locationName: 'Edinburgh, Scotland, UK',
+    shortLabel: 'Edinburgh (Lothian)',
+    latitude: 55.9533,
+    longitude: -3.1883,
+    regionCode: 'st',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Glacial boulder clay to fertile garden loam (pH 6.0–6.8)',
+    microclimateNotes: 'Firth of Forth maritime breeze; cool spring nights and brisk westerlies.'
+  },
+  {
+    id: 'manchester',
+    town: 'Manchester',
+    county: 'Greater Manchester',
+    regionName: 'North West England',
+    postcodePrefix: 'M1',
+    locationName: 'Manchester, North West, UK',
+    shortLabel: 'Manchester (North West)',
+    latitude: 53.4808,
+    longitude: -2.2426,
+    regionCode: 'nw',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Moisture-retentive clay loam over glacial till (pH 6.0–6.7)',
+    microclimateNotes: 'Higher annual rainfall; focus on winter drainage and raised bed aeration.'
+  },
+  {
+    id: 'bristol',
+    town: 'Bristol',
+    county: 'South West England',
+    regionName: 'South West England',
+    postcodePrefix: 'BS1',
+    locationName: 'Bristol, South West, UK',
+    shortLabel: 'Bristol (South West)',
+    latitude: 51.4545,
+    longitude: -2.5879,
+    regionCode: 'sw',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'Neutral to mildly alkaline clay loam (pH 6.5–7.2)',
+    microclimateNotes: 'Milder maritime winters (RHS H5); earlier spring growth and warm south walls.'
+  },
+  {
+    id: 'cambridge',
+    town: 'Cambridge',
+    county: 'Cambridgeshire',
+    regionName: 'East Anglia',
+    postcodePrefix: 'CB1',
+    locationName: 'Cambridge, East Anglia, UK',
+    shortLabel: 'Cambridge (East Anglia)',
+    latitude: 52.2053,
+    longitude: 0.1218,
+    regionCode: 'ee',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Calcareous clay loam to fen silt (pH 6.8–7.4)',
+    microclimateNotes: 'Drier continental influence; warm summers and crisp frosty winter nights.'
+  },
+  {
+    id: 'cardiff',
+    town: 'Cardiff',
+    county: 'South Glamorgan, Wales',
+    regionName: 'Wales',
+    postcodePrefix: 'CF10',
+    locationName: 'Cardiff, South Wales, UK',
+    shortLabel: 'Cardiff (South Wales)',
+    latitude: 51.4816,
+    longitude: -3.1791,
+    regionCode: 'wl',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'Alluvial clay-silt & coastal loam (pH 6.2–6.9)',
+    microclimateNotes: 'Severn Estuary maritime moderation; mild winters with wet Atlantic fronts.'
+  },
+  {
+    id: 'london',
+    town: 'London',
+    county: 'Greater London',
+    regionName: 'London & South East',
+    postcodePrefix: 'TW9',
+    locationName: 'London (Kew / Richmond), UK',
+    shortLabel: 'London (South East)',
+    latitude: 51.4787,
+    longitude: -0.2956,
+    regionCode: 'se',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'London clay to improved alluvial loam (pH 6.5–7.2)',
+    microclimateNotes: 'Urban heat-island shelter (+1.5°C warmer overnight minimums).'
+  },
+  {
+    id: 'durham',
+    town: 'Durham City',
+    county: 'County Durham',
+    regionName: 'North East England',
+    postcodePrefix: 'DH1',
+    locationName: 'Durham City, County Durham, UK',
+    shortLabel: 'Durham City (Wear Valley)',
+    latitude: 54.7753,
+    longitude: -1.5849,
+    regionCode: 'ne',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Wear Valley heavy boulder clay (pH 6.0–6.8)',
+    microclimateNotes: 'Steep river valley frost pocket; slow-draining winter clay.'
+  },
+  // North East & Northumberland
+  {
+    id: 'hadston',
+    town: 'Hadston',
+    county: 'Northumberland',
+    regionName: 'North East England',
+    postcodePrefix: 'NE65',
+    locationName: 'Hadston, Morpeth, Northumberland',
+    shortLabel: 'Hadston (NE65 Coastal Plain)',
+    latitude: 55.3005,
+    longitude: -1.5947,
+    regionCode: 'ne',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Coastal Northumberland boulder clay & moisture-retentive loam (pH 6.2–6.8)',
+    microclimateNotes: 'Druridge Bay maritime moderation with brisk North Sea winds and slow spring clay warming.'
+  },
+  {
+    id: 'morpeth',
+    town: 'Morpeth',
+    county: 'Northumberland',
+    regionName: 'North East England',
+    postcodePrefix: 'NE61',
+    locationName: 'Morpeth, Northumberland, UK',
+    shortLabel: 'Morpeth (Wansbeck Valley)',
+    latitude: 55.1688,
+    longitude: -1.6874,
+    regionCode: 'ne',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Wansbeck valley boulder clay & alluvial garden loam (pH 6.1–6.8)',
+    microclimateNotes: 'Sheltered river valley with late spring ground frosts and moisture-retentive clay.'
+  },
+  {
+    id: 'amble',
+    town: 'Amble',
+    county: 'Northumberland',
+    regionName: 'North East England',
+    postcodePrefix: 'NE65',
+    locationName: 'Amble, Northumberland, UK',
+    shortLabel: 'Amble (Coquet Estuary)',
+    latitude: 55.3341,
+    longitude: -1.5784,
+    regionCode: 'ne',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Coastal clay loam with sandy maritime influence (pH 6.3–7.0)',
+    microclimateNotes: 'Coastal exposure with salt-laden easterly breezes and fewer severe mid-winter air frosts.'
+  },
+  {
+    id: 'alnwick',
+    town: 'Alnwick',
+    county: 'Northumberland',
+    regionName: 'North East England',
+    postcodePrefix: 'NE66',
+    locationName: 'Alnwick, Northumberland, UK',
+    shortLabel: 'Alnwick (Northumberland)',
+    latitude: 55.4133,
+    longitude: -1.7061,
+    regionCode: 'ne',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Heavy glacial clay to humus-rich estate loam (pH 6.0–6.8)',
+    microclimateNotes: 'Cool northern summers and crisp winters; walled beds warm 2 weeks earlier.'
+  },
+  {
+    id: 'hexham',
+    town: 'Hexham',
+    county: 'Northumberland',
+    regionName: 'North East England',
+    postcodePrefix: 'NE46',
+    locationName: 'Hexham, Northumberland, UK',
+    shortLabel: 'Hexham (Tyne Valley)',
+    latitude: 54.9715,
+    longitude: -2.1014,
+    regionCode: 'ne',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Tyne Valley alluvial silt-loam over boulder clay (pH 5.9–6.7)',
+    microclimateNotes: 'Inland river valley with colder winter minimums and late May frost risk.'
+  },
+  {
+    id: 'newcastle',
+    town: 'Newcastle upon Tyne',
+    county: 'Tyne and Wear',
+    regionName: 'North East England',
+    postcodePrefix: 'NE1',
+    locationName: 'Newcastle upon Tyne, Tyne and Wear, UK',
+    shortLabel: 'Newcastle upon Tyne (NE1)',
+    latitude: 54.9783,
+    longitude: -1.6178,
+    regionCode: 'ne',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Tyneside boulder clay & improved urban garden loam (pH 6.2–6.9)',
+    microclimateNotes: 'Urban shelter moderates overnight frosts compared with rural upland Northumberland.'
+  },
+  {
+    id: 'sunderland',
+    town: 'Sunderland',
+    county: 'Tyne and Wear',
+    regionName: 'North East England',
+    postcodePrefix: 'SR1',
+    locationName: 'Sunderland, Tyne and Wear, UK',
+    shortLabel: 'Sunderland (Wearside Coast)',
+    latitude: 54.9069,
+    longitude: -1.3838,
+    regionCode: 'ne',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Magnesian limestone clay loam (pH 6.6–7.3)',
+    microclimateNotes: 'North Sea coastal haar in spring; breezy maritime conditions.'
+  },
+  {
+    id: 'darlington',
+    town: 'Darlington',
+    county: 'County Durham',
+    regionName: 'North East England',
+    postcodePrefix: 'DL1',
+    locationName: 'Darlington, County Durham, UK',
+    shortLabel: 'Darlington (Tees Valley)',
+    latitude: 54.5236,
+    longitude: -1.5595,
+    regionCode: 'ne',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Tees lowland clay loam (pH 6.3–7.0)',
+    microclimateNotes: 'Sheltered lowland basin between Pennines and North York Moors.'
+  },
+  // Yorkshire & the Humber
+  {
+    id: 'harrogate',
+    town: 'Harrogate',
+    county: 'North Yorkshire',
+    regionName: 'Yorkshire & the Humber',
+    postcodePrefix: 'HG1',
+    locationName: 'Harrogate, North Yorkshire',
+    shortLabel: 'Harrogate (RHS Harlow Carr)',
+    latitude: 53.9921,
+    longitude: -1.5418,
+    regionCode: 'yh',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Acidic to neutral heavy millstone grit clay (pH 5.6–6.5)',
+    microclimateNotes: 'Upland fringe microclimate (RHS Harlow Carr profile); cool, moist, and frost-prone in spring.'
+  },
+  {
+    id: 'leeds',
+    town: 'Leeds',
+    county: 'West Yorkshire',
+    regionName: 'Yorkshire & the Humber',
+    postcodePrefix: 'LS1',
+    locationName: 'Leeds, West Yorkshire, UK',
+    shortLabel: 'Leeds (West Yorkshire)',
+    latitude: 53.8008,
+    longitude: -1.5491,
+    regionCode: 'yh',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Pennine fringe clay loam (pH 6.0–6.8)',
+    microclimateNotes: 'Aire valley shelter with brisk westerly rain fronts.'
+  },
+  {
+    id: 'sheffield',
+    town: 'Sheffield',
+    county: 'South Yorkshire',
+    regionName: 'Yorkshire & the Humber',
+    postcodePrefix: 'S1',
+    locationName: 'Sheffield, South Yorkshire, UK',
+    shortLabel: 'Sheffield (South Yorkshire)',
+    latitude: 53.3811,
+    longitude: -1.4701,
+    regionCode: 'yh',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Millstone grit loam & valley clay (pH 5.8–6.6)',
+    microclimateNotes: 'Strong elevation gradients; hillside gardens drain faster and escape valley frost pockets.'
+  },
+  {
+    id: 'whitby',
+    town: 'Whitby',
+    county: 'North Yorkshire',
+    regionName: 'Yorkshire & the Humber',
+    postcodePrefix: 'YO21',
+    locationName: 'Whitby, North Yorkshire, UK',
+    shortLabel: 'Whitby (North Yorkshire Coast)',
+    latitude: 54.4858,
+    longitude: -0.6206,
+    regionCode: 'yh',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Coastal glacial till & boulder clay (pH 6.2–6.9)',
+    microclimateNotes: 'Exposed North Sea cliffs; windbreak hedging essential for tall perennials.'
+  },
+  // Scotland
+  {
+    id: 'glasgow',
+    town: 'Glasgow',
+    county: 'Lanarkshire, Scotland',
+    regionName: 'Scotland',
+    postcodePrefix: 'G1',
+    locationName: 'Glasgow, Scotland, UK',
+    shortLabel: 'Glasgow (Clyde Valley)',
+    latitude: 55.8642,
+    longitude: -4.2518,
+    regionCode: 'st',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Heavy Clyde drumlin boulder clay (pH 5.8–6.5)',
+    microclimateNotes: 'Mild, moist western Atlantic climate; high autumn/winter rainfall requires raised beds.'
+  },
+  {
+    id: 'aberdeen',
+    town: 'Aberdeen',
+    county: 'Aberdeenshire, Scotland',
+    regionName: 'Scotland',
+    postcodePrefix: 'AB10',
+    locationName: 'Aberdeen, Aberdeenshire, Scotland',
+    shortLabel: 'Aberdeen (North East Scotland)',
+    latitude: 57.1497,
+    longitude: -2.0943,
+    regionCode: 'st',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Granitic sandy clay loam (pH 5.5–6.3)',
+    microclimateNotes: 'Bright, breezy coastal climate with cool spring temperatures and acidic soil tendency.'
+  },
+  {
+    id: 'inverness',
+    town: 'Inverness',
+    county: 'Highland, Scotland',
+    regionName: 'Scotland',
+    postcodePrefix: 'IV1',
+    locationName: 'Inverness, Highland, Scotland',
+    shortLabel: 'Inverness (Moray Firth)',
+    latitude: 57.4778,
+    longitude: -4.2247,
+    regionCode: 'st',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Moray Firth free-draining loam to glacial clay (pH 5.7–6.5)',
+    microclimateNotes: 'Rain-shadow shelter from Great Glen; long summer daylight hours and cold winter nights.'
+  },
+  {
+    id: 'stirling',
+    town: 'Stirling',
+    county: 'Stirlingshire, Scotland',
+    regionName: 'Scotland',
+    postcodePrefix: 'FK8',
+    locationName: 'Stirling, Central Scotland, UK',
+    shortLabel: 'Stirling (Forth Valley)',
+    latitude: 56.1165,
+    longitude: -3.9369,
+    regionCode: 'st',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Forth carse heavy estuarine clay (pH 6.0–6.7)',
+    microclimateNotes: 'Low-lying carse clay holds winter moisture; protect H3 tubers from winter wet.'
+  },
+  // North West
+  {
+    id: 'liverpool',
+    town: 'Liverpool',
+    county: 'Merseyside',
+    regionName: 'North West England',
+    postcodePrefix: 'L1',
+    locationName: 'Liverpool, Merseyside, UK',
+    shortLabel: 'Liverpool (Merseyside)',
+    latitude: 53.4084,
+    longitude: -2.9916,
+    regionCode: 'nw',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Sandy coastal loam to boulder clay (pH 6.2–6.9)',
+    microclimateNotes: 'Irish Sea maritime moderation reduces hard air frosts; brisk westerly gales.'
+  },
+  {
+    id: 'chester',
+    town: 'Chester',
+    county: 'Cheshire',
+    regionName: 'North West England',
+    postcodePrefix: 'CH1',
+    locationName: 'Chester, Cheshire, UK',
+    shortLabel: 'Chester (Cheshire Plain)',
+    latitude: 53.193,
+    longitude: -2.8931,
+    regionCode: 'nw',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Deep Cheshire red marl clay loam (pH 6.2–6.9)',
+    microclimateNotes: 'Fertile moisture-retentive Cheshire plain; rain shadow of Welsh hills.'
+  },
+  {
+    id: 'kendal',
+    town: 'Kendal',
+    county: 'Cumbria',
+    regionName: 'North West England',
+    postcodePrefix: 'LA9',
+    locationName: 'Kendal, Lake District, Cumbria',
+    shortLabel: 'Kendal (South Lakeland)',
+    latitude: 54.328,
+    longitude: -2.7463,
+    regionCode: 'nw',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Silty stony loam over clay subsoil (pH 5.8–6.6)',
+    microclimateNotes: 'High Lakeland rainfall; prioritise grit incorporation and raised crowns.'
+  },
+  {
+    id: 'carlisle',
+    town: 'Carlisle',
+    county: 'Cumbria',
+    regionName: 'North West England',
+    postcodePrefix: 'CA1',
+    locationName: 'Carlisle, Cumbria, UK',
+    shortLabel: 'Carlisle (Eden Valley)',
+    latitude: 54.8925,
+    longitude: -2.9329,
+    regionCode: 'nw',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Red sandstone clay-loam (pH 6.0–6.7)',
+    microclimateNotes: 'Solway plain exposure with cool, moist winters.'
+  },
+  // Midlands
+  {
+    id: 'birmingham',
+    town: 'Birmingham',
+    county: 'West Midlands',
+    regionName: 'West Midlands',
+    postcodePrefix: 'B1',
+    locationName: 'Birmingham, West Midlands, UK',
+    shortLabel: 'Birmingham (West Midlands)',
+    latitude: 52.4862,
+    longitude: -1.8904,
+    regionCode: 'wm',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Keuper marl clay to sandy drift loam (pH 6.1–6.9)',
+    microclimateNotes: 'Elevated Midland plateau; cooler winter nights than lowland valleys.'
+  },
+  {
+    id: 'nottingham',
+    town: 'Nottingham',
+    county: 'Nottinghamshire',
+    regionName: 'East Midlands',
+    postcodePrefix: 'NG1',
+    locationName: 'Nottingham, Nottinghamshire, UK',
+    shortLabel: 'Nottingham (Trent Valley)',
+    latitude: 52.9548,
+    longitude: -1.1581,
+    regionCode: 'em',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Trent valley alluvial clay & Mercia mudstone loam (pH 6.4–7.1)',
+    microclimateNotes: 'Warm Midland summers; valley fog and radiation frost in autumn/winter.'
+  },
+  {
+    id: 'lincoln',
+    town: 'Lincoln',
+    county: 'Lincolnshire',
+    regionName: 'East Midlands',
+    postcodePrefix: 'LN1',
+    locationName: 'Lincoln, Lincolnshire, UK',
+    shortLabel: 'Lincoln (Lincolnshire)',
+    latitude: 53.2307,
+    longitude: -0.5406,
+    regionCode: 'em',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Limestone brash to lowland fen clay (pH 6.7–7.4)',
+    microclimateNotes: 'Lower annual rainfall with brisk easterly winds in spring.'
+  },
+  {
+    id: 'shrewsbury',
+    town: 'Shrewsbury',
+    county: 'Shropshire',
+    regionName: 'West Midlands',
+    postcodePrefix: 'SY1',
+    locationName: 'Shrewsbury, Shropshire, UK',
+    shortLabel: 'Shrewsbury (Severn Loop)',
+    latitude: 52.7073,
+    longitude: -2.7553,
+    regionCode: 'wm',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Deep Severn alluvial loam & boulder clay (pH 6.2–6.9)',
+    microclimateNotes: 'Classic Shropshire frost-hollow topography; warm summers.'
+  },
+  // East Anglia
+  {
+    id: 'norwich',
+    town: 'Norwich',
+    county: 'Norfolk',
+    regionName: 'East Anglia',
+    postcodePrefix: 'NR1',
+    locationName: 'Norwich, Norfolk, UK',
+    shortLabel: 'Norwich (Norfolk)',
+    latitude: 52.6309,
+    longitude: 1.2974,
+    regionCode: 'ee',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Sandy boulder clay & fertile Norfolk loam (pH 6.5–7.2)',
+    microclimateNotes: 'Sunniest, driest region; summer mulching vital to conserve moisture.'
+  },
+  {
+    id: 'ipswich',
+    town: 'Ipswich',
+    county: 'Suffolk',
+    regionName: 'East Anglia',
+    postcodePrefix: 'IP1',
+    locationName: 'Ipswich, Suffolk, UK',
+    shortLabel: 'Ipswich (Suffolk)',
+    latitude: 52.0567,
+    longitude: 1.1482,
+    regionCode: 'ee',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Chalky Suffolk boulder clay (pH 6.8–7.5)',
+    microclimateNotes: 'Low annual rainfall; heavy clay bakes hard in summer without organic mulch.'
+  },
+  {
+    id: 'colchester',
+    town: 'Colchester',
+    county: 'Essex',
+    regionName: 'East Anglia',
+    postcodePrefix: 'CO1',
+    locationName: 'Colchester, Essex, UK',
+    shortLabel: 'Colchester (North Essex)',
+    latitude: 51.8892,
+    longitude: 0.9042,
+    regionCode: 'ee',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'London clay & brickearth loam (pH 6.6–7.3)',
+    microclimateNotes: 'One of the driest UK microclimates; ideal for Mediterranean sub-shrubs once gritted.'
+  },
+  // South East & Home Counties
+  {
+    id: 'oxford',
+    town: 'Oxford',
+    county: 'Oxfordshire',
+    regionName: 'South East England',
+    postcodePrefix: 'OX1',
+    locationName: 'Oxford, Oxfordshire, UK',
+    shortLabel: 'Oxford (Thames Valley)',
+    latitude: 51.752,
+    longitude: -1.2577,
+    regionCode: 'se',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Heavy Oxford clay & Thames valley gravel loam (pH 6.6–7.3)',
+    microclimateNotes: 'Warm summers and cold winter valley nights; classic heavy Oxford clay.'
+  },
+  {
+    id: 'wisley',
+    town: 'Wisley',
+    county: 'Surrey',
+    regionName: 'South East England',
+    postcodePrefix: 'GU23',
+    locationName: 'Wisley, Woking, Surrey, UK',
+    shortLabel: 'Wisley (RHS Wisley, Surrey)',
+    latitude: 51.3128,
+    longitude: -0.4743,
+    regionCode: 'se',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'Bagshot greensand to improved garden loam (pH 5.8–6.6)',
+    microclimateNotes: 'Warm Surrey summer highs with radiation frost risk in Wey valley.'
+  },
+  {
+    id: 'brighton',
+    town: 'Brighton',
+    county: 'East Sussex',
+    regionName: 'South East England',
+    postcodePrefix: 'BN1',
+    locationName: 'Brighton, East Sussex, UK',
+    shortLabel: 'Brighton (South Coast)',
+    latitude: 50.8225,
+    longitude: -0.1372,
+    regionCode: 'se',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'South Downs chalky clay loam (pH 7.0–7.7)',
+    microclimateNotes: 'High coastal sunshine hours, salt winds, and alkaline chalk-influence soil.'
+  },
+  {
+    id: 'canterbury',
+    town: 'Canterbury',
+    county: 'Kent',
+    regionName: 'South East England',
+    postcodePrefix: 'CT1',
+    locationName: 'Canterbury, Kent, UK',
+    shortLabel: 'Canterbury (Garden of England)',
+    latitude: 51.2802,
+    longitude: 1.0789,
+    regionCode: 'se',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'Kentish brickearth & clay-with-flints loam (pH 6.5–7.2)',
+    microclimateNotes: 'Warm continental summers; prime fruit and hop growing microclimate.'
+  },
+  {
+    id: 'winchester',
+    town: 'Winchester',
+    county: 'Hampshire',
+    regionName: 'South East England',
+    postcodePrefix: 'SO23',
+    locationName: 'Winchester, Hampshire, UK',
+    shortLabel: 'Winchester (Hampshire)',
+    latitude: 51.0632,
+    longitude: -1.308,
+    regionCode: 'se',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'Chalk downland clay-loam (pH 6.8–7.5)',
+    microclimateNotes: 'Sheltered Itchen valley with mild winters and warm early springs.'
+  },
+  // South West
+  {
+    id: 'bath',
+    town: 'Bath',
+    county: 'Somerset',
+    regionName: 'South West England',
+    postcodePrefix: 'BA1',
+    locationName: 'Bath, Somerset, UK',
+    shortLabel: 'Bath (Avon Valley)',
+    latitude: 51.3758,
+    longitude: -2.3599,
+    regionCode: 'sw',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'Cotswold limestone brash & Lias valley clay (pH 6.7–7.4)',
+    microclimateNotes: 'Warm Bath stone microclimate on south-facing slopes; valley floor mist.'
+  },
+  {
+    id: 'cheltenham',
+    town: 'Cheltenham',
+    county: 'Gloucestershire',
+    regionName: 'South West England',
+    postcodePrefix: 'GL50',
+    locationName: 'Cheltenham, Gloucestershire, UK',
+    shortLabel: 'Cheltenham (Cotswold Edge)',
+    latitude: 51.8994,
+    longitude: -2.0783,
+    regionCode: 'sw',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'Severn Vale Lower Lias heavy clay (pH 6.5–7.2)',
+    microclimateNotes: 'Sheltered beneath Cotswold escarpment; rich moisture-retentive clay.'
+  },
+  {
+    id: 'exeter',
+    town: 'Exeter',
+    county: 'Devon',
+    regionName: 'South West England',
+    postcodePrefix: 'EX1',
+    locationName: 'Exeter, Devon, UK',
+    shortLabel: 'Exeter (East Devon)',
+    latitude: 50.7184,
+    longitude: -3.5339,
+    regionCode: 'sw',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'Devon red sandstone clay-loam (pH 6.0–6.8)',
+    microclimateNotes: 'Mild South West winters and early spring warmth; wet Atlantic spells.'
+  },
+  {
+    id: 'rosemoor',
+    town: 'Great Torrington',
+    county: 'Devon',
+    regionName: 'South West England',
+    postcodePrefix: 'EX38',
+    locationName: 'Great Torrington (RHS Rosemoor), Devon, UK',
+    shortLabel: 'RHS Rosemoor (North Devon)',
+    latitude: 50.9419,
+    longitude: -4.1169,
+    regionCode: 'sw',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'Heavy culm measures silty clay (pH 5.7–6.4)',
+    microclimateNotes: 'High annual rainfall in Torridge valley with lush growth and winter wet clay.'
+  },
+  {
+    id: 'truro',
+    town: 'Truro',
+    county: 'Cornwall',
+    regionName: 'South West England',
+    postcodePrefix: 'TR1',
+    locationName: 'Truro, Cornwall, UK',
+    shortLabel: 'Truro (Cornwall)',
+    latitude: 50.2632,
+    longitude: -5.051,
+    regionCode: 'sw',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'Acidic Cornish shillet & clay loam (pH 5.4–6.2)',
+    microclimateNotes: 'Near frost-free maritime Cornwall; prime Camellia and Magnolia territory.'
+  },
+  // Wales & Northern Ireland
+  {
+    id: 'swansea',
+    town: 'Swansea',
+    county: 'West Glamorgan, Wales',
+    regionName: 'Wales',
+    postcodePrefix: 'SA1',
+    locationName: 'Swansea, South Wales, UK',
+    shortLabel: 'Swansea (Gower Peninsula)',
+    latitude: 51.6214,
+    longitude: -3.9436,
+    regionCode: 'wl',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'Coastal clay loam (pH 6.0–6.8)',
+    microclimateNotes: 'Mild coastal winters with strong south-westerly winds and high rainfall.'
+  },
+  {
+    id: 'llandudno',
+    town: 'Llandudno',
+    county: 'Conwy, North Wales',
+    regionName: 'Wales',
+    postcodePrefix: 'LL30',
+    locationName: 'Llandudno, Conwy, North Wales',
+    shortLabel: 'Llandudno (North Wales Coast)',
+    latitude: 53.3241,
+    longitude: -3.8276,
+    regionCode: 'wl',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'Limestone headland & coastal clay loam (pH 6.4–7.2)',
+    microclimateNotes: 'Snowdonia rain-shadow effect with mild Irish Sea winter temperatures.'
+  },
+  {
+    id: 'belfast',
+    town: 'Belfast',
+    county: 'County Antrim, Northern Ireland',
+    regionName: 'Northern Ireland',
+    postcodePrefix: 'BT1',
+    locationName: 'Belfast, Northern Ireland, UK',
+    shortLabel: 'Belfast (Lagan Valley)',
+    latitude: 54.5973,
+    longitude: -5.9301,
+    regionCode: 'ni',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Lagan valley heavy estuarine clay & basalt loam (pH 5.9–6.7)',
+    microclimateNotes: 'Temperate Belfast Lough moderation; steady year-round moisture.'
+  },
+  {
+    id: 'bamburgh',
+    town: 'Bamburgh',
+    county: 'Northumberland',
+    regionName: 'North East England',
+    postcodePrefix: 'NE69',
+    locationName: 'Bamburgh, Northumberland, UK',
+    shortLabel: 'Bamburgh (Northumberland Coast)',
+    latitude: 55.6089,
+    longitude: -1.7099,
+    regionCode: 'ne',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Coastal sandy clay loam over whin sill (pH 6.2–6.9)',
+    microclimateNotes: 'Strong maritime winds and high light levels; salt-tolerant windbreaks essential.'
+  },
+  {
+    id: 'berwick',
+    town: 'Berwick-upon-Tweed',
+    county: 'Northumberland',
+    regionName: 'North East England',
+    postcodePrefix: 'TD15',
+    locationName: 'Berwick-upon-Tweed, Northumberland, UK',
+    shortLabel: 'Berwick-upon-Tweed (Tweed Estuary)',
+    latitude: 55.7702,
+    longitude: -2.0054,
+    regionCode: 'ne',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Lower Tweed fertile boulder clay & loam (pH 6.3–7.0)',
+    microclimateNotes: 'Low annual rainfall for the North East with cool sea breezes.'
+  },
+  {
+    id: 'corbridge',
+    town: 'Corbridge',
+    county: 'Northumberland',
+    regionName: 'North East England',
+    postcodePrefix: 'NE45',
+    locationName: 'Corbridge, Northumberland, UK',
+    shortLabel: 'Corbridge (Tyne Valley)',
+    latitude: 54.9748,
+    longitude: -2.018,
+    regionCode: 'ne',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Alluvial Tyne terrace loam over clay (pH 6.1–6.8)',
+    microclimateNotes: 'Sheltered Tyne valley microclimate; watch for radiation frost in spring.'
+  },
+  {
+    id: 'ponteland',
+    town: 'Ponteland',
+    county: 'Northumberland',
+    regionName: 'North East England',
+    postcodePrefix: 'NE20',
+    locationName: 'Ponteland, Northumberland, UK',
+    shortLabel: 'Ponteland (Pont Valley)',
+    latitude: 55.0519,
+    longitude: -1.7453,
+    regionCode: 'ne',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Heavy Northumberland boulder clay (pH 6.0–6.8)',
+    microclimateNotes: 'Flat clay basin prone to winter waterlogging and frost pockets.'
+  },
+  {
+    id: 'morecambe',
+    town: 'Morecambe',
+    county: 'Lancashire',
+    regionName: 'North West England',
+    postcodePrefix: 'LA4',
+    locationName: 'Morecambe, Lancashire, UK',
+    shortLabel: 'Morecambe Bay (Lancashire)',
+    latitude: 54.0734,
+    longitude: -2.8659,
+    regionCode: 'nw',
+    rhsHardinessZone: 'H5',
+    soilProfile: 'Coastal alluvial silt & clay loam (pH 6.3–7.0)',
+    microclimateNotes: 'Morecambe Bay maritime moderation reduces winter frost severity.'
+  },
+  {
+    id: 'moreton-in-marsh',
+    town: 'Moreton-in-Marsh',
+    county: 'Gloucestershire',
+    regionName: 'South West England',
+    postcodePrefix: 'GL56',
+    locationName: 'Moreton-in-Marsh, Cotswolds, Gloucestershire',
+    shortLabel: 'Moreton-in-Marsh (Evenlode Vale)',
+    latitude: 51.9904,
+    longitude: -1.7032,
+    regionCode: 'sw',
+    rhsHardinessZone: 'H4',
+    soilProfile: 'Calcareous Cotswold clay-loam (pH 6.8–7.5)',
+    microclimateNotes: 'Open Cotswold vale; alkaline clay-loam suits lavender, clematis, and roses.'
+  }
+];
+
+// Pre-indexed location search entries for zero-allocation mobile autocomplete
+const INDEXED_UK_LOCATION_DIRECTORY = UK_GARDEN_LOCATION_DIRECTORY.map((item) => {
+  const townLower = (item.town || '').toLowerCase();
+  const locLower = (item.locationName || '').toLowerCase();
+  const shortLower = (item.shortLabel || '').toLowerCase();
+  const countyLower = (item.county || '').toLowerCase();
+  const regionLower = (item.regionName || '').toLowerCase();
+  const postcodeLower = (item.postcodePrefix || '').toLowerCase();
+  const rhsLower = (item.rhsHardinessZone || '').toLowerCase();
+  const searchableBlob = `${townLower} ${locLower} ${shortLower} ${countyLower} ${regionLower} ${postcodeLower} ${rhsLower}`;
+  const words = searchableBlob.split(/[\s,()-]+/).filter(Boolean);
+  return {
+    item,
+    townLower,
+    locLower,
+    shortLower,
+    countyLower,
+    regionLower,
+    postcodeLower,
+    searchableBlob,
+    words
+  };
+});
+
 /**
- * Resolves any location input (preset ID, preset name, or custom town/postcode)
+ * Returns ranked location suggestions matching a partial user query
+ * (e.g. partial town/city/village name, county, region, or UK postcode prefix).
+ */
+export function getGardenLocationSuggestions(partialQuery, limit = 8) {
+  const maxResults = Math.max(1, Math.min(20, Number(limit) || 8));
+  const raw = String(partialQuery || '').trim();
+
+  if (!raw) {
+    return UK_GARDEN_LOCATION_DIRECTORY.slice(0, maxResults);
+  }
+
+  const lower = raw.toLowerCase();
+  const tokens = lower.split(/[\s,]+/).filter(Boolean);
+
+  const prefixScored = [];
+  const substringScored = [];
+
+  for (const entry of INDEXED_UK_LOCATION_DIRECTORY) {
+    const {
+      item,
+      townLower,
+      locLower,
+      shortLower,
+      countyLower,
+      postcodeLower,
+      searchableBlob,
+      words
+    } = entry;
+
+    let score = 0;
+    let isPrefixOrTokenMatch = false;
+
+    if (townLower === lower || locLower === lower || postcodeLower === lower || item.id === lower) {
+      score = 120;
+      isPrefixOrTokenMatch = true;
+    } else if (townLower.startsWith(lower) || locLower.startsWith(lower)) {
+      score = 100;
+      isPrefixOrTokenMatch = true;
+    } else if (postcodeLower.startsWith(lower) || (postcodeLower.length >= 2 && lower.startsWith(postcodeLower))) {
+      score = 95;
+      isPrefixOrTokenMatch = true;
+    } else if (shortLower.startsWith(lower) || countyLower.startsWith(lower)) {
+      score = 85;
+      isPrefixOrTokenMatch = true;
+    } else if (words.some((w) => w.startsWith(lower))) {
+      score = 75;
+      isPrefixOrTokenMatch = true;
+    } else if (
+      tokens.length > 1 &&
+      tokens.every((tok) => words.some((w) => w.startsWith(tok)))
+    ) {
+      score = 68;
+      isPrefixOrTokenMatch = true;
+    } else if (
+      tokens.length > 0 &&
+      tokens.every((tok) => searchableBlob.includes(tok))
+    ) {
+      score = 55;
+    } else if (searchableBlob.includes(lower)) {
+      score = 45;
+    }
+
+    if (score > 0) {
+      if (isPrefixOrTokenMatch) {
+        prefixScored.push({ item, score });
+      } else {
+        substringScored.push({ item, score });
+      }
+    }
+  }
+
+  const sortByScoreThenName = (a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.item.locationName.localeCompare(b.item.locationName);
+  };
+
+  prefixScored.sort(sortByScoreThenName);
+  substringScored.sort(sortByScoreThenName);
+
+  const combined =
+    lower.length <= 3 && prefixScored.length > 0
+      ? prefixScored
+      : [...prefixScored, ...substringScored];
+
+  return combined.slice(0, maxResults).map((entry) => entry.item);
+}
+
+/**
+ * Converts a raw Open-Meteo Geocoding API item into a Loamy location suggestion object.
+ */
+export function convertGeocodeResultToSuggestion(geoItem) {
+  if (!geoItem || typeof geoItem !== 'object' || !geoItem.name) {
+    return null;
+  }
+  const lat = Number(Number(geoItem.latitude ?? 53.5).toFixed(4));
+  const lon = Number(Number(geoItem.longitude ?? -1.5).toFixed(4));
+  const town = String(geoItem.name).trim();
+  const admin1 = String(geoItem.admin1 || '').trim();
+  const admin2 = String(geoItem.admin2 || '').trim();
+  const county = admin2 || admin1 || 'UK';
+  const parts = [town];
+  if (admin2 && admin2.toLowerCase() !== town.toLowerCase()) parts.push(admin2);
+  else if (admin1 && admin1.toLowerCase() !== town.toLowerCase()) parts.push(admin1);
+  parts.push('UK');
+  const locationName = parts.join(', ');
+  const rhsHardinessZone = lat < 52.0 ? 'H5' : lat > 56.5 ? 'H3' : 'H4';
+  const postcodePrefix = Array.isArray(geoItem.postcodes) && geoItem.postcodes[0]
+    ? String(geoItem.postcodes[0]).split(' ')[0]
+    : '';
+
+  return {
+    id: `geo-${geoItem.id || `${town.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${lat}`}`,
+    town,
+    county,
+    regionName: admin1 || 'United Kingdom',
+    postcodePrefix,
+    locationName,
+    shortLabel: `${town} (${county})`,
+    latitude: lat,
+    longitude: lon,
+    regionCode: 'uk',
+    rhsHardinessZone,
+    soilProfile:
+      lat < 52.2
+        ? 'Neutral to mildly alkaline clay loam (pH 6.4–7.2)'
+        : 'Moisture-retentive boulder clay to garden loam (pH 6.0–6.8)',
+    microclimateNotes: `Calibrated for ${locationName} (${lat.toFixed(2)}°N, ${lon.toFixed(2)}°E); monitor overnight frost pockets and clay drainage.`
+  };
+}
+
+/**
+ * Resolves any location input (preset ID, preset name, suggestion object, or custom town/postcode)
  * into a complete GardenProfile with coordinates and RHS hardiness zone.
  */
 export function resolveGardenLocationProfile(
@@ -200,6 +1182,26 @@ export function resolveGardenLocationProfile(
     ...ADVISOR_CONFIG.DEFAULT_GARDEN_PROFILE,
     ...(currentProfile || {})
   };
+
+  if (locationInput && typeof locationInput === 'object' && locationInput.locationName) {
+    return {
+      ...baseProfile,
+      locationId: locationInput.id || locationInput.locationId || 'custom',
+      locationName: locationInput.locationName,
+      latitude: locationInput.latitude ?? baseProfile.latitude,
+      longitude: locationInput.longitude ?? baseProfile.longitude,
+      regionCode: locationInput.regionCode || baseProfile.regionCode || 'uk',
+      rhsHardinessZone: locationInput.rhsHardinessZone || baseProfile.rhsHardinessZone || 'H4',
+      soilProfile:
+        locationInput.soilProfile ||
+        baseProfile.soilProfile ||
+        'Moisture-retentive clay to garden loam (pH 6.0–6.8)',
+      microclimateNotes:
+        locationInput.microclimateNotes ||
+        `Calibrated for ${locationInput.locationName}; monitor overnight frost pockets and drainage after heavy rain.`
+    };
+  }
+
   const trimmed = String(locationInput || '').trim();
   if (!trimmed) {
     return null;
@@ -226,6 +1228,48 @@ export function resolveGardenLocationProfile(
       soilProfile: matchedPreset.soilProfile,
       microclimateNotes: matchedPreset.microclimateNotes
     };
+  }
+
+  // Check exact or town/postcode match in UK_GARDEN_LOCATION_DIRECTORY
+  const exactDirectoryMatch = UK_GARDEN_LOCATION_DIRECTORY.find(
+    (d) =>
+      d.id.toLowerCase() === lower ||
+      d.locationName.toLowerCase() === lower ||
+      d.town.toLowerCase() === lower ||
+      (d.postcodePrefix && d.postcodePrefix.toLowerCase() === lower)
+  );
+
+  if (exactDirectoryMatch) {
+    return {
+      ...baseProfile,
+      locationId: exactDirectoryMatch.id,
+      locationName: exactDirectoryMatch.locationName,
+      latitude: exactDirectoryMatch.latitude,
+      longitude: exactDirectoryMatch.longitude,
+      regionCode: exactDirectoryMatch.regionCode,
+      rhsHardinessZone: exactDirectoryMatch.rhsHardinessZone,
+      soilProfile: exactDirectoryMatch.soilProfile,
+      microclimateNotes: exactDirectoryMatch.microclimateNotes
+    };
+  }
+
+  // If user typed a partial single-token query without a comma (e.g. "Hadst" or "Morp"), resolve to top suggestion
+  if (!trimmed.includes(',') && lower.length >= 3) {
+    const partialMatches = getGardenLocationSuggestions(trimmed, 1);
+    if (partialMatches.length > 0) {
+      const topMatch = partialMatches[0];
+      return {
+        ...baseProfile,
+        locationId: topMatch.id,
+        locationName: topMatch.locationName,
+        latitude: topMatch.latitude,
+        longitude: topMatch.longitude,
+        regionCode: topMatch.regionCode,
+        rhsHardinessZone: topMatch.rhsHardinessZone,
+        soilProfile: topMatch.soilProfile,
+        microclimateNotes: topMatch.microclimateNotes
+      };
+    }
   }
 
   // Deterministic UK coordinates for custom town/village/postcode entries
@@ -419,34 +1463,34 @@ Strict Operational Rules:
 5. Explicitly address regional hazards when triggered by the forecast: winter waterlogging in heavy clay, wind-rock on tall brassicas/shrubs in wet soil, slug/snail pressure after rain, late/early frost pockets, and damp fungal diseases (e.g., potato/tomato blight, botrytis).`;
 
 export const GARDEN_ADVICE_SCHEMA = {
-  type: Type.OBJECT,
+  type: SchemaType.OBJECT,
   properties: {
     weatherAlerts: {
-      type: Type.ARRAY,
+      type: SchemaType.ARRAY,
       description: 'Immediate protective actions triggered by the 7-day Met Office forecast and active warnings.',
       items: {
-        type: Type.OBJECT,
+        type: SchemaType.OBJECT,
         properties: {
           severity: {
-            type: Type.STRING,
+            type: SchemaType.STRING,
             enum: ['INFO', 'WARNING', 'CRITICAL'],
             description: 'CRITICAL for imminent frost on tender plants or Amber/Red warnings; WARNING for wind-rock/heavy rain.'
           },
           hazardType: {
-            type: Type.STRING,
+            type: SchemaType.STRING,
             enum: ['FROST', 'HIGH_WIND', 'WATERLOGGING', 'HEAT_DROUGHT', 'BLIGHT_HUMIDITY', 'PEST_PRESSURE']
           },
           forecastWindow: {
-            type: Type.STRING,
+            type: SchemaType.STRING,
             description: 'UK formatted date/time window when the hazard occurs (e.g., "Sunday 25 Oct, 02:00 - 07:00").'
           },
           affectedPlants: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
+            type: SchemaType.ARRAY,
+            items: { type: SchemaType.STRING },
             description: 'Exact names of vulnerable plants from the user inventory.'
           },
           actionRequired: {
-            type: Type.STRING,
+            type: SchemaType.STRING,
             description: 'Direct, practical horticultural action (e.g., double-layer 30gsm fleece, stake and firm soil collar, move pot under glass).'
           }
         },
@@ -454,22 +1498,22 @@ export const GARDEN_ADVICE_SCHEMA = {
       }
     },
     seasonalTasks: {
-      type: Type.ARRAY,
+      type: SchemaType.ARRAY,
       description: 'Time-of-year gardening tasks tailored to the current date in North East England.',
       items: {
-        type: Type.OBJECT,
+        type: SchemaType.OBJECT,
         properties: {
-          taskTitle: { type: Type.STRING },
+          taskTitle: { type: SchemaType.STRING },
           category: {
-            type: Type.STRING,
+            type: SchemaType.STRING,
             enum: ['PRUNING', 'SOWING_PLANTING', 'SOIL_CARE', 'PEST_DISEASE', 'PROTECTION']
           },
           targetPlants: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
+            type: SchemaType.ARRAY,
+            items: { type: SchemaType.STRING }
           },
           instructions: {
-            type: Type.STRING,
+            type: SchemaType.STRING,
             description: 'Concise UK RHS-standard instructions adjusted for heavy clay and cool northern conditions.'
           }
         },
@@ -477,7 +1521,7 @@ export const GARDEN_ADVICE_SCHEMA = {
       }
     },
     soilAndMicroclimateNote: {
-      type: Type.STRING,
+      type: SchemaType.STRING,
       description: 'Assessment of current soil workability, drainage, and frost-pocket status based on incoming rain and temperatures.'
     }
   },
@@ -632,11 +1676,22 @@ export function buildRuleBasedHorticulturalAdvice(
 // 4. WEATHER FETCHER (MET OFFICE PROXY + OPEN-METEO UKMO FALLBACK)
 // ============================================================================
 
+const clientWeatherCache = new Map();
+const CLIENT_WEATHER_CACHE_TTL_MS = 10 * 60 * 1000;
+
 export async function fetchGardenWeather(gardenProfile = ADVISOR_CONFIG.DEFAULT_GARDEN_PROFILE, forceRefresh = false) {
   const resolvedProfile = gardenProfile?.locationName
     ? resolveGardenLocationProfile(gardenProfile.locationName, gardenProfile)
     : gardenProfile;
   const { latitude, longitude, regionCode, locationName } = resolvedProfile || {};
+
+  const cacheKey = `${latitude ?? ''}_${longitude ?? ''}_${regionCode || 'uk'}_${(locationName || '').trim().toLowerCase()}`;
+  if (!forceRefresh) {
+    const cached = clientWeatherCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CLIENT_WEATHER_CACHE_TTL_MS) {
+      return cached.data;
+    }
+  }
 
   // 1. Attempt primary Node.js Met Office DataHub Proxy
   try {
@@ -650,11 +1705,13 @@ export async function fetchGardenWeather(gardenProfile = ADVISOR_CONFIG.DEFAULT_
     const contentType = response.headers.get('content-type') || '';
     if (response.ok && contentType.includes('application/json')) {
       const data = await response.json();
+      const result = { ...data, dataSourceMode: 'MET_OFFICE_DATAHUB_PROXY' };
+      clientWeatherCache.set(cacheKey, { timestamp: Date.now(), data: result });
       logClientEvent('INFO', 'WEATHER_FETCH_PROXY_SUCCESS', {
         source: 'MET_OFFICE_DATAHUB_PROXY',
         cached: data.cached
       });
-      return { ...data, dataSourceMode: 'MET_OFFICE_DATAHUB_PROXY' };
+      return result;
     }
     throw new Error(`Proxy returned status ${response.status}`);
   } catch (proxyError) {

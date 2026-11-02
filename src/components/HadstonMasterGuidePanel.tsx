@@ -23,6 +23,7 @@ import {
   HADSTON_LOCAL_RISK_MITIGATION,
   generateHadstonMasterGuideMarkdown
 } from '../utils/hadstonMasterGuide';
+import PlantThumbnailWithModal from './PlantThumbnailWithModal';
 
 interface HadstonMasterGuidePanelProps {
   locationName?: string;
@@ -100,13 +101,32 @@ export default function HadstonMasterGuidePanel({
     setTimeout(() => setLoadFeedback(null), 4500);
   };
 
-  const isPlantInActivePlot = (item: RhsCatalogPlant) =>
-    plantInventory.some(
+  const activePlotKeySet = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of plantInventory) {
+      if (p.id) set.add(p.id.toLowerCase());
+      if (p.name) {
+        const lower = p.name.toLowerCase();
+        set.add(lower);
+        const refMatch = lower.match(/^#(\d+)\b/);
+        if (refMatch) {
+          set.add(`hadston-${String(refMatch[1]).padStart(2, '0')}`);
+        }
+      }
+    }
+    return set;
+  }, [plantInventory]);
+
+  const isPlantInActivePlot = (item: RhsCatalogPlant) => {
+    if (activePlotKeySet.has(item.catalogId.toLowerCase())) return true;
+    if (activePlotKeySet.has(item.name.toLowerCase())) return true;
+    if (activePlotKeySet.has(item.commonName.toLowerCase())) return true;
+    return plantInventory.some(
       (p) =>
-        p.id === item.catalogId ||
         p.name.toLowerCase().includes(item.commonName.toLowerCase()) ||
         p.name.toLowerCase().includes(item.name.toLowerCase())
     );
+  };
 
   return (
     <section
@@ -306,16 +326,24 @@ export default function HadstonMasterGuidePanel({
                   className="bg-white border border-stone-200/90 hover:border-emerald-600/60 rounded-2xl p-5 shadow-xs transition flex flex-col justify-between gap-4"
                 >
                   <div className="space-y-2.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-mono font-bold text-emerald-900">
-                          #{plant.photoRef}
-                        </span>
-                        <div>
-                          <h3 className="text-base font-bold text-slate-900 leading-snug">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <PlantThumbnailWithModal
+                          plantId={plant.catalogId}
+                          plantName={plant.commonName}
+                          photoRef={plant.photoRef}
+                          size="md"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-mono font-bold text-emerald-900">
+                              #{plant.photoRef}
+                            </span>
+                            <span className="text-xs italic text-slate-500 truncate">{plant.botanicalName}</span>
+                          </div>
+                          <h3 className="text-base font-bold text-slate-900 leading-snug mt-0.5">
                             {plant.commonName}
                           </h3>
-                          <p className="text-xs italic text-slate-500">{plant.botanicalName}</p>
                         </div>
                       </div>
 
@@ -541,36 +569,45 @@ export default function HadstonMasterGuidePanel({
           role="dialog"
           aria-modal="true"
           aria-label={`Care guide for ${selectedPlantDossier.name}`}
-          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+          className="fixed inset-0 z-50 bg-slate-900/55 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto"
           onClick={() => setSelectedPlantDossier(null)}
         >
           <div
-            className="bg-white border border-stone-200 rounded-2xl max-w-2xl w-full p-5 sm:p-6 shadow-xl space-y-5 my-8"
+            className="bg-white border-t sm:border border-stone-200 rounded-t-3xl sm:rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-5 sm:p-6 shadow-xl space-y-5 sm:my-8"
             onClick={(e) => e.stopPropagation()}
           >
+            <div className="w-10 h-1.5 bg-stone-300 rounded-full mx-auto -mt-1.5 mb-2 sm:hidden" />
             <div className="flex items-start justify-between gap-3 border-b border-stone-200 pb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-mono font-bold text-emerald-900">
-                    Photo Ref #{selectedPlantDossier.photoRef}
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-lg bg-stone-100 text-slate-800 text-xs font-bold">
-                    RHS {selectedPlantDossier.rhsRating}
-                  </span>
+              <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                <PlantThumbnailWithModal
+                  plantId={selectedPlantDossier.catalogId}
+                  plantName={selectedPlantDossier.commonName}
+                  photoRef={selectedPlantDossier.photoRef}
+                  size="lg"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-mono font-bold text-emerald-900">
+                      Photo Ref #{selectedPlantDossier.photoRef}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-lg bg-stone-100 text-slate-800 text-xs font-bold">
+                      RHS {selectedPlantDossier.rhsRating}
+                    </span>
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-bold text-slate-900 mt-1.5">
+                    {selectedPlantDossier.commonName}
+                  </h3>
+                  <p className="text-xs sm:text-sm italic text-slate-500">
+                    {selectedPlantDossier.botanicalName}
+                  </p>
                 </div>
-                <h3 className="text-xl font-bold text-slate-900 mt-1.5">
-                  {selectedPlantDossier.commonName}
-                </h3>
-                <p className="text-sm italic text-slate-500">
-                  {selectedPlantDossier.botanicalName}
-                </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => setSelectedPlantDossier(null)}
                 aria-label="Close plant care card"
-                className="p-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-slate-700 cursor-pointer"
+                className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl bg-stone-100 hover:bg-stone-200 text-slate-700 cursor-pointer shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>

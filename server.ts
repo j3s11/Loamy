@@ -16,8 +16,14 @@ async function startServer() {
   app.use(express.json({ limit: '15mb' }));
 
   // ==========================================================================
-  // 1. MOUNT MET OFFICE PROXY BEFORE VITE MIDDLEWARE OR CATCH-ALL ROUTES
+  // 1. MOUNT MET OFFICE PROXY & STATIC ASSETS BEFORE CATCH-ALL ROUTES
   // ==========================================================================
+  app.use(
+    express.static(path.resolve(process.cwd(), 'public'), {
+      maxAge: '7d',
+      etag: true
+    })
+  );
   app.use(metOfficeProxy);
 
   // ==========================================================================

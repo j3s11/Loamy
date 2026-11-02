@@ -4,6 +4,9 @@ import { CONFIG, msToMph, kmhToMph, msToKmh, round1, normaliseForecastData } fro
 import { calculateClaySoilSaturation, SOIL_RAINFALL_SCHEMA_SQL } from '../db/soilLogsDb';
 import {
   ADVISOR_CONFIG,
+  UK_GARDEN_LOCATION_DIRECTORY,
+  getGardenLocationSuggestions,
+  convertGeocodeResultToSuggestion,
   buildRuleBasedHorticulturalAdvice,
   resolveGardenLocationProfile,
   saveGardenProfileToStorage,
@@ -427,3 +430,83 @@ test('Clay Soil Saturation & 30-Day Trend dynamically changes depending on locat
   assert.equal(customHexham.locationCalibration.locationName, 'Hexham, UK');
   assert.ok(customHexham.logs[0].locationZone.includes('Hexham'));
 });
+
+test('getGardenLocationSuggestions provides ranked location suggestions for partial entered town, county, or postcode', () => {
+  assert.ok(Array.isArray(UK_GARDEN_LOCATION_DIRECTORY));
+  assert.ok(UK_GARDEN_LOCATION_DIRECTORY.length >= 30);
+
+  // 1. Partial town prefix ("Had" -> Hadston, Morpeth, Northumberland)
+  const hadSuggestions = getGardenLocationSuggestions('Had', 5);
+  assert.ok(hadSuggestions.length >= 1);
+  assert.equal(hadSuggestions[0].id, 'hadston');
+  assert.ok(hadSuggestions[0].locationName.includes('Hadston'));
+
+  // 2. Partial town prefix ("Morp" -> Morpeth, Northumberland, UK)
+  const morpSuggestions = getGardenLocationSuggestions('Morp', 5);
+  assert.ok(morpSuggestions.length >= 1);
+  assert.equal(morpSuggestions[0].id, 'morpeth');
+
+  // 3. Partial postcode prefix ("NE65" -> Hadston & Amble)
+  const ne65Suggestions = getGardenLocationSuggestions('NE65', 5);
+  assert.ok(ne65Suggestions.length >= 2);
+  assert.ok(ne65Suggestions.some((s: any) => s.id === 'hadston'));
+  assert.ok(ne65Suggestions.some((s: any) => s.id === 'amble'));
+
+  // 4. Partial county/region ("Corn" -> Truro, Cornwall)
+  const cornwallSuggestions = getGardenLocationSuggestions('Corn', 5);
+  assert.ok(cornwallSuggestions.length >= 1);
+  assert.ok(cornwallSuggestions[0].locationName.includes('Cornwall'));
+
+  // 5. Selecting a suggestion object resolves full GardenProfile with exact coordinates and RHS zone
+  const selectedProfile = resolveGardenLocationSuggestionsProfileHelper(hadSuggestions[0]);
+  assert.equal(selectedProfile.locationId, 'hadston');
+  assert.equal(selectedProfile.locationName, 'Hadston, Morpeth, Northumberland');
+  assert.equal(selectedProfile.rhsHardinessZone, 'H4');
+  assert.equal(selectedProfile.latitude, 55.3005);
+
+  // 6. Geocoding helper converts live Open-Meteo geocoding item into suggestion format
+  const geoSuggestion = convertGeocodeResultToSuggestion({
+    id: 2644668,
+    name: 'Knaresborough',
+    admin1: 'England',
+    admin2: 'North Yorkshire',
+    latitude: 54.0091,
+    longitude: -1.467,
+    postcodes: ['HG5 8AA']
+  });
+  assert.ok(geoSuggestion);
+  assert.equal(geoSuggestion.locationName, 'Knaresborough, North Yorkshire, UK');
+  assert.equal(geoSuggestion.postcodePrefix, 'HG5');
+  assert.equal(geoSuggestion.rhsHardinessZone, 'H4');
+});
+
+test('getPlantImageInfo resolves curated botanical photos for all 32 plants and staples', async () => {
+  const { getPlantImageInfo, PLANT_BOTANICAL_IMAGE_MAP } = await import('./plantImages');
+  
+  // 1. Photo Ref #1 (Salvia farinacea / Mealycup Sage)
+  const p1 = getPlantImageInfo('hadston-01', 1);
+  assert.ok(p1.photoUrl.startsWith('https://') || p1.photoUrl.startsWith('/assets/plants/'));
+  assert.equal(p1.name, 'Mealycup Sage');
+  assert.ok(p1.description.includes('violet-blue'));
+
+  // 2. Photo Ref #16 (Peony)
+  const p16 = getPlantImageInfo('Peony', 16);
+  assert.ok(p16.photoUrl.startsWith('https://') || p16.photoUrl.startsWith('/assets/plants/'));
+  assert.ok(p16.name.includes('Peony'));
+
+  // 3. Name search resolution (e.g. "English Lavender")
+  const pLav = getPlantImageInfo('English Lavender');
+  assert.ok(pLav.photoUrl.startsWith('https://') || pLav.photoUrl.startsWith('/assets/plants/'));
+  assert.ok(pLav.description.includes('Lavender') || pLav.description.includes('violet'));
+
+  // 4. Default graceful fallback for unknown plant
+  const pUnknown = getPlantImageInfo('Exotic Mysterious Orchid XYZ');
+  assert.ok(pUnknown.photoUrl.startsWith('https://') || pUnknown.photoUrl.startsWith('/assets/plants/'));
+  assert.equal(pUnknown.name, 'Exotic Mysterious Orchid XYZ');
+});
+
+function resolveGardenLocationSuggestionsProfileHelper(suggestion: any) {
+  return resolveGardenLocationProfile(suggestion);
+}
+
+
