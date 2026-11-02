@@ -10,7 +10,7 @@ import {
   Cell,
   CartesianGrid
 } from 'recharts';
-import { CloudRain, Droplets, Info } from 'lucide-react';
+import { CloudRain, Droplets, Info, Clock } from 'lucide-react';
 
 export interface DailyRainfallForecastItem {
   date: string;
@@ -27,6 +27,7 @@ interface SevenDayRainfallRechartsProps {
   dailyForecast: any[];
   locationName?: string;
   formatDayFn?: (dateStr: string) => string;
+  lastUpdatedLabel?: string;
 }
 
 // Horticultural classification for UK daily rainfall in heavy clay
@@ -71,7 +72,8 @@ function getRainfallCategory(mm: number): {
 export default function SevenDayRainfallRecharts({
   dailyForecast = [],
   locationName = 'Your Garden',
-  formatDayFn
+  formatDayFn,
+  lastUpdatedLabel
 }: SevenDayRainfallRechartsProps) {
   const [activeBarIndex, setActiveBarIndex] = useState<number | null>(null);
 
@@ -135,13 +137,22 @@ export default function SevenDayRainfallRecharts({
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3.5">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="p-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
               <CloudRain className="w-4 h-4" />
             </span>
             <h3 className="text-base sm:text-lg font-bold text-slate-900">
               Daily Rainfall Forecast (Next 7 Days)
             </h3>
+            {lastUpdatedLabel && (
+              <span
+                data-testid="rainfall-chart-last-updated"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-stone-50 border border-stone-200/80 px-2 py-0.5 rounded-md tabular-nums"
+              >
+                <Clock className="w-3 h-3 text-emerald-700 shrink-0" />
+                <span>Last updated: {lastUpdatedLabel}</span>
+              </span>
+            )}
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
             Recharts daily precipitation forecast calibrated for {locationName}

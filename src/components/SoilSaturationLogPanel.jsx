@@ -11,9 +11,11 @@ import {
   ChevronDown,
   ChevronUp,
   MapPin,
-  Compass
+  Compass,
+  Clock
 } from 'lucide-react';
 import SoilSaturationD3Chart from './SoilSaturationD3Chart';
+import { formatUkDateTime } from '../gardenAdvisorService';
 
 const DRAINAGE_LABELS = {
   WATERLOGGED_CLAY: {
@@ -40,6 +42,7 @@ export default function SoilSaturationLogPanel({
   locationPresets = []
 }) {
   const [logs, setLogs] = useState([]);
+  const [lastSyncedAt, setLastSyncedAt] = useState(() => new Date().toISOString());
   const [locationCalibration, setLocationCalibration] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -144,6 +147,7 @@ export default function SoilSaturationLogPanel({
       if (res.ok) {
         const data = await res.json();
         setLogs(Array.isArray(data.logs) ? data.logs : []);
+        setLastSyncedAt(new Date().toISOString());
         if (data.locationCalibration) {
           setLocationCalibration(data.locationCalibration);
         }
@@ -196,6 +200,7 @@ export default function SoilSaturationLogPanel({
       if (res.ok) {
         const data = await res.json();
         setLogs(Array.isArray(data.logs) ? data.logs : []);
+        setLastSyncedAt(new Date().toISOString());
         if (data.locationCalibration) {
           setLocationCalibration(data.locationCalibration);
         }
@@ -241,6 +246,7 @@ export default function SoilSaturationLogPanel({
       if (res.ok) {
         const data = await res.json();
         setLogs(Array.isArray(data.logs) ? data.logs : []);
+        setLastSyncedAt(new Date().toISOString());
         if (data.locationCalibration) {
           setLocationCalibration(data.locationCalibration);
         }
@@ -276,14 +282,9 @@ export default function SoilSaturationLogPanel({
     logs.length > 0 ? Math.max(...logs.map((item) => item.rainfall48hMm || 0)).toFixed(1) : '0.0';
   const waterloggedDaysCount = logs.filter((l) => l.waterloggingHazard).length;
   const latestRecordedDateLabel = useMemo(() => {
-    const rawDate = logs[0]?.recordedAt ? new Date(logs[0].recordedAt) : new Date();
-    const validDate = Number.isNaN(rawDate.getTime()) ? new Date() : rawDate;
-    return validDate.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-  }, [logs]);
+    const rawTimestamp = logs[0]?.recordedAt || lastSyncedAt;
+    return formatUkDateTime(rawTimestamp);
+  }, [logs, lastSyncedAt]);
 
   return (
     <section
@@ -333,8 +334,8 @@ export default function SoilSaturationLogPanel({
               data-testid="soil-last-updated-badge"
               className="inline-flex items-center gap-1 font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-md tabular-nums"
             >
-              <CheckCircle2 className="w-3 h-3 text-emerald-700 shrink-0" />
-              <span>Updated: {latestRecordedDateLabel}</span>
+              <Clock className="w-3 h-3 text-emerald-700 shrink-0" />
+              <span>Last updated: {latestRecordedDateLabel}</span>
             </span>
           </div>
 
@@ -564,7 +565,7 @@ export default function SoilSaturationLogPanel({
               <table className="w-full text-left border-collapse text-xs sm:text-sm">
                 <thead>
                   <tr className="bg-stone-50 border-b border-stone-200 text-slate-600 font-semibold">
-                    <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3">Date &amp; Time</th>
                     <th className="py-2.5 px-3">Zone</th>
                     <th className="py-2.5 px-3 text-right">48h Rain</th>
                     <th className="py-2.5 px-3 text-right">Saturation</th>
@@ -582,13 +583,10 @@ export default function SoilSaturationLogPanel({
                   ) : (
                     filteredLogs.map((log) => {
                       const badge = DRAINAGE_LABELS[log.drainageState] || DRAINAGE_LABELS.FIELD_CAPACITY;
-                      const formattedDate = new Date(log.recordedAt).toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: 'short'
-                      });
+                      const formattedDate = formatUkDateTime(log.recordedAt);
                       return (
                         <tr key={log.id} className="hover:bg-stone-50/80">
-                          <td className="py-2.5 px-3 font-mono text-slate-700 whitespace-nowrap">
+                          <td className="py-2.5 px-3 font-mono text-slate-700 whitespace-nowrap tabular-nums">
                             {formattedDate}
                           </td>
                           <td className="py-2.5 px-3 text-slate-900 font-medium">{log.locationZone}</td>

@@ -1544,6 +1544,39 @@ function logClientEvent(level, action, meta = {}) {
 }
 
 /**
+ * Formats an ISO timestamp or Date into UK date & 24-hour time (e.g. "02 Nov 2026, 15:14").
+ */
+export function formatUkDateTime(isoDateOrTimestamp) {
+  try {
+    const dateObj =
+      isoDateOrTimestamp instanceof Date
+        ? isoDateOrTimestamp
+        : isoDateOrTimestamp
+        ? new Date(isoDateOrTimestamp)
+        : new Date();
+    const validDate = Number.isNaN(dateObj.getTime()) ? new Date() : dateObj;
+
+    const datePart = new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'Europe/London'
+    }).format(validDate);
+
+    const timePart = new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'Europe/London'
+    }).format(validDate);
+
+    return `${datePart}, ${timePart}`;
+  } catch {
+    return 'Just now';
+  }
+}
+
+/**
  * Deterministic RHS H4 Heavy Clay Rule Engine Advisor Fallback
  * Used if Open-Meteo/MetOffice fails or if GEMINI_API_KEY is not configured in the environment.
  */
@@ -1666,6 +1699,7 @@ export function buildRuleBasedHorticulturalAdvice(
     : `${aspectCode}-facing aspect (reduced winter solar gain means heavy clay stays wet and cold 10–14 days longer)`;
 
   return {
+    evaluatedAt: weatherData?.fetchedAt || new Date().toISOString(),
     weatherAlerts,
     seasonalTasks,
     soilAndMicroclimateNote: `${placeName} (RHS ${profile.rhsHardinessZone}) · ${aspectSummary}. Forecast: ${rainMm}mm 48h rain, 7-day low ${minT}°C, peak gusts ${peakGustMph} mph. Use timber staging boards on heavy clay borders and keep container drainage clear.`
@@ -1705,7 +1739,12 @@ export async function fetchGardenWeather(gardenProfile = ADVISOR_CONFIG.DEFAULT_
     const contentType = response.headers.get('content-type') || '';
     if (response.ok && contentType.includes('application/json')) {
       const data = await response.json();
-      const result = { ...data, dataSourceMode: 'MET_OFFICE_DATAHUB_PROXY' };
+      const nowIso = new Date().toISOString();
+      const result = {
+        ...data,
+        fetchedAt: forceRefresh ? nowIso : data.fetchedAt || nowIso,
+        dataSourceMode: 'MET_OFFICE_DATAHUB_PROXY'
+      };
       clientWeatherCache.set(cacheKey, { timestamp: Date.now(), data: result });
       logClientEvent('INFO', 'WEATHER_FETCH_PROXY_SUCCESS', {
         source: 'MET_OFFICE_DATAHUB_PROXY',

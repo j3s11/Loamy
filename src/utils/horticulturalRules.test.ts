@@ -12,7 +12,8 @@ import {
   saveGardenProfileToStorage,
   loadSavedGardenProfileFromStorage,
   clearSavedGardenProfileFromStorage,
-  GARDEN_PROFILE_STORAGE_KEY
+  GARDEN_PROFILE_STORAGE_KEY,
+  formatUkDateTime
 } from '../gardenAdvisorService.js';
 import {
   MONTHLY_CLAY_PROFILES,
@@ -528,6 +529,29 @@ test('getAllSoilRainfallLogs dynamically rolls 30-day timestamps up to Today ins
 function resolveGardenLocationSuggestionsProfileHelper(suggestion: any) {
   return resolveGardenLocationProfile(suggestion);
 }
+
+test('formatUkDateTime formats ISO timestamps into UK date and 24-hour time and advice includes evaluatedAt', () => {
+  const formatted = formatUkDateTime('2026-11-02T15:09:00.000Z');
+  assert.ok(formatted.includes('02 Nov 2026'));
+  assert.ok(formatted.includes('15:09'));
+
+  // Graceful fallback when null or undefined is passed
+  const fallbackFormatted = formatUkDateTime(null);
+  assert.ok(fallbackFormatted.includes(','));
+  assert.ok(/\d{2}:\d{2}$/.test(fallbackFormatted));
+
+  const advice = buildRuleBasedHorticulturalAdvice(
+    {
+      fetchedAt: '2026-11-02T15:09:00.000Z',
+      hazardSummary: { frostRiskDetected: true, lowestForecastTempC: -0.5 },
+      dailyForecast: []
+    },
+    ADVISOR_CONFIG.DEFAULT_PLANT_INVENTORY,
+    ADVISOR_CONFIG.DEFAULT_GARDEN_PROFILE
+  );
+  assert.equal(advice.evaluatedAt, '2026-11-02T15:09:00.000Z');
+});
+
 
 
 
