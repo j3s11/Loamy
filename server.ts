@@ -30,6 +30,7 @@ async function startServer() {
   // 2. HISTORICAL RAINFALL & SOIL SATURATION DATABASE ROUTES
   // ==========================================================================
   app.get('/api/soil-logs', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     const locationQuery = {
       locationId: typeof req.query.locationId === 'string' ? req.query.locationId : undefined,
       locationName: typeof req.query.locationName === 'string' ? req.query.locationName : undefined,

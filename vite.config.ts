@@ -101,7 +101,7 @@ export default defineConfig(() => {
               },
             },
             {
-              urlPattern: /\/api\/(weather|soil-logs).*/i,
+              urlPattern: /\/api\/weather.*/i,
               handler: 'NetworkFirst',
               options: {
                 cacheName: 'loamy-api-data-cache',

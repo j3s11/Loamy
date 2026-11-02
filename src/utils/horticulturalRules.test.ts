@@ -505,8 +505,29 @@ test('getPlantImageInfo resolves curated botanical photos for all 32 plants and 
   assert.equal(pUnknown.name, 'Exotic Mysterious Orchid XYZ');
 });
 
+test('getAllSoilRainfallLogs dynamically rolls 30-day timestamps up to Today instead of static 23rd Oct', () => {
+  const now = new Date();
+  const todayIsoDate = now.toISOString().split('T')[0];
+
+  const { logs } = getAllSoilRainfallLogs({
+    locationId: 'york',
+    locationName: 'York, North Yorkshire, UK',
+    gardenAspect: 'SOUTH'
+  }, now);
+
+  assert.ok(logs.length >= 10);
+  // The newest reading in the 30-day trend must be anchored to Today
+  assert.equal(logs[0].recordedAt.split('T')[0], todayIsoDate);
+
+  // Oldest reading in the 10-point rolling window is 28 days prior to Today
+  const oldestDate = new Date(logs[logs.length - 1].recordedAt);
+  const diffDays = Math.round((now.getTime() - oldestDate.getTime()) / (24 * 60 * 60 * 1000));
+  assert.ok(diffDays >= 27 && diffDays <= 29);
+});
+
 function resolveGardenLocationSuggestionsProfileHelper(suggestion: any) {
   return resolveGardenLocationProfile(suggestion);
 }
+
 
 

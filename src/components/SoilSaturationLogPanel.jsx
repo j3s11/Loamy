@@ -140,7 +140,7 @@ export default function SoilSaturationLogPanel({
     setIsLoading(true);
     try {
       const qs = buildQueryString();
-      const res = await fetch(`/api/soil-logs${qs}`);
+      const res = await fetch(`/api/soil-logs${qs}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setLogs(Array.isArray(data.logs) ? data.logs : []);
@@ -275,6 +275,15 @@ export default function SoilSaturationLogPanel({
   const peakRain48h =
     logs.length > 0 ? Math.max(...logs.map((item) => item.rainfall48hMm || 0)).toFixed(1) : '0.0';
   const waterloggedDaysCount = logs.filter((l) => l.waterloggingHazard).length;
+  const latestRecordedDateLabel = useMemo(() => {
+    const rawDate = logs[0]?.recordedAt ? new Date(logs[0].recordedAt) : new Date();
+    const validDate = Number.isNaN(rawDate.getTime()) ? new Date() : rawDate;
+    return validDate.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  }, [logs]);
 
   return (
     <section
@@ -319,6 +328,14 @@ export default function SoilSaturationLogPanel({
                 </span>
               </>
             )}
+            <span aria-hidden="true">·</span>
+            <span
+              data-testid="soil-last-updated-badge"
+              className="inline-flex items-center gap-1 font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-md tabular-nums"
+            >
+              <CheckCircle2 className="w-3 h-3 text-emerald-700 shrink-0" />
+              <span>Updated: {latestRecordedDateLabel}</span>
+            </span>
           </div>
 
           <p data-testid="soil-hydrology-note" className="text-xs sm:text-sm text-slate-600 pt-0.5">

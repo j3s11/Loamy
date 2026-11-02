@@ -123,10 +123,45 @@ export function calculateClaySoilSaturation({
   };
 }
 
-const DEFAULT_SEED_LOGS: HistoricalSoilRainfallLog[] = [
+interface SeedLogTemplate extends Omit<HistoricalSoilRainfallLog, 'recordedAt'> {
+  daysAgo: number;
+  hourUtc: number;
+  minuteUtc: number;
+}
+
+/**
+ * Computes a rolling ISO timestamp `daysAgo` prior to `referenceDate` (defaults to Today).
+ * Ensures `daysAgo === 0` always lands on today's date without exceeding the current timestamp.
+ */
+export function computeRollingLogTimestamp(
+  daysAgo: number,
+  hourUtc: number = 8,
+  minuteUtc: number = 0,
+  referenceDate: Date = new Date()
+): string {
+  const target = new Date(
+    Date.UTC(
+      referenceDate.getUTCFullYear(),
+      referenceDate.getUTCMonth(),
+      referenceDate.getUTCDate() - daysAgo,
+      hourUtc,
+      minuteUtc,
+      0,
+      0
+    )
+  );
+  if (daysAgo === 0 && target.getTime() > referenceDate.getTime()) {
+    return referenceDate.toISOString();
+  }
+  return target.toISOString();
+}
+
+const DEFAULT_SEED_LOG_TEMPLATES: SeedLogTemplate[] = [
   {
     id: 'log-garden-01',
-    recordedAt: '2026-10-23T08:00:00.000Z',
+    daysAgo: 0,
+    hourUtc: 8,
+    minuteUtc: 0,
     locationZone: 'South-Facing Mixed Border (Heavy Clay)',
     rainfall24hMm: 16.4,
     rainfall48hMm: 32.8,
@@ -140,7 +175,9 @@ const DEFAULT_SEED_LOGS: HistoricalSoilRainfallLog[] = [
   },
   {
     id: 'log-garden-02',
-    recordedAt: '2026-10-21T08:00:00.000Z',
+    daysAgo: 2,
+    hourUtc: 8,
+    minuteUtc: 0,
     locationZone: 'Open Allotment Bed (Exposed)',
     rainfall24hMm: 9.2,
     rainfall48hMm: 21.5,
@@ -154,7 +191,9 @@ const DEFAULT_SEED_LOGS: HistoricalSoilRainfallLog[] = [
   },
   {
     id: 'log-garden-03',
-    recordedAt: '2026-10-18T07:30:00.000Z',
+    daysAgo: 5,
+    hourUtc: 7,
+    minuteUtc: 30,
     locationZone: 'Lower Garden Frost Pocket',
     rainfall24hMm: 1.8,
     rainfall48hMm: 5.4,
@@ -168,7 +207,9 @@ const DEFAULT_SEED_LOGS: HistoricalSoilRainfallLog[] = [
   },
   {
     id: 'log-garden-04',
-    recordedAt: '2026-10-14T09:00:00.000Z',
+    daysAgo: 8,
+    hourUtc: 9,
+    minuteUtc: 0,
     locationZone: 'Raised Bed (Compost / Loam Mix)',
     rainfall24hMm: 0.4,
     rainfall48hMm: 2.1,
@@ -177,12 +218,14 @@ const DEFAULT_SEED_LOGS: HistoricalSoilRainfallLog[] = [
     drainageState: 'FREE_DRAINING',
     waterloggingHazard: false,
     frostPocketActive: false,
-    notes: 'Friable tilth across raised beds; applied 5cm well-rotted farmyard manure mulch ahead of November frosts.',
+    notes: 'Friable tilth across raised beds; applied 5cm well-rotted organic mulch ahead of overnight frosts.',
     source: 'MANUAL_OBSERVATION'
   },
   {
     id: 'log-garden-05',
-    recordedAt: '2026-10-11T08:15:00.000Z',
+    daysAgo: 11,
+    hourUtc: 8,
+    minuteUtc: 15,
     locationZone: 'South-Facing Mixed Border (Heavy Clay)',
     rainfall24hMm: 4.5,
     rainfall48hMm: 11.2,
@@ -191,12 +234,14 @@ const DEFAULT_SEED_LOGS: HistoricalSoilRainfallLog[] = [
     drainageState: 'FIELD_CAPACITY',
     waterloggingHazard: false,
     frostPocketActive: false,
-    notes: 'Moderate drainage recovery following early October squalls; earthworm casts active across mulched border.',
+    notes: 'Moderate drainage recovery following passing squalls; earthworm casts active across mulched border.',
     source: 'UKMO_2KM_AUTO_SYNC'
   },
   {
     id: 'log-garden-06',
-    recordedAt: '2026-10-08T07:45:00.000Z',
+    daysAgo: 14,
+    hourUtc: 7,
+    minuteUtc: 45,
     locationZone: 'North-Facing Shaded Border (Heavy Clay)',
     rainfall24hMm: 18.2,
     rainfall48hMm: 35.6,
@@ -210,7 +255,9 @@ const DEFAULT_SEED_LOGS: HistoricalSoilRainfallLog[] = [
   },
   {
     id: 'log-garden-07',
-    recordedAt: '2026-10-05T08:30:00.000Z',
+    daysAgo: 18,
+    hourUtc: 8,
+    minuteUtc: 30,
     locationZone: 'Open Allotment Bed (Exposed)',
     rainfall24hMm: 11.0,
     rainfall48hMm: 23.4,
@@ -224,7 +271,9 @@ const DEFAULT_SEED_LOGS: HistoricalSoilRainfallLog[] = [
   },
   {
     id: 'log-garden-08',
-    recordedAt: '2026-10-01T08:00:00.000Z',
+    daysAgo: 21,
+    hourUtc: 8,
+    minuteUtc: 0,
     locationZone: 'South-Facing Mixed Border (Heavy Clay)',
     rainfall24hMm: 3.2,
     rainfall48hMm: 7.8,
@@ -233,12 +282,14 @@ const DEFAULT_SEED_LOGS: HistoricalSoilRainfallLog[] = [
     drainageState: 'FIELD_CAPACITY',
     waterloggingHazard: false,
     frostPocketActive: false,
-    notes: 'Start of October baseline check; soil warm and moist at field capacity.',
+    notes: 'Rolling 3-week baseline check; soil moist and stable at field capacity.',
     source: 'UKMO_2KM_AUTO_SYNC'
   },
   {
     id: 'log-garden-09',
-    recordedAt: '2026-09-28T09:00:00.000Z',
+    daysAgo: 25,
+    hourUtc: 9,
+    minuteUtc: 0,
     locationZone: 'Sheltered Lawn Corner',
     rainfall24hMm: 1.2,
     rainfall48hMm: 3.5,
@@ -252,7 +303,9 @@ const DEFAULT_SEED_LOGS: HistoricalSoilRainfallLog[] = [
   },
   {
     id: 'log-garden-10',
-    recordedAt: '2026-09-25T08:30:00.000Z',
+    daysAgo: 28,
+    hourUtc: 8,
+    minuteUtc: 30,
     locationZone: 'Raised Bed (Compost / Loam Mix)',
     rainfall24hMm: 0.0,
     rainfall48hMm: 1.4,
@@ -261,10 +314,17 @@ const DEFAULT_SEED_LOGS: HistoricalSoilRainfallLog[] = [
     drainageState: 'FREE_DRAINING',
     waterloggingHazard: false,
     frostPocketActive: false,
-    notes: 'Late September dry tilth; planted narcissus bulbs with sharp grit drainage layer.',
+    notes: 'Start of 30-day window dry tilth; planted spring bulbs with sharp grit drainage layer.',
     source: 'MANUAL_OBSERVATION'
   }
 ];
+
+function materializeRollingSeedLogs(referenceDate: Date = new Date()): HistoricalSoilRainfallLog[] {
+  return DEFAULT_SEED_LOG_TEMPLATES.map(({ daysAgo, hourUtc, minuteUtc, ...rest }) => ({
+    ...rest,
+    recordedAt: computeRollingLogTimestamp(daysAgo, hourUtc, minuteUtc, referenceDate)
+  }));
+}
 
 interface RegionalHydrologyProfile {
   baselineClayRetentionPct: number;
@@ -465,18 +525,20 @@ export function resolveSoilLocationCalibration(
 
 /**
  * Generates a realistic, deterministic 30-day series of 10 soil saturation & rainfall logs
- * calibrated to the specified garden location, soil profile, and aspect.
+ * calibrated to the specified garden location, soil profile, and aspect, dynamically anchored to Today.
  */
 export function buildLocationCalibratedSeedLogs(
-  query?: SoilLogLocationQuery
+  query?: SoilLogLocationQuery,
+  referenceDate: Date = new Date()
 ): HistoricalSoilRainfallLog[] {
+  const rollingBaseLogs = materializeRollingSeedLogs(referenceDate);
   const hasLocationQuery = Boolean(
     (query?.locationName && query.locationName.trim()) ||
       (query?.locationId && query.locationId.trim())
   );
 
   if (!hasLocationQuery) {
-    return DEFAULT_SEED_LOGS.map((log) => ({ ...log }));
+    return rollingBaseLogs;
   }
 
   const calibration = resolveSoilLocationCalibration(query);
@@ -492,7 +554,7 @@ export function buildLocationCalibratedSeedLogs(
     hash = (hash * 31 + calibration.locationKey.charCodeAt(i)) % 9973;
   }
 
-  return DEFAULT_SEED_LOGS.map((baseLog, idx) => {
+  return rollingBaseLogs.map((baseLog, idx) => {
     const waveOffset = presetProfile
       ? presetProfile.dayWaveOffsets[idx % presetProfile.dayWaveOffsets.length]
       : (((hash >> (idx % 8)) % 11) - 5) * 0.7;
@@ -561,7 +623,7 @@ interface PersistedSoilDbState {
   deletedIds: string[];
 }
 
-const DB_FILE_PATH = path.resolve(os.tmpdir(), 'garden_soil_rainfall_logs_v5.json');
+const DB_FILE_PATH = path.resolve(os.tmpdir(), 'garden_soil_rainfall_logs_v6.json');
 
 let cachedPersistedState: PersistedSoilDbState | null = null;
 
@@ -614,14 +676,17 @@ function savePersistedState(state: PersistedSoilDbState): void {
   }
 }
 
-export function getAllSoilRainfallLogs(query?: SoilLogLocationQuery): {
+export function getAllSoilRainfallLogs(
+  query?: SoilLogLocationQuery,
+  referenceDate: Date = new Date()
+): {
   schemaSql: string;
   locationCalibration: SoilLocationCalibrationSummary;
   logs: HistoricalSoilRainfallLog[];
 } {
   const state = loadPersistedState();
   const calibration = resolveSoilLocationCalibration(query);
-  const seedLogs = buildLocationCalibratedSeedLogs(query);
+  const seedLogs = buildLocationCalibratedSeedLogs(query, referenceDate);
 
   // Filter user-created logs that belong to this locationKey (or default if unconfigured)
   const matchingCustomLogs = state.customLogs.filter((log) => {
