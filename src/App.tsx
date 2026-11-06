@@ -33,6 +33,8 @@ import {
   BookOpen,
   SlidersHorizontal,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Clock
 } from 'lucide-react';
 import {
@@ -53,7 +55,11 @@ import {
   CatalogPlantItem,
   getHadston32InventoryRecords,
   HADSTON_GARDEN_COLLECTION_32,
-  RhsCatalogPlant
+  RhsCatalogPlant,
+  PLANT_CATEGORY_DEFINITIONS,
+  PlantGroupCategoryId,
+  resolvePlantGroupCategory,
+  groupPlantInventoryByCategory
 } from './utils/rhsPlantCatalog';
 import { HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR } from './utils/hadstonMasterGuide';
 import { getCurrentUkMonthIndex } from './utils/monthlyClayChecklist';
@@ -81,6 +87,7 @@ for (const masterPlant of HADSTON_GARDEN_COLLECTION_32) {
 export interface PlantRecord {
   id: string;
   name: string;
+  category?: PlantGroupCategoryId | string;
   rhsRating: string;
   location: string;
   growthStage: string;
@@ -326,13 +333,20 @@ export default function App() {
     gardenProfile?.locationName && gardenProfile.locationName.trim() !== ''
   );
 
-  // Clean top-level workspace tab state (directly under title)
+  // Clean top-level workspace tab state
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<
     'OVERVIEW' | 'MASTER_GUIDE' | 'CHECKLIST' | 'SOIL_TREND' | 'PLANTS'
   >('OVERVIEW');
 
-  // Sub-view for grouping similar options inside the Calendar & Checklist tab
-  const [calendarSubView, setCalendarSubView] = useState<'ALL' | 'CALENDAR' | 'CHECKLISTS'>('ALL');
+  // Minimalist progressive-disclosure states (collapsed by default until clicked)
+  const [showWeatherDetails, setShowWeatherDetails] = useState<boolean>(false);
+  const [expandedForecastDayIdx, setExpandedForecastDayIdx] = useState<number | null>(null);
+  const [expandedAlertIndices, setExpandedAlertIndices] = useState<Record<number, boolean>>({});
+  const [showRainfallChart, setShowRainfallChart] = useState<boolean>(false);
+  const [showSoilTrendDrawer, setShowSoilTrendDrawer] = useState<boolean>(false);
+  const [showFullYearCalendar, setShowFullYearCalendar] = useState<boolean>(false);
+  const [showMonthlyClayChecklist, setShowMonthlyClayChecklist] = useState<boolean>(false);
+  const [showPlantManagerDrawer, setShowPlantManagerDrawer] = useState<boolean>(false);
 
   // Location text input synced with current gardenProfile.locationName (empty on first visit)
   const [locationInputText, setLocationInputText] = useState<string>(
@@ -403,8 +417,9 @@ export default function App() {
     };
   }, [locationInputText, isLocationSuggestionsOpen]);
 
-  // Inventory search & care modal state
+  // Inventory search, collapsible category headings & care modal state
   const [inventoryFilterText, setInventoryFilterText] = useState<string>('');
+  const [expandedPlantCategories, setExpandedPlantCategories] = useState<Record<string, boolean>>({});
   const [activeCareModalPlant, setActiveCareModalPlant] = useState<RhsCatalogPlant | null>(null);
 
   const [completedTasks, setCompletedTasks] = useState<Record<string, boolean>>(() => {
@@ -421,6 +436,7 @@ export default function App() {
   const [editingPlantId, setEditingPlantId] = useState<string | null>(null);
   const [plantForm, setPlantForm] = useState({
     name: '',
+    category: 'SHRUBS' as PlantGroupCategoryId,
     rhsRating: 'H4',
     location: UI_CONFIG.LOCATION_PRESETS[0],
     growthStage: UI_CONFIG.GROWTH_STAGE_PRESETS[2],
@@ -445,13 +461,51 @@ export default function App() {
   const filteredPlotInventory = useMemo(() => {
     const q = inventoryFilterText.trim().toLowerCase();
     if (!q) return plantInventory;
-    return plantInventory.filter(
-      (p: PlantRecord) =>
+    return plantInventory.filter((p: PlantRecord) => {
+      const catId = resolvePlantGroupCategory(p);
+      const catDef = PLANT_CATEGORY_DEFINITIONS.find((d) => d.id === catId);
+      const catLabel = catDef ? `${catDef.label} ${catDef.shortLabel}`.toLowerCase() : '';
+      return (
         p.name.toLowerCase().includes(q) ||
         p.location.toLowerCase().includes(q) ||
-        p.rhsRating.toLowerCase().includes(q)
-    );
+        p.rhsRating.toLowerCase().includes(q) ||
+        catLabel.includes(q)
+      );
+    });
   }, [plantInventory, inventoryFilterText]);
+
+  const groupedPlotInventory = useMemo(
+    () => groupPlantInventoryByCategory(filteredPlotInventory, false),
+    [filteredPlotInventory]
+  );
+
+  const isSearchingInventory = inventoryFilterText.trim() !== '';
+
+  const areAllCategoriesExpanded = useMemo(
+    () =>
+      groupedPlotInventory.length > 0 &&
+      groupedPlotInventory.every((g) => Boolean(expandedPlantCategories[g.id])),
+    [groupedPlotInventory, expandedPlantCategories]
+  );
+
+  const togglePlantCategoryGroup = useCallback((categoryId: string) => {
+    setExpandedPlantCategories((prev) => ({
+      ...prev,
+      [categoryId]: !prev[categoryId]
+    }));
+  }, []);
+
+  const toggleAllPlantCategoryGroups = useCallback(() => {
+    if (areAllCategoriesExpanded) {
+      setExpandedPlantCategories({});
+    } else {
+      const next: Record<string, boolean> = {};
+      for (const g of groupedPlotInventory) {
+        next[g.id] = true;
+      }
+      setExpandedPlantCategories(next);
+    }
+  }, [areAllCategoriesExpanded, groupedPlotInventory]);
 
   // Close Plant Care modal on Escape key
   useEffect(() => {
@@ -619,6 +673,7 @@ export default function App() {
     setEditingPlantId(null);
     setPlantForm({
       name: '',
+      category: 'SHRUBS',
       rhsRating: 'H4',
       location: gardenProfile.isSouthFacing
         ? UI_CONFIG.LOCATION_PRESETS[0]
@@ -633,6 +688,7 @@ export default function App() {
     setEditingPlantId(plant.id);
     setPlantForm({
       name: plant.name,
+      category: resolvePlantGroupCategory(plant),
       rhsRating: plant.rhsRating || 'H4',
       location: plant.location || UI_CONFIG.LOCATION_PRESETS[0],
       growthStage: plant.growthStage || UI_CONFIG.GROWTH_STAGE_PRESETS[2],
@@ -651,6 +707,8 @@ export default function App() {
       .map((v) => v.trim())
       .filter(Boolean);
 
+    const chosenCategory = plantForm.category || resolvePlantGroupCategory({ name: trimmedName });
+
     if (editingPlantId) {
       setPlantInventory((prev: PlantRecord[]) =>
         prev.map((item) =>
@@ -658,6 +716,7 @@ export default function App() {
             ? {
                 ...item,
                 name: trimmedName,
+                category: chosenCategory,
                 rhsRating: plantForm.rhsRating,
                 location: plantForm.location,
                 growthStage: plantForm.growthStage,
@@ -670,6 +729,7 @@ export default function App() {
       const newPlant: PlantRecord = {
         id: `plt-${Date.now()}`,
         name: trimmedName,
+        category: chosenCategory,
         rhsRating: plantForm.rhsRating,
         location: plantForm.location,
         growthStage: plantForm.growthStage,
@@ -678,6 +738,7 @@ export default function App() {
       setPlantInventory((prev: PlantRecord[]) => [newPlant, ...prev]);
     }
 
+    setExpandedPlantCategories((prev) => ({ ...prev, [chosenCategory]: true }));
     setIsFormOpen(false);
     setEditingPlantId(null);
   };
@@ -702,17 +763,20 @@ export default function App() {
     (catalogPlant: CatalogPlantItem) => {
       if (activeInventoryNameSet.has(catalogPlant.name.toLowerCase())) return;
 
+      const resolvedCategory = resolvePlantGroupCategory(catalogPlant);
       const newPlant: PlantRecord = {
         id: catalogPlant.photoRef
           ? `hadston-plt-${String(catalogPlant.photoRef).padStart(2, '0')}`
           : `plt-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
         name: catalogPlant.name,
+        category: resolvedCategory,
         rhsRating: catalogPlant.rhsRating,
         location: catalogPlant.recommendedLocation,
         growthStage: catalogPlant.defaultOctGrowthStage,
         vulnerabilities: [...catalogPlant.vulnerabilities]
       };
       setPlantInventory((prev: PlantRecord[]) => [newPlant, ...prev]);
+      setExpandedPlantCategories((prev) => ({ ...prev, [resolvedCategory]: true }));
     },
     [activeInventoryNameSet, setPlantInventory]
   );
@@ -844,62 +908,26 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#F6F5F0] text-slate-900 font-sans safe-page-bottom overflow-x-hidden">
       {/* =====================================================================
-          CLEAN STICKY TOP HEADER WITH SAFE-AREA CLEARANCE & TOP TABS
+          CLEAN STICKY TOP HEADER (Brand + Actions on Row 1, Location + Timestamp on Row 2)
       ===================================================================== */}
       <header className="border-b border-stone-200/90 bg-white sticky top-0 z-30 safe-top-header">
-        <div className="max-w-6xl mx-auto px-3.5 sm:px-6 lg:px-8 pt-2 sm:pt-3.5 pb-2.5 space-y-2.5">
-          {/* Top Row: Title, Subtitle & Quick Actions */}
+        <div className="max-w-6xl mx-auto px-3.5 sm:px-6 lg:px-8 pt-2 sm:pt-3 pb-2.5 space-y-2">
+          {/* Row 1: Brand Title & Quick Action Buttons */}
           <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2.5 sm:gap-3">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-stone-900 border border-stone-700/80 flex items-center justify-center shrink-0 shadow-2xs">
-                  <PixelSunflowerLogo className="w-6 h-6 sm:w-7 sm:h-7" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <h1
-                      data-testid="app-brand-title"
-                      className="text-base sm:text-2xl font-extrabold tracking-tight text-slate-900 truncate"
-                    >
-                      Loamy
-                    </h1>
-                    <span className="text-xs font-medium text-slate-500 hidden sm:inline">
-                      Garden &amp; Weather Companion
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (hasConfiguredLocation) {
-                        setShowLocationEditor((prev) => !prev);
-                      }
-                    }}
-                    className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] sm:text-xs text-slate-600 text-left hover:text-slate-900 transition cursor-pointer"
-                    title="Tap to change garden location or direction"
-                  >
-                    <span className="inline-flex items-center gap-1 font-semibold text-slate-800 truncate max-w-[135px] sm:max-w-none">
-                      <MapPin className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-700 shrink-0" />
-                      <span className="truncate">
-                        {hasConfiguredLocation
-                          ? gardenProfile.locationName
-                          : 'Set your garden location below'}
-                      </span>
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      {hasConfiguredLocation && (
-                        <>
-                          <span className="text-emerald-800 font-semibold">
-                            RHS {gardenProfile.rhsHardinessZone}
-                          </span>
-                          <span aria-hidden="true">·</span>
-                        </>
-                      )}
-                      <span className="text-amber-800 font-medium truncate">
-                        {currentAspectShortName}
-                      </span>
-                    </span>
-                  </button>
-                </div>
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-stone-900 border border-stone-700/80 flex items-center justify-center shrink-0 shadow-2xs">
+                <PixelSunflowerLogo className="w-5 h-5 sm:w-7 sm:h-7" />
+              </div>
+              <div className="flex items-baseline gap-2 min-w-0">
+                <h1
+                  data-testid="app-brand-title"
+                  className="text-lg sm:text-2xl font-extrabold tracking-tight text-slate-900 shrink-0"
+                >
+                  Loamy
+                </h1>
+                <span className="text-xs font-medium text-slate-500 hidden md:inline truncate">
+                  Garden &amp; Weather Companion
+                </span>
               </div>
             </div>
 
@@ -911,39 +939,26 @@ export default function App() {
                     type="button"
                     data-testid="toggle-location-editor-button"
                     onClick={() => setShowLocationEditor((prev) => !prev)}
-                    className={`inline-flex items-center justify-center gap-1.5 min-h-[36px] sm:min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                    className={`inline-flex items-center justify-center gap-1.5 min-h-[34px] sm:min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
                       showLocationEditor
                         ? 'bg-emerald-50 border-emerald-600 text-emerald-900'
                         : 'bg-stone-100 hover:bg-stone-200 text-slate-800 border-stone-300'
                     }`}
                   >
                     <SlidersHorizontal className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-                    <span className="sm:hidden">{showLocationEditor ? 'Done' : 'Location'}</span>
-                    <span className="hidden sm:inline">
-                      {showLocationEditor ? 'Hide Location' : 'Location & Direction'}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => exportGardenReportToCsv(plantInventory, advice, gardenProfile)}
-                    className="hidden md:inline-flex items-center justify-center gap-1.5 min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-medium bg-white hover:bg-stone-50 text-slate-700 border border-stone-300 transition cursor-pointer"
-                    title="Export Inventory, Alerts & Tasks to CSV"
-                  >
-                    <Download className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Export CSV</span>
+                    <span>{showLocationEditor ? 'Done' : 'Location'}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => runGardenAnalysis(true)}
                     disabled={isLoading}
-                    className="inline-flex items-center justify-center gap-1.5 min-h-[36px] sm:min-h-[38px] px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-800 hover:bg-emerald-700 disabled:bg-emerald-800/60 text-white shadow-2xs transition cursor-pointer"
+                    className="inline-flex items-center justify-center gap-1.5 min-h-[34px] sm:min-h-[38px] px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-800 hover:bg-emerald-700 disabled:bg-emerald-800/60 text-white shadow-2xs transition cursor-pointer"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isLoading ? 'animate-spin' : ''}`} />
                     <span className="sm:hidden">{isLoading ? '...' : 'Refresh'}</span>
                     <span className="hidden sm:inline">
-                      {isLoading ? 'Refreshing...' : 'Refresh Weather'}
+                      {isLoading ? 'Refreshing...' : 'Refresh'}
                     </span>
                   </button>
                 </>
@@ -951,76 +966,50 @@ export default function App() {
             </div>
           </div>
 
-          {/* Primary Top Navigation Tabs Directly Under the Title */}
-          {hasConfiguredLocation && (
-            <nav
-              id="workspace-tabs-anchor"
-              data-testid="workspace-tabs"
-              aria-label="Garden dashboard sections"
-              className="pt-1.5 border-t border-stone-100"
+          {/* Row 2: Dedicated Location Pill & Last Updated Timestamp Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-1.5 border-t border-stone-100 text-[11px] sm:text-xs text-slate-600">
+            <button
+              type="button"
+              onClick={() => {
+                if (hasConfiguredLocation) {
+                  setShowLocationEditor((prev) => !prev);
+                }
+              }}
+              className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-left hover:text-slate-900 transition cursor-pointer min-w-0"
+              title="Tap to change garden location or direction"
             >
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 w-full">
-                <button
-                  type="button"
-                  data-testid="tab-overview"
-                  onClick={() => setActiveWorkspaceTab('OVERVIEW')}
-                  className={`inline-flex items-center justify-center gap-1.5 sm:gap-2 min-h-[38px] sm:min-h-[40px] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
-                    activeWorkspaceTab === 'OVERVIEW' || activeWorkspaceTab === 'SOIL_TREND'
-                      ? 'bg-emerald-800 text-white shadow-2xs'
-                      : 'text-slate-700 bg-stone-50 hover:bg-stone-100 border border-stone-200/80'
-                  }`}
-                >
-                  <Thermometer className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                  <span className="truncate">Weather &amp; Soil</span>
-                </button>
-
-                <button
-                  type="button"
-                  data-testid="tab-master-guide"
-                  onClick={() => setActiveWorkspaceTab('MASTER_GUIDE')}
-                  className={`inline-flex items-center justify-center gap-1.5 sm:gap-2 min-h-[38px] sm:min-h-[40px] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
-                    activeWorkspaceTab === 'MASTER_GUIDE'
-                      ? 'bg-emerald-800 text-white shadow-2xs'
-                      : 'text-slate-700 bg-stone-50 hover:bg-stone-100 border border-stone-200/80'
-                  }`}
-                >
-                  <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                  <span className="truncate">Master Guide</span>
-                </button>
-
-                <button
-                  type="button"
-                  data-testid="tab-checklist"
-                  onClick={() => setActiveWorkspaceTab('CHECKLIST')}
-                  className={`inline-flex items-center justify-center gap-1.5 sm:gap-2 min-h-[38px] sm:min-h-[40px] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
-                    activeWorkspaceTab === 'CHECKLIST'
-                      ? 'bg-emerald-800 text-white shadow-2xs'
-                      : 'text-slate-700 bg-stone-50 hover:bg-stone-100 border border-stone-200/80'
-                  }`}
-                >
-                  <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                  <span className="truncate">Calendar &amp; Checklist</span>
-                </button>
-
-                <button
-                  type="button"
-                  data-testid="tab-plants"
-                  onClick={() => setActiveWorkspaceTab('PLANTS')}
-                  className={`inline-flex items-center justify-center gap-1.5 sm:gap-2 min-h-[38px] sm:min-h-[40px] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
-                    activeWorkspaceTab === 'PLANTS'
-                      ? 'bg-emerald-800 text-white shadow-2xs'
-                      : 'text-slate-700 bg-stone-50 hover:bg-stone-100 border border-stone-200/80'
-                  }`}
-                >
-                  <Sprout className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                  <span className="truncate">My Plants ({plantInventory.length})</span>
-                </button>
-              </div>
-              <span data-testid="microclimate-note" className="sr-only">
-                {advice?.soilAndMicroclimateNote}
+              <span className="inline-flex items-center gap-1 font-semibold text-slate-800 truncate max-w-[200px] sm:max-w-none">
+                <MapPin className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-700 shrink-0" />
+                <span className="truncate">
+                  {hasConfiguredLocation
+                    ? gardenProfile.locationName
+                    : 'Set your garden location below'}
+                </span>
               </span>
-            </nav>
-          )}
+              {hasConfiguredLocation && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="text-emerald-800 font-semibold shrink-0">
+                    RHS {gardenProfile.rhsHardinessZone}
+                  </span>
+                </>
+              )}
+              <span aria-hidden="true">·</span>
+              <span className="text-amber-800 font-medium shrink-0">
+                {currentAspectShortName}
+              </span>
+            </button>
+
+            {hasConfiguredLocation && (
+              <span
+                data-testid="weather-last-updated"
+                className="inline-flex items-center gap-1 text-[11px] text-slate-500 tabular-nums shrink-0"
+              >
+                <Clock className="w-3 h-3 text-emerald-700 shrink-0" />
+                <span>Updated {weatherLastUpdatedLabel}</span>
+              </span>
+            )}
+          </div>
         </div>
       </header>
 
@@ -1261,626 +1250,601 @@ export default function App() {
             )}
 
             {/* ===================================================================
-                GARDEN LOCATION & DIRECTION BAR
-                Collapsed by default on mobile once location is remembered so weather cards
-                appear immediately; expands when 'Location' is tapped in header.
+                GARDEN LOCATION & DIRECTION BAR (Recommendation 3)
+                Always collapsed by default on both mobile & desktop once location is set;
+                opens as a clean panel only when the header location pill or 'Location' button is clicked.
             =================================================================== */}
-            {(activeWorkspaceTab === 'OVERVIEW' ||
-              activeWorkspaceTab === 'SOIL_TREND' ||
-              showLocationEditor) && (
-              <section
-                data-testid="garden-location-aspect-bar"
-                className={`${
-                  showLocationEditor ? 'block' : 'hidden md:block'
-                } bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4`}
-              >
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
-                  {/* Location Input & Quick Region Preset */}
-                  <div className="lg:col-span-7 space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <label
-                          htmlFor="garden-location-input"
-                          className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5"
-                        >
-                          <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                          Garden Location
-                        </label>
-                        <span
-                          data-testid="saved-location-indicator"
-                          className="inline-flex items-center gap-1 text-xs font-medium text-emerald-800"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                          <span>Remembered for next visit</span>
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <label htmlFor="garden-location-select" className="text-xs text-slate-500">
-                          Preset:
-                        </label>
-                        <select
-                          id="garden-location-select"
-                          data-testid="garden-location-select"
-                          value={selectedLocationPreset ? selectedLocationPreset.id : ''}
-                          onChange={(e) => handleSelectLocationPreset(e.target.value)}
-                          className="px-2.5 py-1 text-xs font-medium rounded-lg bg-stone-50 border border-stone-300 text-slate-800 focus:outline-none focus:border-emerald-700"
-                        >
-                          <option value="" disabled>
-                            Choose a UK preset...
-                          </option>
-                          {ADVISOR_CONFIG.GARDEN_LOCATION_PRESETS.map((preset: any) => (
-                            <option key={preset.id} value={preset.id}>
-                              {preset.shortLabel || `${preset.locationName} (RHS ${preset.rhsHardinessZone})`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+            <section
+              data-testid="garden-location-aspect-bar"
+              className={`${
+                showLocationEditor ? 'block' : 'hidden'
+              } bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4`}
+            >
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+                {/* Location Input & Quick Region Preset */}
+                <div className="lg:col-span-7 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <label
+                        htmlFor="garden-location-input"
+                        className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5"
+                      >
+                        <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                        Garden Location
+                      </label>
+                      <span
+                        data-testid="saved-location-indicator"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-emerald-800"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                        <span>Remembered for next visit</span>
+                      </span>
                     </div>
 
-                    <form onSubmit={handleLocationInputSubmit} className="flex flex-row gap-2 relative">
-                      <div className="relative flex-1 min-w-0">
-                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        <input
-                          id="garden-location-input"
-                          data-testid="garden-location-input"
-                          type="text"
-                          autoComplete="off"
-                          role="combobox"
-                          aria-expanded={isLocationSuggestionsOpen && locationSuggestions.length > 0}
-                          aria-autocomplete="list"
-                          aria-controls="bar-location-suggestions"
-                          value={locationInputText}
-                          onFocus={() => {
-                            if (locationInputText.trim().length > 0) {
-                              setIsLocationSuggestionsOpen(true);
-                            }
-                          }}
-                          onBlur={() => {
-                            window.setTimeout(() => setIsLocationSuggestionsOpen(false), 150);
-                          }}
-                          onKeyDown={handleLocationInputKeyDown}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setLocationInputText(val);
-                            setIsLocationSuggestionsOpen(val.trim().length > 0);
+                    <div className="flex items-center gap-1.5">
+                      <label htmlFor="garden-location-select" className="text-xs text-slate-500">
+                        Preset:
+                      </label>
+                      <select
+                        id="garden-location-select"
+                        data-testid="garden-location-select"
+                        value={selectedLocationPreset ? selectedLocationPreset.id : ''}
+                        onChange={(e) => handleSelectLocationPreset(e.target.value)}
+                        className="px-2.5 py-1 text-xs font-medium rounded-lg bg-stone-50 border border-stone-300 text-slate-800 focus:outline-none focus:border-emerald-700"
+                      >
+                        <option value="" disabled>
+                          Choose a UK preset...
+                        </option>
+                        {ADVISOR_CONFIG.GARDEN_LOCATION_PRESETS.map((preset: any) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.shortLabel || `${preset.locationName} (RHS ${preset.rhsHardinessZone})`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleLocationInputSubmit} className="flex flex-row gap-2 relative">
+                    <div className="relative flex-1 min-w-0">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        id="garden-location-input"
+                        data-testid="garden-location-input"
+                        type="text"
+                        autoComplete="off"
+                        role="combobox"
+                        aria-expanded={isLocationSuggestionsOpen && locationSuggestions.length > 0}
+                        aria-autocomplete="list"
+                        aria-controls="bar-location-suggestions"
+                        value={locationInputText}
+                        onFocus={() => {
+                          if (locationInputText.trim().length > 0) {
+                            setIsLocationSuggestionsOpen(true);
+                          }
+                        }}
+                        onBlur={() => {
+                          window.setTimeout(() => setIsLocationSuggestionsOpen(false), 150);
+                        }}
+                        onKeyDown={handleLocationInputKeyDown}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setLocationInputText(val);
+                          setIsLocationSuggestionsOpen(val.trim().length > 0);
+                          setActiveSuggestionIndex(-1);
+                        }}
+                        placeholder="Start typing town, village, or postcode (e.g. York, Morpeth, NE65)..."
+                        className="w-full min-h-[40px] pl-9 pr-8 py-1.5 text-sm rounded-xl bg-stone-50 border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
+                      />
+                      {locationInputText && (
+                        <button
+                          type="button"
+                          data-testid="clear-location-input-button"
+                          onClick={() => {
+                            setLocationInputText('');
+                            setIsLocationSuggestionsOpen(false);
                             setActiveSuggestionIndex(-1);
                           }}
-                          placeholder="Start typing town, village, or postcode (e.g. York, Morpeth, NE65)..."
-                          className="w-full min-h-[40px] pl-9 pr-8 py-1.5 text-sm rounded-xl bg-stone-50 border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
-                        />
-                        {locationInputText && (
-                          <button
-                            type="button"
-                            data-testid="clear-location-input-button"
-                            onClick={() => {
-                              setLocationInputText('');
-                              setIsLocationSuggestionsOpen(false);
-                              setActiveSuggestionIndex(-1);
-                            }}
-                            aria-label="Clear location search"
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-stone-200/70 transition cursor-pointer"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                      <button
-                        type="submit"
-                        data-testid="set-location-button"
-                        className="min-h-[40px] px-4 py-1.5 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-800 hover:bg-emerald-700 text-white transition whitespace-nowrap shrink-0 cursor-pointer"
-                      >
-                        Set Location
-                      </button>
-
-                      {/* Partial Location Suggestions Dropdown (Full Form Row Width) */}
-                      {isLocationSuggestionsOpen && locationSuggestions.length > 0 && (
-                        <ul
-                          id="bar-location-suggestions"
-                          data-testid="location-suggestions-list"
-                          role="listbox"
-                          aria-label="Matching UK garden locations"
-                          className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-white border border-stone-200 rounded-xl shadow-lg max-h-64 overflow-y-auto divide-y divide-stone-100"
+                          aria-label="Clear location search"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-stone-200/70 transition cursor-pointer"
                         >
-                          {locationSuggestions.map((suggestion: any, idx: number) => {
-                            const isHighlighted = idx === activeSuggestionIndex;
-                            return (
-                              <li key={suggestion.id || suggestion.locationName} role="option" aria-selected={isHighlighted}>
-                                <button
-                                  type="button"
-                                  data-testid="location-suggestion-item"
-                                  onMouseDown={(e) => {
-                                    e.preventDefault();
-                                    handleSelectLocationSuggestion(suggestion);
-                                  }}
-                                  onClick={() => handleSelectLocationSuggestion(suggestion)}
-                                  className={`w-full text-left px-3 py-2 flex items-start justify-between gap-2 transition cursor-pointer ${
-                                    isHighlighted
-                                      ? 'bg-emerald-50 text-emerald-950'
-                                      : 'hover:bg-stone-50 text-slate-800'
-                                  }`}
-                                >
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-1.5">
-                                      <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                                      <span className="text-xs sm:text-sm font-semibold text-slate-900 truncate">
-                                        {suggestion.locationName}
-                                      </span>
-                                    </div>
-                                    <p className="text-[11px] text-slate-500 truncate mt-0.5 pl-5">
-                                      {suggestion.shortLabel || suggestion.county || 'UK'}
-                                      {suggestion.soilProfile ? ` · ${suggestion.soilProfile}` : ''}
-                                    </p>
-                                  </div>
-                                  <div className="flex items-center gap-1 shrink-0 mt-0.5">
-                                    {suggestion.postcodePrefix && (
-                                      <span className="text-[10px] font-medium text-slate-600 bg-stone-100 px-1.5 py-0.5 rounded-md">
-                                        {suggestion.postcodePrefix}
-                                      </span>
-                                    )}
-                                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
-                                      RHS {suggestion.rhsHardinessZone || 'H4'}
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="submit"
+                      data-testid="set-location-button"
+                      className="min-h-[40px] px-4 py-1.5 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-800 hover:bg-emerald-700 text-white transition whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      Set Location
+                    </button>
+
+                    {/* Partial Location Suggestions Dropdown */}
+                    {isLocationSuggestionsOpen && locationSuggestions.length > 0 && (
+                      <ul
+                        id="bar-location-suggestions"
+                        data-testid="location-suggestions-list"
+                        role="listbox"
+                        aria-label="Matching UK garden locations"
+                        className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-white border border-stone-200 rounded-xl shadow-lg max-h-64 overflow-y-auto divide-y divide-stone-100"
+                      >
+                        {locationSuggestions.map((suggestion: any, idx: number) => {
+                          const isHighlighted = idx === activeSuggestionIndex;
+                          return (
+                            <li key={suggestion.id || suggestion.locationName} role="option" aria-selected={isHighlighted}>
+                              <button
+                                type="button"
+                                data-testid="location-suggestion-item"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  handleSelectLocationSuggestion(suggestion);
+                                }}
+                                onClick={() => handleSelectLocationSuggestion(suggestion)}
+                                className={`w-full text-left px-3 py-2 flex items-start justify-between gap-2 transition cursor-pointer ${
+                                  isHighlighted
+                                    ? 'bg-emerald-50 text-emerald-950'
+                                    : 'hover:bg-stone-50 text-slate-800'
+                                }`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                                    <span className="text-xs sm:text-sm font-semibold text-slate-900 truncate">
+                                      {suggestion.locationName}
                                     </span>
                                   </div>
-                                </button>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </form>
-                  </div>
-
-                  {/* Garden Direction Selector (What direction does your garden face?) */}
-                  <div className="lg:col-span-5 flex flex-col justify-between gap-2.5 border-t border-stone-100 pt-3 lg:border-t-0 lg:pt-0 lg:border-l lg:pl-5">
-                    <div className="min-w-0">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                        <Compass className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                        <span>What direction does your garden face?</span>
-                      </span>
-                      <p className="text-xs text-slate-500 mt-0.5 truncate">
-                        {currentAspectShortName}: {currentAspectOption.summary}
-                      </p>
-                    </div>
-
-                    <div
-                      data-testid="garden-direction-selector"
-                      role="group"
-                      aria-label="What direction does your garden face?"
-                      className="grid grid-cols-4 gap-1.5"
-                    >
-                      {ADVISOR_CONFIG.GARDEN_ASPECT_OPTIONS.map((option: any) => {
-                        const isSelected = currentAspectOption.code === option.code;
-                        return (
-                          <button
-                            key={option.code}
-                            type="button"
-                            data-testid={`direction-option-${option.code.toLowerCase()}`}
-                            onClick={() => handleSelectAspectOption(option.code)}
-                            aria-pressed={isSelected}
-                            className={`min-h-[34px] px-2 py-1 rounded-lg text-xs font-semibold border text-center transition truncate cursor-pointer ${
-                              isSelected
-                                ? 'bg-emerald-800 border-emerald-800 text-white shadow-2xs'
-                                : 'bg-stone-50 border-stone-200 text-slate-600 hover:bg-stone-100'
-                            }`}
-                          >
-                            {option.code.charAt(0) + option.code.slice(1).toLowerCase()}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                                  <p className="text-[11px] text-slate-500 truncate mt-0.5 pl-5">
+                                    {suggestion.shortLabel || suggestion.county || 'UK'}
+                                    {suggestion.soilProfile ? ` · ${suggestion.soilProfile}` : ''}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                                  {suggestion.postcodePrefix && (
+                                    <span className="text-[10px] font-medium text-slate-600 bg-stone-100 px-1.5 py-0.5 rounded-md">
+                                      {suggestion.postcodePrefix}
+                                    </span>
+                                  )}
+                                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
+                                    RHS {suggestion.rhsHardinessZone || 'H4'}
+                                  </span>
+                                </div>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </form>
                 </div>
 
-                {showLocationEditor && (
-                  <div className="pt-3 border-t border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-600">
-                    <p data-testid="aspect-advice-summary">
-                      <strong className="text-slate-900">{currentAspectShortName} Microclimate:</strong>{' '}
-                      {currentAspectOption.summary}
-                    </p>
-                    <p className="text-slate-500">
-                      <strong className="text-slate-700">Soil:</strong> {currentSoilProfileText}
+                {/* Garden Direction Selector */}
+                <div className="lg:col-span-5 flex flex-col justify-between gap-2.5 border-t border-stone-100 pt-3 lg:border-t-0 lg:pt-0 lg:border-l lg:pl-5">
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                      <Compass className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                      <span>What direction does your garden face?</span>
+                    </span>
+                    <p className="text-xs text-slate-500 mt-0.5 truncate">
+                      {currentAspectShortName}: {currentAspectOption.summary}
                     </p>
                   </div>
-                )}
-              </section>
-            )}
+
+                  <div
+                    data-testid="garden-direction-selector"
+                    role="group"
+                    aria-label="What direction does your garden face?"
+                    className="grid grid-cols-4 gap-1.5"
+                  >
+                    {ADVISOR_CONFIG.GARDEN_ASPECT_OPTIONS.map((option: any) => {
+                      const isSelected = currentAspectOption.code === option.code;
+                      return (
+                        <button
+                          key={option.code}
+                          type="button"
+                          data-testid={`direction-option-${option.code.toLowerCase()}`}
+                          onClick={() => handleSelectAspectOption(option.code)}
+                          aria-pressed={isSelected}
+                          className={`min-h-[34px] px-2 py-1 rounded-lg text-xs font-semibold border text-center transition truncate cursor-pointer ${
+                            isSelected
+                              ? 'bg-emerald-800 border-emerald-800 text-white shadow-2xs'
+                              : 'bg-stone-50 border-stone-200 text-slate-600 hover:bg-stone-100'
+                          }`}
+                        >
+                          {option.code.charAt(0) + option.code.slice(1).toLowerCase()}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-600">
+                <p data-testid="aspect-advice-summary">
+                  <strong className="text-slate-900">{currentAspectShortName} Microclimate:</strong>{' '}
+                  {currentAspectOption.summary}
+                </p>
+                <p className="text-slate-500">
+                  <strong className="text-slate-700">Soil:</strong> {currentSoilProfileText}
+                </p>
+              </div>
+            </section>
 
         {/* ===================================================================
-            TAB 1: WEATHER & SOIL (Grouped Weather Forecast, Alerts & Soil Trend)
+            TAB 1: WEATHER & SOIL (Minimalist Progressive-Disclosure Layout)
         =================================================================== */}
         {(activeWorkspaceTab === 'OVERVIEW' || activeWorkspaceTab === 'SOIL_TREND') && (
-          <div className="space-y-4 sm:space-y-6">
-            {/* Sub-options Switcher Inside Weather & Soil Tab */}
-            <div className="flex flex-wrap items-center justify-between gap-2 bg-white border border-stone-200/90 rounded-2xl p-2 sm:p-3 shadow-xs">
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5 w-full sm:w-auto">
+          <div className="space-y-4">
+            {/* 1. COMPACT "TODAY AT A GLANCE" BAR (Recommendation 1) */}
+            <section
+              data-testid="primary-weather-metrics"
+              aria-label="Current weather conditions in UK units"
+              className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Today at a Glance
+                  </span>
+                  {(hazardSummary.frostRiskDetected ||
+                    hazardSummary.windRockRiskDetected ||
+                    hazardSummary.waterloggingRiskDetected) && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200">
+                      <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                      <span>
+                        {hazardSummary.frostRiskDetected
+                          ? 'Frost Alert'
+                          : hazardSummary.windRockRiskDetected
+                          ? 'High Gusts'
+                          : 'Wet Clay'}
+                      </span>
+                    </span>
+                  )}
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => setActiveWorkspaceTab('OVERVIEW')}
-                  className={`inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
-                    activeWorkspaceTab === 'OVERVIEW'
-                      ? 'bg-emerald-800 text-white'
-                      : 'bg-stone-100 text-slate-700 hover:bg-stone-200'
-                  }`}
+                  data-testid="toggle-weather-details-button"
+                  onClick={() => setShowWeatherDetails((prev) => !prev)}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 hover:text-emerald-950 px-2.5 py-1 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200/80 transition cursor-pointer"
                 >
-                  <Thermometer className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                  <span className="truncate sm:hidden">Weather &amp; Outlook</span>
-                  <span className="hidden sm:inline">Current Weather, 7-Day Outlook &amp; Alerts</span>
-                </button>
-
-                <button
-                  type="button"
-                  data-testid="tab-soil-trend"
-                  onClick={() => setActiveWorkspaceTab('SOIL_TREND')}
-                  className={`inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
-                    activeWorkspaceTab === 'SOIL_TREND'
-                      ? 'bg-emerald-800 text-white'
-                      : 'bg-stone-100 text-slate-700 hover:bg-stone-200'
-                  }`}
-                >
-                  <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                  <span className="truncate sm:hidden">Soil &amp; 30-Day Trend</span>
-                  <span className="hidden sm:inline">Soil Moisture &amp; 30-Day Trend</span>
-                </button>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 w-full sm:w-auto pt-1 sm:pt-0 border-t border-stone-100 sm:border-t-0 text-xs text-slate-600">
-                <span
-                  data-testid="weather-last-updated"
-                  className="inline-flex items-center gap-1.5 font-medium text-emerald-900 bg-emerald-50/80 border border-emerald-200/80 px-2.5 py-1 rounded-lg tabular-nums"
-                >
-                  <Clock className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                  <span>Last updated: {weatherLastUpdatedLabel}</span>
-                </span>
-                <span className="hidden lg:inline text-slate-400">·</span>
-                <span className="hidden lg:inline text-slate-500">ukv_2km + Open-Meteo</span>
-              </div>
-            </div>
-
-            {activeWorkspaceTab === 'SOIL_TREND' ? (
-              <Suspense
-                fallback={
-                  <div className="bg-white border border-stone-200/90 rounded-2xl p-6 text-center text-sm text-slate-500 animate-pulse">
-                    Loading 30-day soil moisture trend &amp; rainfall log...
-                  </div>
-                }
-              >
-                <SoilSaturationLogPanel
-                  weatherData={weatherData}
-                  gardenProfile={gardenProfile}
-                  locationPresets={UI_CONFIG.LOCATION_PRESETS as any}
-                />
-              </Suspense>
-            ) : (
-              <div className="space-y-4 sm:space-y-6">
-                {/* 3 Clean Weather Cards (°C, mph, mm) */}
-                <section
-                  data-testid="primary-weather-metrics"
-                  aria-label="Current weather conditions in UK units"
-                  className="grid grid-cols-1 sm:grid-cols-3 gap-4"
-                >
-                  {/* Card 1: Current Temperature (°C) */}
-                  <div
-                    data-testid="metric-temperature-card"
-                    className={`p-5 rounded-2xl border shadow-xs ${
-                      hazardSummary.frostRiskDetected
-                        ? 'bg-sky-50/70 border-sky-300'
-                        : 'bg-white border-stone-200/90'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Temperature (°C)
-                      </span>
-                      <Thermometer
-                        className={`w-5 h-5 ${
-                          hazardSummary.frostRiskDetected ? 'text-sky-700' : 'text-emerald-700'
-                        }`}
-                      />
-                    </div>
-
-                    <div className="mt-2 flex items-baseline justify-between gap-2 tabular-nums">
-                      <span
-                        data-testid="current-temperature-value"
-                        className="text-3xl font-bold text-slate-900"
-                      >
-                        {currentTempC.toFixed(1)}°C
-                      </span>
-                      <span className="text-xs font-medium text-slate-500">
-                        High {todayMaxTempC.toFixed(1)}°C · 7d Low {lowest7DayTempC.toFixed(1)}°C
-                      </span>
-                    </div>
-
-                    <p className="mt-2 text-xs text-slate-600">
-                      {hazardSummary.frostRiskDetected
-                        ? `Frost alert: overnight low reaches ${lowest7DayTempC.toFixed(1)}°C`
-                        : 'Above ground-frost threshold'}
-                    </p>
-                  </div>
-
-                  {/* Card 2: Wind Speed (mph) */}
-                  <div
-                    data-testid="metric-wind-card"
-                    className={`p-5 rounded-2xl border shadow-xs ${
-                      hazardSummary.windRockRiskDetected
-                        ? 'bg-amber-50/70 border-amber-300'
-                        : 'bg-white border-stone-200/90'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Wind Speed (mph)
-                      </span>
-                      <Wind
-                        className={`w-5 h-5 ${
-                          hazardSummary.windRockRiskDetected ? 'text-amber-700' : 'text-emerald-700'
-                        }`}
-                      />
-                    </div>
-
-                    <div className="mt-2 flex items-baseline justify-between gap-2 tabular-nums">
-                      <span
-                        data-testid="current-wind-mph-value"
-                        className="text-3xl font-bold text-slate-900"
-                      >
-                        {currentWindSpeedMph.toFixed(1)} mph
-                      </span>
-                      <span className="text-xs font-semibold text-amber-800">
-                        Gust {peakWindGustMph.toFixed(1)} mph
-                      </span>
-                    </div>
-
-                    <p className="mt-2 text-xs text-slate-600">
-                      {hazardSummary.windRockRiskDetected
-                        ? `Wind-rock risk: gusts exceed ${UI_CONFIG.WIND_ROCK_THRESHOLD_MPH} mph`
-                        : `Calm — below ${UI_CONFIG.WIND_ROCK_THRESHOLD_MPH} mph wind-rock limit`}
-                    </p>
-                  </div>
-
-                  {/* Card 3: Rainfall (mm) */}
-                  <div
-                    data-testid="metric-rainfall-card"
-                    className={`p-5 rounded-2xl border shadow-xs ${
-                      hazardSummary.waterloggingRiskDetected
-                        ? 'bg-blue-50/70 border-blue-300'
-                        : 'bg-white border-stone-200/90'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Rainfall (mm)
-                      </span>
-                      <Droplets
-                        className={`w-5 h-5 ${
-                          hazardSummary.waterloggingRiskDetected ? 'text-blue-700' : 'text-sky-700'
-                        }`}
-                      />
-                    </div>
-
-                    <div className="mt-2 flex items-baseline justify-between gap-2 tabular-nums">
-                      <span
-                        data-testid="current-rainfall-mm-value"
-                        className="text-3xl font-bold text-slate-900"
-                      >
-                        {todayRainfallMm.toFixed(1)} mm
-                      </span>
-                      <span className="text-xs font-medium text-slate-500">
-                        48h Total: {cumulative48hRainfallMm.toFixed(1)} mm
-                      </span>
-                    </div>
-
-                    <p className="mt-2 text-xs text-slate-600">
-                      {hazardSummary.waterloggingRiskDetected
-                        ? `Heavy clay waterlogging risk (>= ${UI_CONFIG.HEAVY_RAIN_48H_MM} mm)`
-                        : 'Normal clay drainage load'}
-                    </p>
-                  </div>
-                </section>
-
-                {/* Full-Width 7-Day Outlook Strip */}
-                <section className="bg-white border border-stone-200/90 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4 overflow-hidden">
-                  <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
-                      <h2 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2 min-w-0 max-w-full">
-                        <Calendar className="w-4 h-4 text-emerald-700 shrink-0" />
-                        <span className="truncate break-words">
-                          7-Day Outlook — {gardenProfile.locationName}
-                        </span>
-                      </h2>
-                      <span
-                        data-testid="forecast-last-updated"
-                        className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 bg-stone-50 border border-stone-200/90 px-2 py-0.5 rounded-md tabular-nums"
-                      >
-                        <Clock className="w-3 h-3 text-emerald-700 shrink-0" />
-                        <span>Last updated: {weatherLastUpdatedLabel}</span>
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 min-w-0">
-                      <span className="inline-flex items-center gap-1.5 truncate">
-                        <span className="w-2 h-2 rounded-full bg-sky-600 shrink-0" />
-                        <span className="truncate">Frost (&le; {UI_CONFIG.FROST_THRESHOLD_C}°C)</span>
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 truncate">
-                        <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                        <span className="truncate">High Wind (&ge; {UI_CONFIG.WIND_ROCK_THRESHOLD_MPH} mph)</span>
-                      </span>
-                    </div>
-                  </div>
-
-                  {dailyForecast.length === 0 ? (
-                    <div className="py-6 text-center text-sm text-slate-500">
-                      {isLoading ? 'Loading 7-day forecast...' : 'No forecast data loaded.'}
-                    </div>
+                  <span>{showWeatherDetails ? 'Hide details' : 'More details'}</span>
+                  {showWeatherDetails ? (
+                    <ChevronUp className="w-3.5 h-3.5" />
                   ) : (
-                    <div
-                      data-testid="seven-day-forecast-strip"
-                      className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 overflow-hidden"
-                    >
-                      {dailyForecast.slice(0, 7).map((day: any, idx: number) => {
-                        const isFrost =
-                          day.minTempC !== null &&
-                          day.minTempC !== undefined &&
-                          day.minTempC <= UI_CONFIG.FROST_THRESHOLD_C;
-                        const dayGustMph = resolveWindMph(day.peakWindGustMph, day.peakWindGustKmh);
-                        const isHighWind =
-                          dayGustMph !== null && dayGustMph >= UI_CONFIG.WIND_ROCK_THRESHOLD_MPH;
-                        const formattedDayLabel = formatUkDay(day.date);
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
 
-                        return (
-                          <div
-                            key={day.date || idx}
-                            className={`min-w-0 overflow-hidden break-words rounded-xl p-3.5 border flex flex-col justify-between gap-2.5 ${
-                              isFrost
-                                ? 'bg-sky-50/75 border-sky-300'
-                                : isHighWind
-                                ? 'bg-amber-50/75 border-amber-300'
-                                : 'bg-stone-50/80 border-stone-200/90'
-                            }`}
-                          >
-                            <div className="space-y-1.5 min-w-0 overflow-hidden break-words">
-                              <div className="flex items-center justify-between gap-1 min-w-0 overflow-hidden">
-                                <span
-                                  title={formattedDayLabel}
-                                  className="block w-full text-xs font-bold text-slate-900 truncate break-words"
-                                >
-                                  {formattedDayLabel}
-                                </span>
-                              </div>
-
-                              <div className="min-w-0 overflow-hidden">
-                                {isFrost ? (
-                                  <span className="inline-block max-w-full truncate break-words text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-sky-700 text-white">
-                                    Frost
-                                  </span>
-                                ) : isHighWind ? (
-                                  <span className="inline-block max-w-full truncate break-words text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-600 text-white">
-                                    High Wind
-                                  </span>
-                                ) : (
-                                  <span className="inline-block max-w-full truncate break-words text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/80">
-                                    Normal
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="pt-1 tabular-nums min-w-0 overflow-hidden break-words">
-                                <div className="text-lg font-bold text-slate-900 leading-tight truncate break-words">
-                                  {day.maxTempC !== null && day.maxTempC !== undefined
-                                    ? `${day.maxTempC}°C`
-                                    : '--'}
-                                </div>
-                                <div className="text-xs font-medium text-slate-600 mt-0.5 truncate break-words">
-                                  Low:{' '}
-                                  {day.minTempC !== null && day.minTempC !== undefined
-                                    ? `${day.minTempC}°C`
-                                    : '--'}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="pt-2.5 border-t border-stone-200/80 space-y-1.5 text-xs text-slate-600 tabular-nums min-w-0 overflow-hidden break-words">
-                              <div className="flex items-center justify-between gap-1.5 min-w-0 overflow-hidden">
-                                <span className="text-slate-500 shrink-0 truncate">Wind</span>
-                                <span
-                                  title={dayGustMph !== null ? `${dayGustMph} mph` : '--'}
-                                  className={`truncate break-words text-right ${
-                                    isHighWind ? 'font-bold text-amber-900' : 'font-semibold text-slate-800'
-                                  }`}
-                                >
-                                  {dayGustMph !== null ? `${dayGustMph} mph` : '--'}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between gap-1.5 min-w-0 overflow-hidden">
-                                <span className="text-slate-500 shrink-0 truncate">Rain</span>
-                                <span
-                                  title={
-                                    day.precipSumMm !== undefined && day.precipSumMm !== null
-                                      ? `${day.precipSumMm} mm`
-                                      : '--'
-                                  }
-                                  className="font-semibold text-slate-800 truncate break-words text-right"
-                                >
-                                  {day.precipSumMm !== undefined && day.precipSumMm !== null
-                                    ? `${day.precipSumMm} mm`
-                                    : '--'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+              <div className="grid grid-cols-3 gap-2.5 sm:gap-4 pt-1">
+                {/* Metric 1: Temperature (°C) */}
+                <div
+                  data-testid="metric-temperature-card"
+                  onClick={() => setShowWeatherDetails((prev) => !prev)}
+                  className={`p-3 sm:p-4 rounded-xl border transition cursor-pointer ${
+                    hazardSummary.frostRiskDetected
+                      ? 'bg-sky-50/60 border-sky-200'
+                      : 'bg-stone-50/70 border-stone-200/80 hover:border-stone-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] font-semibold text-slate-500 truncate">Temp</span>
+                    <Thermometer
+                      className={`w-3.5 h-3.5 shrink-0 ${
+                        hazardSummary.frostRiskDetected ? 'text-sky-700' : 'text-emerald-700'
+                      }`}
+                    />
+                  </div>
+                  <div
+                    data-testid="current-temperature-value"
+                    className="mt-1 text-xl sm:text-2xl font-bold text-slate-900 tabular-nums"
+                  >
+                    {currentTempC.toFixed(1)}°C
+                  </div>
+                  {showWeatherDetails && (
+                    <div className="mt-2 pt-2 border-t border-stone-200/70 space-y-1 text-[11px] text-slate-600 tabular-nums">
+                      <p className="font-medium text-slate-700">
+                        High {todayMaxTempC.toFixed(1)}°C · 7d Low {lowest7DayTempC.toFixed(1)}°C
+                      </p>
+                      <p>
+                        {hazardSummary.frostRiskDetected
+                          ? `Frost alert: overnight low reaches ${lowest7DayTempC.toFixed(1)}°C`
+                          : 'Above ground-frost threshold'}
+                      </p>
                     </div>
                   )}
-                </section>
+                </div>
 
-                {/* Daily Rainfall Forecast Bar Chart (Recharts) directly below 7-Day Outlook Strip */}
-                <SevenDayRainfallRecharts
-                  dailyForecast={dailyForecast}
-                  locationName={gardenProfile.locationName}
-                  formatDayFn={formatUkDay}
-                  lastUpdatedLabel={weatherLastUpdatedLabel}
-                />
-
-                {/* Plant-Specific Weather Alerts */}
-                <section className="bg-white border border-stone-200/90 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                        <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" />
-                        <span>Weather Alerts for Your Plants ({weatherAlerts.length})</span>
-                      </h2>
-                      <span
-                        data-testid="alerts-last-updated"
-                        className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 bg-stone-50 border border-stone-200/90 px-2 py-0.5 rounded-md tabular-nums"
-                      >
-                        <Clock className="w-3 h-3 text-emerald-700 shrink-0" />
-                        <span>Last updated: {alertsLastUpdatedLabel}</span>
-                      </span>
-                    </div>
-                    {activeWarnings.length > 0 && (
-                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-900">
-                        Met Office {activeWarnings[0].level} Warning
-                      </span>
-                    )}
+                {/* Metric 2: Wind Speed (mph) */}
+                <div
+                  data-testid="metric-wind-card"
+                  onClick={() => setShowWeatherDetails((prev) => !prev)}
+                  className={`p-3 sm:p-4 rounded-xl border transition cursor-pointer ${
+                    hazardSummary.windRockRiskDetected
+                      ? 'bg-amber-50/60 border-amber-200'
+                      : 'bg-stone-50/70 border-stone-200/80 hover:border-stone-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] font-semibold text-slate-500 truncate">Wind</span>
+                    <Wind
+                      className={`w-3.5 h-3.5 shrink-0 ${
+                        hazardSummary.windRockRiskDetected ? 'text-amber-700' : 'text-emerald-700'
+                      }`}
+                    />
                   </div>
-
-                  {weatherAlerts.length === 0 ? (
-                    <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-950 flex items-center gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0" />
-                      <span>
-                        No severe weather hazards flagged for your plants over the next 7 days.
-                      </span>
+                  <div
+                    data-testid="current-wind-mph-value"
+                    className="mt-1 text-xl sm:text-2xl font-bold text-slate-900 tabular-nums"
+                  >
+                    {currentWindSpeedMph.toFixed(1)} <span className="text-xs sm:text-sm font-semibold">mph</span>
+                  </div>
+                  {showWeatherDetails && (
+                    <div className="mt-2 pt-2 border-t border-stone-200/70 space-y-1 text-[11px] text-slate-600 tabular-nums">
+                      <p className="font-semibold text-amber-800">
+                        Peak Gust {peakWindGustMph.toFixed(1)} mph
+                      </p>
+                      <p>
+                        {hazardSummary.windRockRiskDetected
+                          ? `Wind-rock risk (> ${UI_CONFIG.WIND_ROCK_THRESHOLD_MPH} mph)`
+                          : `Below ${UI_CONFIG.WIND_ROCK_THRESHOLD_MPH} mph wind-rock limit`}
+                      </p>
                     </div>
-                  ) : (
-                    <div className="space-y-3.5">
-                      {weatherAlerts.map((alert: any, idx: number) => {
-                        const style =
-                          UI_CONFIG.SEVERITY_STYLES[alert.severity] || UI_CONFIG.SEVERITY_STYLES.INFO;
+                  )}
+                </div>
 
-                        return (
-                          <div
-                            key={idx}
-                            className={`rounded-xl border ${style.border} ${style.bg} p-4 space-y-2.5`}
+                {/* Metric 3: Rainfall (mm) */}
+                <div
+                  data-testid="metric-rainfall-card"
+                  onClick={() => setShowWeatherDetails((prev) => !prev)}
+                  className={`p-3 sm:p-4 rounded-xl border transition cursor-pointer ${
+                    hazardSummary.waterloggingRiskDetected
+                      ? 'bg-blue-50/60 border-blue-200'
+                      : 'bg-stone-50/70 border-stone-200/80 hover:border-stone-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] font-semibold text-slate-500 truncate">Rain</span>
+                    <Droplets
+                      className={`w-3.5 h-3.5 shrink-0 ${
+                        hazardSummary.waterloggingRiskDetected ? 'text-blue-700' : 'text-sky-700'
+                      }`}
+                    />
+                  </div>
+                  <div
+                    data-testid="current-rainfall-mm-value"
+                    className="mt-1 text-xl sm:text-2xl font-bold text-slate-900 tabular-nums"
+                  >
+                    {todayRainfallMm.toFixed(1)} <span className="text-xs sm:text-sm font-semibold">mm</span>
+                  </div>
+                  {showWeatherDetails && (
+                    <div className="mt-2 pt-2 border-t border-stone-200/70 space-y-1 text-[11px] text-slate-600 tabular-nums">
+                      <p className="font-medium text-slate-700">
+                        48h Total: {cumulative48hRainfallMm.toFixed(1)} mm
+                      </p>
+                      <p>
+                        {hazardSummary.waterloggingRiskDetected
+                          ? `Heavy clay waterlogging risk`
+                          : 'Normal clay drainage load'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* 2. SLIM 7-DAY FORECAST STRIP (Recommendation 1) */}
+            <section className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3 overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Calendar className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <h2 className="text-sm sm:text-base font-bold text-slate-900 truncate">
+                    7-Day Outlook
+                  </h2>
+                  <span data-testid="forecast-last-updated" className="sr-only">
+                    Last updated: {weatherLastUpdatedLabel}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-sky-600 shrink-0" />
+                    <span>Frost</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                    <span>Wind</span>
+                  </span>
+                </div>
+              </div>
+
+              {dailyForecast.length === 0 ? (
+                <div className="py-4 text-center text-sm text-slate-500">
+                  {isLoading ? 'Loading 7-day forecast...' : 'No forecast data loaded.'}
+                </div>
+              ) : (
+                <div
+                  data-testid="seven-day-forecast-strip"
+                  className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 overflow-hidden"
+                >
+                  {dailyForecast.slice(0, 7).map((day: any, idx: number) => {
+                    const isFrost =
+                      day.minTempC !== null &&
+                      day.minTempC !== undefined &&
+                      day.minTempC <= UI_CONFIG.FROST_THRESHOLD_C;
+                    const dayGustMph = resolveWindMph(day.peakWindGustMph, day.peakWindGustKmh);
+                    const isHighWind =
+                      dayGustMph !== null && dayGustMph >= UI_CONFIG.WIND_ROCK_THRESHOLD_MPH;
+                    const formattedDayLabel = formatUkDay(day.date);
+                    const isDayExpanded = showWeatherDetails || expandedForecastDayIdx === idx;
+
+                    return (
+                      <button
+                        type="button"
+                        key={day.date || idx}
+                        onClick={() =>
+                          setExpandedForecastDayIdx((prev) => (prev === idx ? null : idx))
+                        }
+                        className={`text-left min-w-0 overflow-hidden rounded-xl p-2.5 sm:p-3 border transition cursor-pointer flex flex-col justify-between gap-1.5 ${
+                          isFrost
+                            ? 'bg-sky-50/60 border-sky-200 hover:border-sky-300'
+                            : isHighWind
+                            ? 'bg-amber-50/60 border-amber-200 hover:border-amber-300'
+                            : 'bg-stone-50/60 border-stone-200/80 hover:border-stone-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 w-full">
+                          <span
+                            title={formattedDayLabel}
+                            className="text-xs font-bold text-slate-900 truncate"
                           >
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-md uppercase ${style.badge}`}>
-                                  {alert.severity}
-                                </span>
-                                <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-900">
-                                  {alert.hazardType.replace(/_/g, ' ')}
-                                </span>
-                              </div>
-                              <span className="text-xs font-medium text-slate-600">
-                                {alert.forecastWindow}
-                              </span>
-                            </div>
+                            {formattedDayLabel}
+                          </span>
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${
+                              isFrost
+                                ? 'bg-sky-600'
+                                : isHighWind
+                                ? 'bg-amber-500'
+                                : 'bg-emerald-500/60'
+                            }`}
+                            title={isFrost ? 'Frost risk' : isHighWind ? 'High wind' : 'Normal'}
+                          />
+                        </div>
 
+                        <div className="flex items-baseline justify-between gap-1 tabular-nums w-full pt-0.5">
+                          <span className="text-sm sm:text-base font-bold text-slate-900">
+                            {day.maxTempC !== null && day.maxTempC !== undefined
+                              ? `${day.maxTempC}°`
+                              : '--'}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {day.minTempC !== null && day.minTempC !== undefined
+                              ? `${day.minTempC}°C`
+                              : '--'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-1 text-[11px] text-slate-600 tabular-nums w-full">
+                          <span className="truncate">
+                            {day.precipSumMm !== undefined && day.precipSumMm !== null
+                              ? `${day.precipSumMm} mm`
+                              : '0 mm'}
+                          </span>
+                          {(isFrost || isHighWind) && (
+                            <span
+                              className={`text-[10px] font-bold uppercase px-1.5 py-0.2 rounded ${
+                                isFrost
+                                  ? 'bg-sky-700 text-white'
+                                  : 'bg-amber-600 text-white'
+                              }`}
+                            >
+                              {isFrost ? 'Frost' : 'Wind'}
+                            </span>
+                          )}
+                        </div>
+
+                        {isDayExpanded && (
+                          <div className="pt-1.5 mt-1 border-t border-stone-200/70 text-[11px] text-slate-600 tabular-nums w-full flex items-center justify-between">
+                            <span>Gust</span>
+                            <span className="font-semibold text-slate-800">
+                              {dayGustMph !== null ? `${dayGustMph} mph` : '--'}
+                            </span>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            {/* 3. EXPANDABLE 1-LINE WEATHER ALERTS (Recommendation 2) */}
+            <section className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                  <h2 className="text-sm sm:text-base font-bold text-slate-900">
+                    Plant Weather Alerts ({weatherAlerts.length})
+                  </h2>
+                  <span data-testid="alerts-last-updated" className="sr-only">
+                    Last updated: {alertsLastUpdatedLabel}
+                  </span>
+                </div>
+
+                {activeWarnings.length > 0 ? (
+                  <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-100 text-amber-900">
+                    Met Office {activeWarnings[0].level} Warning
+                  </span>
+                ) : (
+                  weatherAlerts.length > 0 && (
+                    <span className="text-[11px] text-slate-500">Tap an alert to view actions</span>
+                  )
+                )}
+              </div>
+
+              {weatherAlerts.length === 0 ? (
+                <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 text-xs sm:text-sm text-emerald-950 flex items-center gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>No severe weather hazards flagged for your plants over the next 7 days.</span>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {weatherAlerts.map((alert: any, idx: number) => {
+                    const style =
+                      UI_CONFIG.SEVERITY_STYLES[alert.severity] || UI_CONFIG.SEVERITY_STYLES.INFO;
+                    const isExpanded = Boolean(expandedAlertIndices[idx]);
+                    const plantCount = (alert.affectedPlants || []).length;
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`rounded-xl border ${style.border} ${style.bg} overflow-hidden transition`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedAlertIndices((prev) => ({
+                              ...prev,
+                              [idx]: !prev[idx]
+                            }))
+                          }
+                          aria-expanded={isExpanded}
+                          className="w-full px-3.5 py-2.5 flex items-center justify-between gap-2 text-left cursor-pointer"
+                        >
+                          <div className="flex flex-wrap items-center gap-2 min-w-0">
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase shrink-0 ${style.badge}`}
+                            >
+                              {alert.severity}
+                            </span>
+                            <span className="text-xs sm:text-sm font-bold uppercase tracking-wide text-slate-900 truncate">
+                              {alert.hazardType.replace(/_/g, ' ')}
+                            </span>
+                            <span className="text-xs text-slate-600 truncate">
+                              · {alert.forecastWindow}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[11px] font-semibold text-slate-700 bg-white/80 px-2 py-0.5 rounded-md border border-stone-200/80">
+                              {plantCount} {plantCount === 1 ? 'plant' : 'plants'}
+                            </span>
+                            {isExpanded ? (
+                              <ChevronUp className="w-4 h-4 text-slate-600" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4 text-slate-600" />
+                            )}
+                          </div>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="px-3.5 pb-3.5 pt-2 border-t border-stone-200/60 space-y-2.5 bg-white/60">
                             <div className="flex flex-wrap gap-1.5">
                               {(alert.affectedPlants || []).slice(0, 8).map((plantName: string, pIdx: number) => (
                                 <span
                                   key={pIdx}
-                                  className="text-xs font-medium bg-white text-slate-800 px-2.5 py-0.5 rounded-md border border-stone-300"
+                                  className="text-xs font-medium bg-white text-slate-800 px-2 py-0.5 rounded-md border border-stone-300"
                                 >
                                   {plantName}
                                 </span>
@@ -1897,13 +1861,114 @@ export default function App() {
                               {alert.actionRequired}
                             </p>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </section>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            {/* 4. COLLAPSIBLE CHART & SOIL TREND DRAWERS (Recommendation 1) */}
+            <div className="space-y-3">
+              {/* Collapsible Drawer: 7-Day Rainfall Chart */}
+              <div className="bg-white border border-stone-200/90 rounded-2xl shadow-xs overflow-hidden">
+                <button
+                  type="button"
+                  data-testid="toggle-rainfall-chart-drawer"
+                  onClick={() => setShowRainfallChart((prev) => !prev)}
+                  aria-expanded={showRainfallChart}
+                  className="w-full px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-stone-50/80 transition cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Droplets className="w-4 h-4 text-blue-700 shrink-0" />
+                    <span className="text-sm font-bold text-slate-900 truncate">
+                      7-Day Rainfall Chart
+                    </span>
+                    <span className="text-xs text-slate-500 hidden sm:inline">
+                      · Daily precipitation &amp; clay leaching threshold
+                    </span>
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 shrink-0">
+                    <span>{showRainfallChart ? 'Hide chart' : 'View chart'}</span>
+                    {showRainfallChart ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
+                  </span>
+                </button>
+
+                {showRainfallChart && (
+                  <div className="border-t border-stone-100 p-2 sm:p-3">
+                    <SevenDayRainfallRecharts
+                      dailyForecast={dailyForecast}
+                      locationName={gardenProfile.locationName}
+                      formatDayFn={formatUkDay}
+                      lastUpdatedLabel={weatherLastUpdatedLabel}
+                    />
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Collapsible Drawer: 30-Day Clay Soil Saturation Trend & Rain Log */}
+              <div className="bg-white border border-stone-200/90 rounded-2xl shadow-xs overflow-hidden">
+                <button
+                  type="button"
+                  data-testid="tab-soil-trend"
+                  onClick={() => {
+                    if (activeWorkspaceTab === 'SOIL_TREND') {
+                      setActiveWorkspaceTab('OVERVIEW');
+                      setShowSoilTrendDrawer(false);
+                    } else {
+                      setShowSoilTrendDrawer((prev) => !prev);
+                    }
+                  }}
+                  aria-expanded={showSoilTrendDrawer || activeWorkspaceTab === 'SOIL_TREND'}
+                  className="w-full px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-stone-50/80 transition cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <TrendingUp className="w-4 h-4 text-emerald-700 shrink-0" />
+                    <span className="text-sm font-bold text-slate-900 truncate">
+                      Clay Soil Saturation &amp; 30-Day Trend
+                    </span>
+                    <span className="text-xs text-slate-500 hidden sm:inline">
+                      · Moisture trend &amp; rain gauge log
+                    </span>
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 shrink-0">
+                    <span>
+                      {showSoilTrendDrawer || activeWorkspaceTab === 'SOIL_TREND'
+                        ? 'Hide soil trend'
+                        : 'View soil trend'}
+                    </span>
+                    {showSoilTrendDrawer || activeWorkspaceTab === 'SOIL_TREND' ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
+                  </span>
+                </button>
+
+                {(showSoilTrendDrawer || activeWorkspaceTab === 'SOIL_TREND') && (
+                  <div className="border-t border-stone-100 p-2 sm:p-3">
+                    <Suspense
+                      fallback={
+                        <div className="p-6 text-center text-sm text-slate-500 animate-pulse">
+                          Loading 30-day soil moisture trend &amp; rainfall log...
+                        </div>
+                      }
+                    >
+                      <SoilSaturationLogPanel
+                        weatherData={weatherData}
+                        gardenProfile={gardenProfile}
+                        locationPresets={UI_CONFIG.LOCATION_PRESETS as any}
+                      />
+                    </Suspense>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1929,66 +1994,118 @@ export default function App() {
         )}
 
         {/* ===================================================================
-            TAB 3: CALENDAR & CHECKLIST (Weekly Focus, 12-Month Schedule & Checklists)
+            TAB 3: CALENDAR & CHECKLIST (Recommendation 4: Focus on Active Fortnight)
         =================================================================== */}
         {activeWorkspaceTab === 'CHECKLIST' && (
-          <div className="space-y-6">
-            {/* Sub-Options Switcher Inside Calendar & Checklist Tab */}
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-stone-200/90 rounded-2xl p-3 shadow-xs">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {[
-                  { id: 'ALL', label: 'All Calendar & Checklists' },
-                  { id: 'CALENDAR', label: '12-Month & Weekly Schedule' },
-                  { id: 'CHECKLISTS', label: 'Seasonal & Clay Checklists' }
-                ].map((mode) => (
-                  <button
-                    key={mode.id}
-                    type="button"
-                    onClick={() => setCalendarSubView(mode.id as 'ALL' | 'CALENDAR' | 'CHECKLISTS')}
-                    className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
-                      calendarSubView === mode.id
-                        ? 'bg-emerald-800 text-white'
-                        : 'bg-stone-100 text-slate-700 hover:bg-stone-200'
-                    }`}
-                  >
-                    {mode.label}
-                  </button>
-                ))}
+          <div className="space-y-4">
+            {/* 1. Priority Seasonal Tasks Checklist */}
+            <section className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <h2 className="text-sm sm:text-base font-bold text-slate-900">
+                    Priority Seasonal Tasks ({seasonalTasks.length})
+                  </h2>
+                  <span data-testid="tasks-last-updated" className="sr-only">
+                    Last updated: {alertsLastUpdatedLabel}
+                  </span>
+                </div>
+                <span className="text-xs text-slate-500">Tap to check off</span>
               </div>
 
-              <span className="text-xs font-medium text-slate-500">
-                Calibrated for {gardenProfile.locationName} (RHS {gardenProfile.rhsHardinessZone || 'H4–H5'})
-              </span>
-            </div>
+              <div className="space-y-2">
+                {seasonalTasks.map((task: any, idx: number) => {
+                  const isDone = Boolean(completedTasks[task.taskTitle]);
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => toggleTaskCompleted(task.taskTitle)}
+                      className={`p-3.5 rounded-xl border transition cursor-pointer flex items-start gap-3 ${
+                        isDone
+                          ? 'bg-stone-50 border-stone-200 opacity-60'
+                          : 'bg-white border-stone-200/90 hover:border-emerald-600/60'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        className="mt-0.5 text-emerald-700 shrink-0 focus:outline-none"
+                        aria-label={`Mark ${task.taskTitle} as complete`}
+                      >
+                        {isDone ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                        ) : (
+                          <Circle className="w-4 h-4 text-stone-400 hover:text-emerald-700" />
+                        )}
+                      </button>
 
-            {/* 1. 12-Month & Weekly Task Calendar (Weeks 1–2 and Weeks 3–4) */}
-            {(calendarSubView === 'ALL' || calendarSubView === 'CALENDAR') && (
-              <section className="bg-white border border-stone-200/90 rounded-2xl p-5 sm:p-6 shadow-xs space-y-5">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 pb-4">
-                  <div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">
-                      {currentMonthGuide.monthName} Schedule ·{' '}
-                      {selectedCalendarMonthIdx === currentUkMonthIdx
-                        ? `Current Focus: ${isSecondHalfOfMonth ? 'Weeks 3–4' : 'Weeks 1–2'}`
-                        : 'Monthly View'}
-                    </span>
-                    <h2 className="text-lg sm:text-xl font-bold text-slate-900 mt-0.5">
-                      Month-by-Month &amp; Weekly Task Calendar
-                    </h2>
-                  </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3
+                            className={`text-xs sm:text-sm font-bold ${
+                              isDone ? 'line-through text-slate-400' : 'text-slate-900'
+                            }`}
+                          >
+                            {task.taskTitle}
+                          </h3>
+                          <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-50 text-emerald-800">
+                            {task.category.replace(/_/g, ' ')}
+                          </span>
+                        </div>
 
+                        <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                          {task.instructions}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* 2. Active Fortnight Focus (with "Browse All 12 Months" progressive disclosure) */}
+            <section className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-3">
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                    {currentMonthGuide.monthName} ·{' '}
+                    {selectedCalendarMonthIdx === currentUkMonthIdx
+                      ? `Active Focus (${isSecondHalfOfMonth ? 'Weeks 3–4' : 'Weeks 1–2'})`
+                      : 'Monthly Schedule'}
+                  </span>
+                  <h2 className="text-sm sm:text-base font-bold text-slate-900 mt-0.5">
+                    Fortnightly Care Schedule
+                  </h2>
+                </div>
+
+                <div className="flex items-center gap-2">
                   {selectedCalendarMonthIdx !== currentUkMonthIdx && (
                     <button
                       type="button"
                       onClick={() => setSelectedCalendarMonthIdx(currentUkMonthIdx)}
-                      className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-900 border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer"
+                      className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-900 border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer"
                     >
-                      Jump to Current Month
+                      Current Month
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setShowFullYearCalendar((prev) => !prev)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-stone-100 hover:bg-stone-200 text-slate-800 border border-stone-200 transition cursor-pointer"
+                  >
+                    <span>
+                      {showFullYearCalendar ? 'Show Active Fortnight Only' : 'Browse All 12 Months'}
+                    </span>
+                    {showFullYearCalendar ? (
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    )}
+                  </button>
                 </div>
+              </div>
 
-                {/* 12-Month Selector Pills */}
+              {/* 12-Month Selector Pills (Hidden unless Browse All 12 Months is clicked) */}
+              {showFullYearCalendar && (
                 <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-1.5">
                   {HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR.map((m, idx) => {
                     const isSelected = idx === selectedCalendarMonthIdx;
@@ -1998,7 +2115,7 @@ export default function App() {
                         key={m.monthName}
                         type="button"
                         onClick={() => setSelectedCalendarMonthIdx(idx)}
-                        className={`min-h-[36px] px-2 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                        className={`min-h-[34px] px-2 py-1 rounded-xl text-xs font-semibold border transition cursor-pointer ${
                           isSelected
                             ? 'bg-emerald-800 border-emerald-800 text-white shadow-2xs'
                             : isCurrentMonth
@@ -2011,378 +2128,403 @@ export default function App() {
                     );
                   })}
                 </div>
+              )}
 
-                {/* Weeks 1–2 and Weeks 3–4 Side-by-Side */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {/* Weeks 1–2 */}
+              {/* Fortnight Cards: Show only active fortnight by default, or both when expanded */}
+              <div
+                className={`grid grid-cols-1 ${
+                  showFullYearCalendar ? 'lg:grid-cols-2' : ''
+                } gap-4`}
+              >
+                {/* Weeks 1–2 */}
+                {(showFullYearCalendar || !isSecondHalfOfMonth) && (
                   <div
-                    className={`rounded-2xl border p-4 sm:p-5 space-y-3 ${
+                    className={`rounded-xl border p-4 space-y-2.5 ${
                       selectedCalendarMonthIdx === currentUkMonthIdx && !isSecondHalfOfMonth
-                        ? 'bg-emerald-50/40 border-emerald-300'
+                        ? 'bg-emerald-50/35 border-emerald-300'
                         : 'bg-stone-50/70 border-stone-200/90'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                      <h3 className="text-sm font-bold text-slate-900">
                         {currentMonthGuide.monthName} — Weeks 1–2
                       </h3>
                       {selectedCalendarMonthIdx === currentUkMonthIdx && !isSecondHalfOfMonth && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-emerald-800 text-white">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-800 text-white">
                           Active Now
                         </span>
                       )}
                     </div>
 
-                    <div className="space-y-2.5 text-xs sm:text-sm leading-relaxed">
-                      <div className="p-3 rounded-xl bg-white border border-stone-200/80">
-                        <span className="block text-xs font-bold uppercase tracking-wider text-sky-800 mb-0.5">
-                          1. Watering &amp; Soil Care
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs leading-relaxed">
+                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
+                        <span className="block text-[11px] font-bold uppercase text-sky-800 mb-0.5">
+                          Watering &amp; Soil
                         </span>
-                        <p className="text-slate-800">{currentMonthGuide.week1To2.wateringAndSoilCare}</p>
+                        <p className="text-slate-700">{currentMonthGuide.week1To2.wateringAndSoilCare}</p>
                       </div>
-                      <div className="p-3 rounded-xl bg-white border border-stone-200/80">
-                        <span className="block text-xs font-bold uppercase tracking-wider text-emerald-800 mb-0.5">
-                          2. Feeding &amp; Mulching
+                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
+                        <span className="block text-[11px] font-bold uppercase text-emerald-800 mb-0.5">
+                          Feeding &amp; Mulch
                         </span>
-                        <p className="text-slate-800">{currentMonthGuide.week1To2.feedingAndMulching}</p>
+                        <p className="text-slate-700">{currentMonthGuide.week1To2.feedingAndMulching}</p>
                       </div>
-                      <div className="p-3 rounded-xl bg-white border border-stone-200/80">
-                        <span className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-0.5">
-                          3. Pruning &amp; Deadheading
+                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
+                        <span className="block text-[11px] font-bold uppercase text-amber-900 mb-0.5">
+                          Pruning
                         </span>
-                        <p className="text-slate-800">{currentMonthGuide.week1To2.pruningAndDeadheading}</p>
+                        <p className="text-slate-700">{currentMonthGuide.week1To2.pruningAndDeadheading}</p>
                       </div>
-                      <div className="p-3 rounded-xl bg-white border border-stone-200/80">
-                        <span className="block text-xs font-bold uppercase tracking-wider text-rose-800 mb-0.5">
-                          4. Frost &amp; Pest Protection
+                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
+                        <span className="block text-[11px] font-bold uppercase text-rose-800 mb-0.5">
+                          Frost &amp; Pests
                         </span>
-                        <p className="text-slate-800">{currentMonthGuide.week1To2.pestDiseaseAndFrost}</p>
+                        <p className="text-slate-700">{currentMonthGuide.week1To2.pestDiseaseAndFrost}</p>
                       </div>
                     </div>
                   </div>
+                )}
 
-                  {/* Weeks 3–4 */}
+                {/* Weeks 3–4 */}
+                {(showFullYearCalendar || isSecondHalfOfMonth) && (
                   <div
-                    className={`rounded-2xl border p-4 sm:p-5 space-y-3 ${
+                    className={`rounded-xl border p-4 space-y-2.5 ${
                       selectedCalendarMonthIdx === currentUkMonthIdx && isSecondHalfOfMonth
-                        ? 'bg-emerald-50/40 border-emerald-300'
+                        ? 'bg-emerald-50/35 border-emerald-300'
                         : 'bg-stone-50/70 border-stone-200/90'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                      <h3 className="text-sm font-bold text-slate-900">
                         {currentMonthGuide.monthName} — Weeks 3–4
                       </h3>
                       {selectedCalendarMonthIdx === currentUkMonthIdx && isSecondHalfOfMonth && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-emerald-800 text-white">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-800 text-white">
                           Active Now
                         </span>
                       )}
                     </div>
 
-                    <div className="space-y-2.5 text-xs sm:text-sm leading-relaxed">
-                      <div className="p-3 rounded-xl bg-white border border-stone-200/80">
-                        <span className="block text-xs font-bold uppercase tracking-wider text-sky-800 mb-0.5">
-                          1. Watering &amp; Soil Care
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs leading-relaxed">
+                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
+                        <span className="block text-[11px] font-bold uppercase text-sky-800 mb-0.5">
+                          Watering &amp; Soil
                         </span>
-                        <p className="text-slate-800">{currentMonthGuide.week3To4.wateringAndSoilCare}</p>
+                        <p className="text-slate-700">{currentMonthGuide.week3To4.wateringAndSoilCare}</p>
                       </div>
-                      <div className="p-3 rounded-xl bg-white border border-stone-200/80">
-                        <span className="block text-xs font-bold uppercase tracking-wider text-emerald-800 mb-0.5">
-                          2. Feeding &amp; Mulching
+                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
+                        <span className="block text-[11px] font-bold uppercase text-emerald-800 mb-0.5">
+                          Feeding &amp; Mulch
                         </span>
-                        <p className="text-slate-800">{currentMonthGuide.week3To4.feedingAndMulching}</p>
+                        <p className="text-slate-700">{currentMonthGuide.week3To4.feedingAndMulching}</p>
                       </div>
-                      <div className="p-3 rounded-xl bg-white border border-stone-200/80">
-                        <span className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-0.5">
-                          3. Pruning &amp; Deadheading
+                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
+                        <span className="block text-[11px] font-bold uppercase text-amber-900 mb-0.5">
+                          Pruning
                         </span>
-                        <p className="text-slate-800">{currentMonthGuide.week3To4.pruningAndDeadheading}</p>
+                        <p className="text-slate-700">{currentMonthGuide.week3To4.pruningAndDeadheading}</p>
                       </div>
-                      <div className="p-3 rounded-xl bg-white border border-stone-200/80">
-                        <span className="block text-xs font-bold uppercase tracking-wider text-rose-800 mb-0.5">
-                          4. Frost &amp; Pest Protection
+                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
+                        <span className="block text-[11px] font-bold uppercase text-rose-800 mb-0.5">
+                          Frost &amp; Pests
                         </span>
-                        <p className="text-slate-800">{currentMonthGuide.week3To4.pestDiseaseAndFrost}</p>
+                        <p className="text-slate-700">{currentMonthGuide.week3To4.pestDiseaseAndFrost}</p>
                       </div>
                     </div>
                   </div>
-                </div>
-              </section>
-            )}
-
-            {/* 2. Priority Seasonal Tasks & Monthly Clay Checklist */}
-            {(calendarSubView === 'ALL' || calendarSubView === 'CHECKLISTS') && (
-              <div className="space-y-6">
-                <section className="bg-white border border-stone-200/90 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0" />
-                        <span>Priority Seasonal Tasks ({seasonalTasks.length})</span>
-                      </h2>
-                      <span
-                        data-testid="tasks-last-updated"
-                        className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 bg-stone-50 border border-stone-200/90 px-2 py-0.5 rounded-md tabular-nums"
-                      >
-                        <Clock className="w-3 h-3 text-emerald-700 shrink-0" />
-                        <span>Last updated: {alertsLastUpdatedLabel}</span>
-                      </span>
-                    </div>
-                    <span className="text-xs text-slate-500">Click to check off</span>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    {seasonalTasks.map((task: any, idx: number) => {
-                      const isDone = Boolean(completedTasks[task.taskTitle]);
-                      return (
-                        <div
-                          key={idx}
-                          onClick={() => toggleTaskCompleted(task.taskTitle)}
-                          className={`p-4 rounded-xl border transition cursor-pointer flex items-start gap-3.5 ${
-                            isDone
-                              ? 'bg-stone-50 border-stone-200 opacity-60'
-                              : 'bg-white border-stone-200/90 hover:border-emerald-600/60'
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            className="mt-0.5 text-emerald-700 shrink-0 focus:outline-none"
-                            aria-label={`Mark ${task.taskTitle} as complete`}
-                          >
-                            {isDone ? (
-                              <CheckCircle2 className="w-5 h-5 text-emerald-700" />
-                            ) : (
-                              <Circle className="w-5 h-5 text-stone-400 hover:text-emerald-700" />
-                            )}
-                          </button>
-
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3
-                                className={`text-sm sm:text-base font-bold ${
-                                  isDone ? 'line-through text-slate-400' : 'text-slate-900'
-                                }`}
-                              >
-                                {task.taskTitle}
-                              </h3>
-                              <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-50 text-emerald-800">
-                                {task.category.replace(/_/g, ' ')}
-                              </span>
-                            </div>
-
-                            <p className="mt-1.5 text-xs sm:text-sm text-slate-700 leading-relaxed">
-                              {task.instructions}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-
-                <Suspense
-                  fallback={
-                    <div className="bg-white border border-stone-200/90 rounded-2xl p-6 text-center text-sm text-slate-500 animate-pulse">
-                      Loading monthly clay checklist...
-                    </div>
-                  }
-                >
-                  <MonthlyClayChecklistPanel />
-                </Suspense>
+                )}
               </div>
-            )}
+            </section>
+
+            {/* 3. Collapsible Monthly Clay Soil Checklist Drawer */}
+            <div className="bg-white border border-stone-200/90 rounded-2xl shadow-xs overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowMonthlyClayChecklist((prev) => !prev)}
+                aria-expanded={showMonthlyClayChecklist}
+                className="w-full px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-stone-50/80 transition cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Calendar className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span className="text-sm font-bold text-slate-900 truncate">
+                    Monthly Clay Soil &amp; Drainage Checklist
+                  </span>
+                </div>
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 shrink-0">
+                  <span>{showMonthlyClayChecklist ? 'Hide checklist' : 'View checklist'}</span>
+                  {showMonthlyClayChecklist ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
+                  )}
+                </span>
+              </button>
+
+              {showMonthlyClayChecklist && (
+                <div className="border-t border-stone-100 p-2 sm:p-3">
+                  <Suspense
+                    fallback={
+                      <div className="p-6 text-center text-sm text-slate-500 animate-pulse">
+                        Loading monthly clay checklist...
+                      </div>
+                    }
+                  >
+                    <MonthlyClayChecklistPanel />
+                  </Suspense>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* ===================================================================
-            TAB 4: MY PLANTS (32 Garden Plants, RHS Catalogue Search & Care Cards)
+            TAB 4: MY PLANTS (Grouped by Collapsible Category Headings)
         =================================================================== */}
         {activeWorkspaceTab === 'PLANTS' && (
-          <div className="space-y-6">
-            <section className="bg-white border border-stone-200/90 rounded-2xl p-5 sm:p-6 shadow-xs space-y-5">
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-stone-100 pb-4">
+          <div className="space-y-4">
+            <section className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3.5">
                 <div>
-                  <h2 className="text-lg sm:text-xl font-bold text-slate-900">
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900">
                     My Garden Plants ({plantInventory.length})
                   </h2>
-                  <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-                    Click any plant card below to open its specialized Feeding, Pruning &amp; Winter Care guide.
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Grouped by category — tap a heading to expand or tap any plant for its care guide.
                   </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    data-testid="inventory-load-hadston-32"
-                    onClick={handleLoadAllHadston32Plants}
-                    className="min-h-[38px] inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 transition cursor-pointer"
-                    title="Load all 32 garden plants (#1–#32)"
-                  >
-                    <BookOpen className="w-3.5 h-3.5 text-emerald-700" />
-                    <span>Load All 32 Plants</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleResetInventory}
-                    aria-label="Reset plant inventory"
-                    className="min-h-[38px] min-w-[38px] inline-flex items-center justify-center p-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-slate-700 border border-stone-300 transition cursor-pointer"
-                    title="Reset to default 32 garden plants"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={openAddPlantModal}
-                    className="min-h-[38px] inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-800 hover:bg-emerald-700 text-white transition cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Custom Plant</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* RHS Plant Catalogue Search-to-Add & Filter Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-                <div className="lg:col-span-7 flex gap-2">
-                  <div className="relative flex-1">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <label htmlFor="plant-catalog-search" className="sr-only">
-                      Search RHS plant catalogue to add
-                    </label>
+                  <div className="relative flex-1 sm:flex-initial">
                     <input
-                      id="plant-catalog-search"
                       type="text"
-                      placeholder="Search RHS catalogue to add plants (e.g. Salvia, Rose, Garlic)..."
-                      value={catalogSearchQuery}
-                      onFocus={() => setIsCatalogOpen(true)}
-                      onChange={(e) => {
-                        setCatalogSearchQuery(e.target.value);
-                        setIsCatalogOpen(true);
-                      }}
-                      className="w-full min-h-[40px] pl-9 pr-8 py-1.5 text-xs sm:text-sm rounded-xl bg-stone-50 border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
+                      data-testid="plant-inventory-filter-input"
+                      value={inventoryFilterText}
+                      onChange={(e) => setInventoryFilterText(e.target.value)}
+                      placeholder={`Filter ${plantInventory.length} plants...`}
+                      className="min-h-[38px] px-3 py-1.5 text-xs sm:text-sm rounded-xl bg-stone-50 border border-stone-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700 w-full sm:w-48"
                     />
-                    {(catalogSearchQuery || isCatalogOpen) && (
+                    {inventoryFilterText && (
                       <button
                         type="button"
-                        aria-label="Clear plant search"
-                        onClick={() => {
-                          setCatalogSearchQuery('');
-                          setIsCatalogOpen(false);
-                        }}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700"
+                        onClick={() => setInventoryFilterText('')}
+                        aria-label="Clear inventory filter"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
                       >
-                        <X className="w-4 h-4" />
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
 
+                  {groupedPlotInventory.length > 0 && !isSearchingInventory && (
+                    <button
+                      type="button"
+                      data-testid="toggle-all-plant-categories-button"
+                      onClick={toggleAllPlantCategoryGroups}
+                      className="min-h-[38px] inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-stone-50 hover:bg-stone-100 text-slate-700 border border-stone-200/90 transition cursor-pointer shrink-0"
+                    >
+                      <span>{areAllCategoriesExpanded ? 'Collapse All' : 'Expand All'}</span>
+                      {areAllCategoriesExpanded ? (
+                        <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                      )}
+                    </button>
+                  )}
+
                   <button
                     type="button"
-                    onClick={() => setIsCatalogOpen((prev) => !prev)}
-                    className="min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-stone-100 hover:bg-stone-200 text-slate-800 border border-stone-300 transition whitespace-nowrap cursor-pointer"
+                    data-testid="toggle-plant-manager-button"
+                    onClick={() => setShowPlantManagerDrawer((prev) => !prev)}
+                    aria-expanded={showPlantManagerDrawer}
+                    className={`min-h-[38px] inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer shrink-0 ${
+                      showPlantManagerDrawer
+                        ? 'bg-stone-200 text-slate-900'
+                        : 'bg-emerald-800 hover:bg-emerald-700 text-white'
+                    }`}
                   >
-                    {isCatalogOpen ? 'Hide Catalogue' : 'Browse Catalogue (46)'}
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{showPlantManagerDrawer ? 'Done' : 'Add / Manage'}</span>
                   </button>
-                </div>
-
-                <div className="lg:col-span-5">
-                  <input
-                    type="text"
-                    value={inventoryFilterText}
-                    onChange={(e) => setInventoryFilterText(e.target.value)}
-                    placeholder={`Filter your ${plantInventory.length} active plants...`}
-                    className="w-full min-h-[40px] px-3.5 py-1.5 text-xs sm:text-sm rounded-xl bg-stone-50 border border-stone-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
-                  />
                 </div>
               </div>
 
-              {(isCatalogOpen || catalogSearchQuery.trim() !== '') && (
-                <div
-                  data-testid="rhs-plant-search-results"
-                  className="p-4 rounded-2xl bg-stone-50 border border-emerald-300 space-y-3"
-                >
+              {/* Hidden by default: RHS Catalogue Search & Inventory Management Controls */}
+              {(showPlantManagerDrawer || isCatalogOpen || catalogSearchQuery.trim() !== '') && (
+                <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/90 space-y-3.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                      {[
-                        { id: 'ALL', label: 'All (46)' },
-                        { id: 'HADSTON_32', label: 'My 32 Plants' },
-                        { id: 'SHRUB_TREE', label: 'Shrubs & Trees' },
-                        { id: 'ORNAMENTAL', label: 'Perennials' },
-                        { id: 'EDIBLE_ALLOTMENT', label: 'Edibles' }
-                      ].map((cat) => (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={() => setCatalogCategory(cat.id)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition whitespace-nowrap cursor-pointer ${
-                            catalogCategory === cat.id
-                              ? 'bg-emerald-800 text-white'
-                              : 'bg-white text-slate-600 border border-stone-200 hover:bg-stone-100'
-                          }`}
-                        >
-                          {cat.label}
-                        </button>
-                      ))}
-                    </div>
-                    <span className="text-xs text-slate-500">
-                      {matchingCatalogPlants.length} matches
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                      Add from RHS Catalogue or Manage Plot
                     </span>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={openAddPlantModal}
+                        className="min-h-[34px] inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-800 hover:bg-emerald-700 text-white transition cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Custom Plant</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        data-testid="inventory-load-hadston-32"
+                        onClick={handleLoadAllHadston32Plants}
+                        className="min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-emerald-50 text-emerald-900 border border-stone-300 transition cursor-pointer"
+                      >
+                        <BookOpen className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Load All 32</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleResetInventory}
+                        aria-label="Reset plant inventory"
+                        className="min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-white hover:bg-stone-100 text-slate-700 border border-stone-300 transition cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Reset</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => exportGardenReportToCsv(plantInventory, advice, gardenProfile)}
+                        className="min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-white hover:bg-stone-100 text-slate-700 border border-stone-300 transition cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Export CSV</span>
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
-                    {matchingCatalogPlants.map((item) => {
-                      const isAlreadyInPlot = activeInventoryNameSet.has(item.name.toLowerCase());
-                      return (
-                        <div
-                          key={item.catalogId}
-                          className="p-3 rounded-xl bg-white border border-stone-200 flex items-center justify-between gap-2.5"
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <label htmlFor="plant-catalog-search" className="sr-only">
+                        Search RHS plant catalogue to add
+                      </label>
+                      <input
+                        id="plant-catalog-search"
+                        type="text"
+                        placeholder="Search RHS catalogue to add plants (e.g. Salvia, Rose, Garlic)..."
+                        value={catalogSearchQuery}
+                        onFocus={() => setIsCatalogOpen(true)}
+                        onChange={(e) => {
+                          setCatalogSearchQuery(e.target.value);
+                          setIsCatalogOpen(true);
+                        }}
+                        className="w-full min-h-[38px] pl-9 pr-8 py-1.5 text-xs sm:text-sm rounded-xl bg-white border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-700"
+                      />
+                      {(catalogSearchQuery || isCatalogOpen) && (
+                        <button
+                          type="button"
+                          aria-label="Clear plant search"
+                          onClick={() => {
+                            setCatalogSearchQuery('');
+                            setIsCatalogOpen(false);
+                          }}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700"
                         >
-                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            <PlantThumbnailWithModal
-                              plantId={item.catalogId}
-                              plantName={item.name}
-                              photoRef={item.photoRef}
-                              size="sm"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                {item.photoRef && (
-                                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] font-mono font-bold text-emerald-900">
-                                    #{item.photoRef}
-                                  </span>
-                                )}
-                                <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
-                                  {item.name}
-                                </span>
-                                <span className="text-xs font-semibold text-emerald-800">
-                                  · RHS {item.rhsRating}
-                                </span>
-                              </div>
-                              <p className="text-xs text-slate-500 mt-0.5 truncate">
-                                {item.recommendedLocation}
-                              </p>
-                            </div>
-                          </div>
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
 
-                          <button
-                            type="button"
-                            disabled={isAlreadyInPlot}
-                            onClick={() => handleQuickAddCatalogPlant(item)}
-                            className={`min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition cursor-pointer ${
-                              isAlreadyInPlot
-                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-default'
-                                : 'bg-emerald-800 hover:bg-emerald-700 text-white'
-                            }`}
-                          >
-                            {isAlreadyInPlot ? 'In Plot ✓' : '+ Add'}
-                          </button>
-                        </div>
-                      );
-                    })}
+                    <button
+                      type="button"
+                      onClick={() => setIsCatalogOpen((prev) => !prev)}
+                      className="min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-stone-100 text-slate-800 border border-stone-300 transition whitespace-nowrap cursor-pointer"
+                    >
+                      {isCatalogOpen ? 'Hide List' : 'Browse (46)'}
+                    </button>
                   </div>
+
+                  {(isCatalogOpen || catalogSearchQuery.trim() !== '') && (
+                    <div
+                      data-testid="rhs-plant-search-results"
+                      className="pt-2 space-y-2.5"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                          {[
+                            { id: 'ALL', label: 'All (46)' },
+                            { id: 'HADSTON_32', label: 'My 32 Plants' },
+                            { id: 'SHRUB_TREE', label: 'Shrubs & Trees' },
+                            { id: 'ORNAMENTAL', label: 'Perennials' },
+                            { id: 'EDIBLE_ALLOTMENT', label: 'Edibles' }
+                          ].map((cat) => (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              onClick={() => setCatalogCategory(cat.id)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition whitespace-nowrap cursor-pointer ${
+                                catalogCategory === cat.id
+                                  ? 'bg-emerald-800 text-white'
+                                  : 'bg-white text-slate-600 border border-stone-200 hover:bg-stone-100'
+                              }`}
+                            >
+                              {cat.label}
+                            </button>
+                          ))}
+                        </div>
+                        <span className="text-xs text-slate-500">
+                          {matchingCatalogPlants.length} matches
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-64 overflow-y-auto pr-1">
+                        {matchingCatalogPlants.map((item) => {
+                          const isAlreadyInPlot = activeInventoryNameSet.has(item.name.toLowerCase());
+                          return (
+                            <div
+                              key={item.catalogId}
+                              className="p-2.5 rounded-xl bg-white border border-stone-200 flex items-center justify-between gap-2.5"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                <PlantThumbnailWithModal
+                                  plantId={item.catalogId}
+                                  plantName={item.name}
+                                  photoRef={item.photoRef}
+                                  size="sm"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {item.photoRef && (
+                                      <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] font-mono font-bold text-emerald-900">
+                                        #{item.photoRef}
+                                      </span>
+                                    )}
+                                    <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                                      {item.name}
+                                    </span>
+                                    <span className="text-xs font-semibold text-emerald-800">
+                                      · RHS {item.rhsRating}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-500 mt-0.5 truncate">
+                                    {item.recommendedLocation}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                disabled={isAlreadyInPlot}
+                                onClick={() => handleQuickAddCatalogPlant(item)}
+                                className={`min-h-[34px] px-3 py-1 rounded-lg text-xs font-semibold shrink-0 transition cursor-pointer ${
+                                  isAlreadyInPlot
+                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-default'
+                                    : 'bg-emerald-800 hover:bg-emerald-700 text-white'
+                                }`}
+                              >
+                                {isAlreadyInPlot ? 'In Plot ✓' : '+ Add'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2405,18 +2547,44 @@ export default function App() {
                     </button>
                   </div>
 
-                  <div>
-                    <label htmlFor="plant-name-input" className="block text-xs font-semibold text-slate-700 mb-1">
-                      Plant Name *
-                    </label>
-                    <input
-                      id="plant-name-input"
-                      type="text"
-                      required
-                      value={plantForm.name}
-                      onChange={(e) => setPlantForm({ ...plantForm, name: e.target.value })}
-                      className="w-full min-h-[38px] px-3 py-1.5 text-sm rounded-xl bg-white border border-stone-300 text-slate-900"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label htmlFor="plant-name-input" className="block text-xs font-semibold text-slate-700 mb-1">
+                        Plant Name *
+                      </label>
+                      <input
+                        id="plant-name-input"
+                        type="text"
+                        required
+                        value={plantForm.name}
+                        onChange={(e) => setPlantForm({ ...plantForm, name: e.target.value })}
+                        className="w-full min-h-[38px] px-3 py-1.5 text-sm rounded-xl bg-white border border-stone-300 text-slate-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="plant-category-select" className="block text-xs font-semibold text-slate-700 mb-1">
+                        Category
+                      </label>
+                      <select
+                        id="plant-category-select"
+                        data-testid="plant-category-select"
+                        value={plantForm.category}
+                        onChange={(e) =>
+                          setPlantForm({
+                            ...plantForm,
+                            category: e.target.value as PlantGroupCategoryId
+                          })
+                        }
+                        className="w-full min-h-[38px] px-2.5 py-1.5 text-xs rounded-xl bg-white border border-stone-300 text-slate-900"
+                      >
+                        {PLANT_CATEGORY_DEFINITIONS.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -2475,90 +2643,162 @@ export default function App() {
                 </form>
               )}
 
-              {/* Spacious 2-Column Plant Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {filteredPlotInventory.map((plant: PlantRecord) => {
-                  const isTender = ['H1a', 'H1b', 'H1c', 'H2', 'H3', 'H4'].includes(plant.rhsRating);
-                  const masterMatch = findMatchingMasterPlant(plant);
+              {/* Grouped Plant Inventory with Collapsible Category Headings */}
+              {groupedPlotInventory.length === 0 ? (
+                <div className="p-6 text-center rounded-xl bg-stone-50 border border-stone-200/80 text-xs sm:text-sm text-slate-500">
+                  No plants match &ldquo;{inventoryFilterText}&rdquo;.
+                </div>
+              ) : (
+                <div data-testid="plant-category-groups" className="space-y-3">
+                  {groupedPlotInventory.map((group) => {
+                    const isGroupOpen =
+                      isSearchingInventory || Boolean(expandedPlantCategories[group.id]);
 
-                  return (
-                    <div
-                      key={plant.id}
-                      onClick={() => {
-                        if (masterMatch) setActiveCareModalPlant(masterMatch);
-                      }}
-                      className={`p-4 rounded-xl bg-stone-50/70 border border-stone-200/90 hover:border-emerald-600/60 transition ${
-                        masterMatch ? 'cursor-pointer' : ''
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3 min-w-0 flex-1">
-                          <PlantThumbnailWithModal
-                            plantId={plant.id}
-                            plantName={masterMatch?.photoRef ? plant.name.replace(/^#\d+\s+/, '') : plant.name}
-                            photoRef={masterMatch?.photoRef}
-                            size="md"
-                          />
+                    return (
+                      <div
+                        key={group.id}
+                        data-testid={`plant-category-group-${group.id}`}
+                        className="rounded-2xl border border-stone-200/90 bg-stone-50/40 overflow-hidden transition"
+                      >
+                        <button
+                          type="button"
+                          data-testid={`plant-category-heading-${group.id}`}
+                          onClick={() => togglePlantCategoryGroup(group.id)}
+                          aria-expanded={isGroupOpen}
+                          className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left bg-stone-50/80 hover:bg-stone-100/80 transition cursor-pointer"
+                        >
                           <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              {masterMatch?.photoRef && (
-                                <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[11px] font-mono font-bold text-emerald-900">
-                                  #{masterMatch.photoRef}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Sprout className="w-4 h-4 text-emerald-700 shrink-0" />
+                              <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                                {group.label}
+                              </h3>
+                              <span className="px-2 py-0.5 rounded-md bg-white border border-stone-200 text-xs font-semibold text-slate-700 tabular-nums">
+                                {group.plants.length}{' '}
+                                {group.plants.length === 1 ? 'plant' : 'plants'}
+                              </span>
+                              {group.tenderCount > 0 && (
+                                <span className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-900">
+                                  {group.tenderCount} tender
                                 </span>
                               )}
-                              <h3 className="text-sm font-bold text-slate-900">
-                                {masterMatch?.photoRef
-                                  ? plant.name.replace(/^#\d+\s+/, '')
-                                  : plant.name}
-                              </h3>
-                              <span
-                                className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
-                                  isTender
-                                    ? 'bg-amber-50 text-amber-900 border border-amber-200'
-                                    : 'bg-white text-slate-700 border border-stone-200'
-                                }`}
-                              >
-                                RHS {plant.rhsRating}
-                              </span>
                             </div>
-                            <p className="text-xs text-slate-600 mt-1">
-                              {plant.location}
+                            <p className="text-xs text-slate-500 mt-0.5 truncate pl-6">
+                              {group.description}
                             </p>
-                            {masterMatch && (
-                              <p className="text-[11px] font-semibold text-emerald-800 mt-1.5 inline-flex items-center gap-0.5">
-                                <span>View Feed ({masterMatch.feedWindowUk}) &amp; Prune ({masterMatch.pruneMonthsUk})</span>
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              </p>
-                            )}
                           </div>
-                        </div>
 
-                        <div
-                          className="flex items-center gap-1 shrink-0"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => openEditPlantModal(plant)}
-                            aria-label={`Edit ${plant.name}`}
-                            className="min-h-[40px] min-w-[40px] sm:min-h-[36px] sm:min-w-[36px] inline-flex items-center justify-center rounded-xl text-slate-500 hover:text-slate-800 hover:bg-stone-200/60 active:bg-stone-200 transition cursor-pointer"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeletePlant(plant)}
-                            aria-label={`Delete ${plant.name}`}
-                            className="min-h-[40px] min-w-[40px] sm:min-h-[36px] sm:min-w-[36px] inline-flex items-center justify-center rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 active:bg-rose-100 transition cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 shrink-0">
+                            <span className="hidden sm:inline">
+                              {isGroupOpen ? 'Hide' : 'Show'}
+                            </span>
+                            {isGroupOpen ? (
+                              <ChevronUp className="w-4 h-4" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4" />
+                            )}
+                          </span>
+                        </button>
+
+                        {isGroupOpen && (
+                          <div className="p-3 sm:p-4 bg-white border-t border-stone-200/80 grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {group.plants.map((plant: PlantRecord) => {
+                              const isTender = ['H1a', 'H1b', 'H1c', 'H2', 'H3', 'H4'].includes(
+                                plant.rhsRating
+                              );
+                              const masterMatch = findMatchingMasterPlant(plant);
+
+                              return (
+                                <div
+                                  key={plant.id}
+                                  onClick={() => {
+                                    if (masterMatch) setActiveCareModalPlant(masterMatch);
+                                  }}
+                                  className={`p-3.5 sm:p-4 rounded-xl bg-stone-50/70 border border-stone-200/90 hover:border-emerald-600/60 transition ${
+                                    masterMatch ? 'cursor-pointer' : ''
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                                      <PlantThumbnailWithModal
+                                        plantId={plant.id}
+                                        plantName={
+                                          masterMatch?.photoRef
+                                            ? plant.name.replace(/^#\d+\s+/, '')
+                                            : plant.name
+                                        }
+                                        photoRef={masterMatch?.photoRef}
+                                        size="md"
+                                      />
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                          {masterMatch?.photoRef && (
+                                            <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[11px] font-mono font-bold text-emerald-900">
+                                              #{masterMatch.photoRef}
+                                            </span>
+                                          )}
+                                          <h4 className="text-sm font-bold text-slate-900">
+                                            {masterMatch?.photoRef
+                                              ? plant.name.replace(/^#\d+\s+/, '')
+                                              : plant.name}
+                                          </h4>
+                                          <span
+                                            className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
+                                              isTender
+                                                ? 'bg-amber-50 text-amber-900 border border-amber-200'
+                                                : 'bg-white text-slate-700 border border-stone-200'
+                                            }`}
+                                          >
+                                            RHS {plant.rhsRating}
+                                          </span>
+                                        </div>
+                                        <p className="text-xs text-slate-600 mt-1">
+                                          {plant.location}
+                                        </p>
+                                        {masterMatch && (
+                                          <p className="text-[11px] font-semibold text-emerald-800 mt-1.5 inline-flex items-center gap-0.5">
+                                            <span>
+                                              View Feed ({masterMatch.feedWindowUk}) &amp; Prune (
+                                              {masterMatch.pruneMonthsUk})
+                                            </span>
+                                            <ChevronRight className="w-3.5 h-3.5" />
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div
+                                      className="flex items-center gap-1 shrink-0"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() => openEditPlantModal(plant)}
+                                        aria-label={`Edit ${plant.name}`}
+                                        className="min-h-[40px] min-w-[40px] sm:min-h-[36px] sm:min-w-[36px] inline-flex items-center justify-center rounded-xl text-slate-500 hover:text-slate-800 hover:bg-stone-200/60 active:bg-stone-200 transition cursor-pointer"
+                                      >
+                                        <Edit3 className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeletePlant(plant)}
+                                        aria-label={`Delete ${plant.name}`}
+                                        className="min-h-[40px] min-w-[40px] sm:min-h-[36px] sm:min-w-[36px] inline-flex items-center justify-center rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 active:bg-rose-100 transition cursor-pointer"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           </div>
         )}
@@ -2656,79 +2896,102 @@ export default function App() {
       )}
 
       {/* =====================================================================
-          MOBILE THUMB-ZONE BOTTOM NAVIGATION BAR
-          Provides one-handed tab switching on mobile screens when scrolled down
+          PRIMARY BOTTOM NAVIGATION BAR
+          4-column bottom bar with stacked icons and non-truncating labels
       ===================================================================== */}
       {hasConfiguredLocation && (
         <nav
-          aria-label="Mobile quick navigation"
-          className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-stone-200/90 px-2 pt-1.5 safe-bottom-nav shadow-lg"
+          id="workspace-tabs-anchor"
+          data-testid="workspace-tabs"
+          aria-label="Garden dashboard sections"
+          className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-stone-200/90 px-2 pt-1.5 pb-1.5 safe-bottom-nav shadow-lg"
         >
-          <div className="grid grid-cols-4 gap-1 max-w-md mx-auto">
+          <div className="grid grid-cols-4 gap-1 max-w-md sm:max-w-2xl mx-auto">
             <button
               type="button"
+              data-testid="tab-overview"
+              aria-current={
+                activeWorkspaceTab === 'OVERVIEW' || activeWorkspaceTab === 'SOIL_TREND'
+                  ? 'page'
+                  : undefined
+              }
               onClick={() => {
                 setActiveWorkspaceTab('OVERVIEW');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className={`min-h-[46px] flex flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-semibold transition cursor-pointer ${
+              className={`min-h-[46px] px-1 flex flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
                 activeWorkspaceTab === 'OVERVIEW' || activeWorkspaceTab === 'SOIL_TREND'
                   ? 'text-emerald-800 bg-emerald-50/90'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <Thermometer className="w-4 h-4 shrink-0" />
-              <span className="truncate">Weather</span>
+              <span className="sm:hidden whitespace-nowrap">Weather</span>
+              <span className="hidden sm:inline whitespace-nowrap">Weather &amp; Soil</span>
             </button>
 
             <button
               type="button"
+              data-testid="tab-master-guide"
+              aria-current={activeWorkspaceTab === 'MASTER_GUIDE' ? 'page' : undefined}
               onClick={() => {
                 setActiveWorkspaceTab('MASTER_GUIDE');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className={`min-h-[46px] flex flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-semibold transition cursor-pointer ${
+              className={`min-h-[46px] px-1 flex flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
                 activeWorkspaceTab === 'MASTER_GUIDE'
                   ? 'text-emerald-800 bg-emerald-50/90'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <BookOpen className="w-4 h-4 shrink-0" />
-              <span className="truncate">Guide</span>
+              <span className="sm:hidden whitespace-nowrap">Guide</span>
+              <span className="hidden sm:inline whitespace-nowrap">Master Guide</span>
             </button>
 
             <button
               type="button"
+              data-testid="tab-checklist"
+              aria-current={activeWorkspaceTab === 'CHECKLIST' ? 'page' : undefined}
               onClick={() => {
                 setActiveWorkspaceTab('CHECKLIST');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className={`min-h-[46px] flex flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-semibold transition cursor-pointer ${
+              className={`min-h-[46px] px-1 flex flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
                 activeWorkspaceTab === 'CHECKLIST'
                   ? 'text-emerald-800 bg-emerald-50/90'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <Calendar className="w-4 h-4 shrink-0" />
-              <span className="truncate">Calendar</span>
+              <span className="sm:hidden whitespace-nowrap">Calendar</span>
+              <span className="hidden sm:inline whitespace-nowrap">Calendar &amp; Checklist</span>
             </button>
 
             <button
               type="button"
+              data-testid="tab-plants"
+              aria-current={activeWorkspaceTab === 'PLANTS' ? 'page' : undefined}
               onClick={() => {
                 setActiveWorkspaceTab('PLANTS');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className={`min-h-[46px] flex flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-semibold transition cursor-pointer ${
+              className={`min-h-[46px] px-1 flex flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
                 activeWorkspaceTab === 'PLANTS'
                   ? 'text-emerald-800 bg-emerald-50/90'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <Sprout className="w-4 h-4 shrink-0" />
-              <span className="truncate">Plants ({plantInventory.length})</span>
+              <span className="sm:hidden whitespace-nowrap">Plants ({plantInventory.length})</span>
+              <span className="hidden sm:inline whitespace-nowrap">
+                My Plants ({plantInventory.length})
+              </span>
             </button>
           </div>
+          <span data-testid="microclimate-note" className="sr-only">
+            {advice?.soilAndMicroclimateNote}
+          </span>
         </nav>
       )}
 

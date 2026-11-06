@@ -979,6 +979,195 @@ export const RHS_PLANT_CATALOG: RhsCatalogPlant[] = [
   ...REGIONAL_UK_STAPLES
 ];
 
+export type PlantGroupCategoryId = 'SHRUBS' | 'FLOWERS' | 'VEGETABLES' | 'FOLIAGE';
+
+export interface PlantCategoryDefinition {
+  id: PlantGroupCategoryId;
+  label: string;
+  shortLabel: string;
+  description: string;
+}
+
+export interface GroupedPlantInventorySection<T = any> extends PlantCategoryDefinition {
+  plants: T[];
+  tenderCount: number;
+}
+
+export const PLANT_CATEGORY_DEFINITIONS: PlantCategoryDefinition[] = [
+  {
+    id: 'SHRUBS',
+    label: 'Shrubs & Trees',
+    shortLabel: 'Shrubs',
+    description: 'Woody shrubs, roses, hydrangeas, and ornamental trees'
+  },
+  {
+    id: 'FLOWERS',
+    label: 'Flowers & Perennials',
+    shortLabel: 'Flowers',
+    description: 'Flowering border perennials, climbers, and patio blooms'
+  },
+  {
+    id: 'VEGETABLES',
+    label: 'Vegetables & Herbs',
+    shortLabel: 'Vegetables',
+    description: 'Allotment vegetables, culinary herbs, and edible crops'
+  },
+  {
+    id: 'FOLIAGE',
+    label: 'Ferns & Architectural Foliage',
+    shortLabel: 'Ferns & Foliage',
+    description: 'Woodland ferns, hostas, bamboo, and evergreen foliage'
+  }
+];
+
+const CATALOG_BY_REF = new Map<number, RhsCatalogPlant>();
+const CATALOG_BY_ID = new Map<string, RhsCatalogPlant>();
+const CATALOG_BY_NAME = new Map<string, RhsCatalogPlant>();
+
+for (const item of RHS_PLANT_CATALOG) {
+  if (typeof item.photoRef === 'number') {
+    CATALOG_BY_REF.set(item.photoRef, item);
+  }
+  CATALOG_BY_ID.set(item.catalogId.toLowerCase(), item);
+  CATALOG_BY_NAME.set(item.name.toLowerCase(), item);
+  CATALOG_BY_NAME.set(item.commonName.toLowerCase(), item);
+}
+
+/**
+ * Resolves the display group category ('SHRUBS' | 'FLOWERS' | 'VEGETABLES' | 'FOLIAGE')
+ * for any plant inventory item or RHS catalog plant.
+ */
+export function resolvePlantGroupCategory(plant: {
+  id?: string;
+  catalogId?: string;
+  photoRef?: number;
+  name?: string;
+  commonName?: string;
+  category?: string;
+}): PlantGroupCategoryId {
+  if (!plant) return 'FLOWERS';
+
+  const rawCat = String(plant.category || '').toUpperCase().trim();
+  if (
+    rawCat === 'SHRUBS' ||
+    rawCat === 'FLOWERS' ||
+    rawCat === 'VEGETABLES' ||
+    rawCat === 'FOLIAGE'
+  ) {
+    return rawCat as PlantGroupCategoryId;
+  }
+
+  const nameStr = String(plant.name || plant.commonName || '').trim();
+  const lowerName = nameStr.toLowerCase();
+
+  // Check if plant matches a known RHS catalog item by photoRef, id, or name
+  let matchedCatalog: RhsCatalogPlant | undefined;
+  if (typeof plant.photoRef === 'number') {
+    matchedCatalog = CATALOG_BY_REF.get(plant.photoRef);
+  }
+  if (!matchedCatalog) {
+    const refMatch = nameStr.match(/^#(\d+)\b/);
+    if (refMatch) {
+      matchedCatalog = CATALOG_BY_REF.get(Number(refMatch[1]));
+    }
+  }
+  if (!matchedCatalog && plant.id) {
+    const idRefMatch = String(plant.id).match(/hadston-(?:plt-)?0*(\d+)/i);
+    if (idRefMatch) {
+      matchedCatalog = CATALOG_BY_REF.get(Number(idRefMatch[1]));
+    } else {
+      matchedCatalog = CATALOG_BY_ID.get(String(plant.id).toLowerCase());
+    }
+  }
+  if (!matchedCatalog && lowerName) {
+    const strippedLower = lowerName.replace(/^#\d+\s+/, '');
+    matchedCatalog =
+      CATALOG_BY_NAME.get(lowerName) ||
+      CATALOG_BY_NAME.get(strippedLower) ||
+      RHS_PLANT_CATALOG.find(
+        (c) =>
+          strippedLower.includes(c.name.toLowerCase()) ||
+          strippedLower.includes(c.commonName.toLowerCase())
+      );
+  }
+
+  const effectiveText = matchedCatalog
+    ? `${matchedCatalog.name} ${matchedCatalog.commonName} ${matchedCatalog.botanicalName || ''}`.toLowerCase()
+    : lowerName;
+
+  const catalogCategory = matchedCatalog?.category || rawCat;
+
+  // 1. Ferns, Hostas, Bamboo & Architectural Foliage
+  if (
+    /\b(fern|dryopteris|polystichum|hosta|plantain lily|bamboo|fargesia|cypress|cupressus|cordyline|cabbage palm|torbay palm|grass|carex|miscanthus)\b/i.test(
+      effectiveText
+    )
+  ) {
+    return 'FOLIAGE';
+  }
+
+  // 2. Vegetables, Culinary Herbs & Edibles
+  if (
+    catalogCategory === 'EDIBLE_ALLOTMENT' ||
+    /\b(thyme|thymus|rosemary|mint|basil|parsley|chive|oregano|broccoli|brassica|kale|cavolo|bean|vicia|garlic|allium|rhubarb|rheum|tomato|potato|carrot|lettuce|courgette|onion|leek|chilli|pepper|strawberry|raspberry|currant|gooseberry|citrus|meyer lemon|lemon tree|vegetable|edible)\b/i.test(
+      effectiveText
+    )
+  ) {
+    return 'VEGETABLES';
+  }
+
+  // 3. Shrubs & Trees
+  if (
+    catalogCategory === 'SHRUB_TREE' ||
+    /\b(rose|rosa|hydrangea|spruce|picea|skimmia|crabapple|malus|cherry|prunus|willow|salix|elder|elderberry|sambucus|weigela|camellia|lilac|syringa|buddleja|butterfly bush|ceanothus|acer|maple|azalea|rhododendron|viburnum|forsythia|magnolia|holly|ilex|yew|taxus|box|buxus|shrub|tree)\b/i.test(
+      effectiveText
+    )
+  ) {
+    return 'SHRUBS';
+  }
+
+  // 4. Default to Flowers & Perennials (includes Herbaceous Perennials, Climbers, Flowering Patio Plants)
+  return 'FLOWERS';
+}
+
+/**
+ * Groups an array of plant inventory records by category in canonical display order.
+ * Only non-empty categories are returned by default unless includeEmpty is true.
+ */
+export function groupPlantInventoryByCategory<
+  T extends {
+    id?: string;
+    name?: string;
+    rhsRating?: string;
+    category?: string;
+  }
+>(plants: T[], includeEmpty: boolean = false): GroupedPlantInventorySection<T>[] {
+  const buckets = new Map<PlantGroupCategoryId, T[]>();
+  for (const def of PLANT_CATEGORY_DEFINITIONS) {
+    buckets.set(def.id, []);
+  }
+
+  for (const plant of plants || []) {
+    const catId = resolvePlantGroupCategory(plant);
+    const list = buckets.get(catId) || buckets.get('FLOWERS')!;
+    list.push(plant);
+  }
+
+  const tenderRatings = new Set(['H1a', 'H1b', 'H1c', 'H2', 'H3']);
+
+  return PLANT_CATEGORY_DEFINITIONS.map((def) => {
+    const groupPlants = buckets.get(def.id) || [];
+    const tenderCount = groupPlants.filter((p) =>
+      tenderRatings.has(String(p.rhsRating || ''))
+    ).length;
+    return {
+      ...def,
+      plants: groupPlants,
+      tenderCount
+    };
+  }).filter((section) => includeEmpty || section.plants.length > 0);
+}
+
 /**
  * Converts the 32 Garden Collection items into active PlantInventory records.
  */
@@ -986,6 +1175,7 @@ export function getHadston32InventoryRecords() {
   return HADSTON_GARDEN_COLLECTION_32.map((item) => ({
     id: item.catalogId,
     name: `#${item.photoRef} ${item.name}`,
+    category: resolvePlantGroupCategory(item),
     rhsRating: item.rhsRating,
     location: item.recommendedLocation,
     growthStage: item.defaultOctGrowthStage,
@@ -1007,7 +1197,8 @@ export function searchRhsPlantCatalog(
     const matchesCategory =
       categoryFilter === 'ALL' ||
       (categoryFilter === 'HADSTON_32' && Boolean(item.isHadstonCollection)) ||
-      item.category === categoryFilter;
+      item.category === categoryFilter ||
+      resolvePlantGroupCategory(item) === categoryFilter;
     if (!matchesCategory) return false;
     if (!cleanQuery) return true;
 

@@ -54,12 +54,6 @@
   padding-right: env(safe-area-inset-right, 0px);
 }
 
-@media (min-width: 640px) {
-  .safe-page-bottom {
-    padding-bottom: max(2rem, calc(env(safe-area-inset-bottom, 0px) + 1.5rem));
-  }
-}
-
 .safe-bottom-nav {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }

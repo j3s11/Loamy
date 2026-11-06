@@ -31,7 +31,10 @@ import {
   searchRhsPlantCatalog,
   RHS_PLANT_CATALOG,
   HADSTON_GARDEN_COLLECTION_32,
-  getHadston32InventoryRecords
+  getHadston32InventoryRecords,
+  PLANT_CATEGORY_DEFINITIONS,
+  resolvePlantGroupCategory,
+  groupPlantInventoryByCategory
 } from './rhsPlantCatalog';
 import {
   HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR,
@@ -552,6 +555,33 @@ test('formatUkDateTime formats ISO timestamps into UK date and 24-hour time and 
   assert.equal(advice.evaluatedAt, '2026-11-02T15:09:00.000Z');
 });
 
+test('groupPlantInventoryByCategory organizes garden plants into Shrubs, Flowers, Vegetables, and Foliage groups', () => {
+  assert.equal(PLANT_CATEGORY_DEFINITIONS.length, 4);
 
+  const records = getHadston32InventoryRecords();
+  const grouped = groupPlantInventoryByCategory(records);
 
+  // All 4 categories are represented in the 32-plant collection
+  assert.equal(grouped.length, 4);
+  const totalGroupedPlants = grouped.reduce((sum, g) => sum + g.plants.length, 0);
+  assert.equal(totalGroupedPlants, 32);
 
+  const shrubsGroup = grouped.find((g) => g.id === 'SHRUBS');
+  const flowersGroup = grouped.find((g) => g.id === 'FLOWERS');
+  const vegetablesGroup = grouped.find((g) => g.id === 'VEGETABLES');
+  const foliageGroup = grouped.find((g) => g.id === 'FOLIAGE');
+
+  assert.ok(shrubsGroup && shrubsGroup.plants.length >= 14);
+  assert.ok(shrubsGroup.label.includes('Shrubs'));
+  assert.ok(flowersGroup && flowersGroup.plants.length >= 6);
+  assert.ok(flowersGroup.label.includes('Flowers'));
+  assert.ok(vegetablesGroup && vegetablesGroup.plants.length >= 1);
+  assert.ok(vegetablesGroup.label.includes('Vegetables'));
+  assert.ok(foliageGroup && foliageGroup.plants.length >= 4);
+
+  // Verify custom and starter plants resolve accurately
+  assert.equal(resolvePlantGroupCategory({ name: "Purple Sprouting Broccoli 'Rudolph'" }), 'VEGETABLES');
+  assert.equal(resolvePlantGroupCategory({ name: "Dahlia 'Bishop of Llandaff'" }), 'FLOWERS');
+  assert.equal(resolvePlantGroupCategory({ name: "Rosa 'Gertrude Jekyll'" }), 'SHRUBS');
+  assert.equal(resolvePlantGroupCategory({ name: 'Scaly Male Fern (Dryopteris affinis)' }), 'FOLIAGE');
+});
