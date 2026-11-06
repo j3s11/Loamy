@@ -1213,3 +1213,138 @@ export function searchRhsPlantCatalog(
     );
   });
 }
+
+const UK_MONTH_METADATA = [
+  { index: 0, full: 'january', short: 'jan', label: 'January' },
+  { index: 1, full: 'february', short: 'feb', label: 'February' },
+  { index: 2, full: 'march', short: 'mar', label: 'March' },
+  { index: 3, full: 'april', short: 'apr', label: 'April' },
+  { index: 4, full: 'may', short: 'may', label: 'May' },
+  { index: 5, full: 'june', short: 'jun', label: 'June' },
+  { index: 6, full: 'july', short: 'jul', label: 'July' },
+  { index: 7, full: 'august', short: 'aug', label: 'August' },
+  { index: 8, full: 'september', short: 'sep', label: 'September' },
+  { index: 9, full: 'october', short: 'oct', label: 'October' },
+  { index: 10, full: 'november', short: 'nov', label: 'November' },
+  { index: 11, full: 'december', short: 'dec', label: 'December' }
+];
+
+/**
+ * Checks whether a horticultural schedule string (e.g. "April to July", "Late October to Early November")
+ * includes the target 0-indexed UK month (0 = Jan ... 11 = Dec).
+ */
+export function doesTextMentionUkMonth(scheduleText?: string | null, monthIndex: number = 0): boolean {
+  if (!scheduleText) return false;
+  const targetIdx = ((monthIndex % 12) + 12) % 12;
+  const lower = String(scheduleText).toLowerCase();
+
+  // Direct mention of the month name or 3-letter abbreviation
+  const targetMeta = UK_MONTH_METADATA[targetIdx];
+  const directRegex = new RegExp(`\\b(${targetMeta.full}|${targetMeta.short}t?)\\b`, 'i');
+  if (directRegex.test(lower)) {
+    return true;
+  }
+
+  // Check month ranges like "April to July", "May–September", "March - August"
+  const rangePattern =
+    /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s*(?:to|–|-|through)\s*(?:early\s+|mid[- ]+|late\s+)?(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/gi;
+
+  let match: RegExpExecArray | null;
+  while ((match = rangePattern.exec(lower)) !== null) {
+    const startToken = match[1].slice(0, 3);
+    const endToken = match[2].slice(0, 3);
+    const startMeta = UK_MONTH_METADATA.find((m) => m.short === startToken);
+    const endMeta = UK_MONTH_METADATA.find((m) => m.short === endToken);
+    if (startMeta && endMeta) {
+      if (startMeta.index <= endMeta.index) {
+        if (targetIdx >= startMeta.index && targetIdx <= endMeta.index) return true;
+      } else {
+        // Wrap-around winter range (e.g. Nov to Feb)
+        if (targetIdx >= startMeta.index || targetIdx <= endMeta.index) return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+export interface PlantMonthlyCareStatus {
+  isDueThisMonth: boolean;
+  feedDue: boolean;
+  pruneDue: boolean;
+  winterProtectDue: boolean;
+  badgeLabel: string | null;
+  monthName: string;
+}
+
+/**
+ * Evaluates whether a plant has active feeding, pruning, or winter protection tasks
+ * due in the given 0-indexed UK month.
+ */
+export function getPlantMonthlyCareStatus(
+  plant: {
+    id?: string;
+    catalogId?: string;
+    photoRef?: number;
+    name?: string;
+    commonName?: string;
+    rhsRating?: string;
+    feedWindowUk?: string;
+    pruneMonthsUk?: string;
+  },
+  monthIndex: number = new Date().getMonth()
+): PlantMonthlyCareStatus {
+  const safeMonthIdx = ((monthIndex % 12) + 12) % 12;
+  const monthName = UK_MONTH_METADATA[safeMonthIdx].label;
+
+  let catalogMatch: RhsCatalogPlant | undefined;
+  if (typeof plant?.photoRef === 'number') {
+    catalogMatch = CATALOG_BY_REF.get(plant.photoRef);
+  }
+  const nameStr = String(plant?.name || plant?.commonName || '').trim();
+  if (!catalogMatch && nameStr) {
+    const refMatch = nameStr.match(/^#(\d+)\b/);
+    if (refMatch) {
+      catalogMatch = CATALOG_BY_REF.get(Number(refMatch[1]));
+    } else {
+      const stripped = nameStr.replace(/^#\d+\s+/, '').toLowerCase();
+      catalogMatch = CATALOG_BY_NAME.get(nameStr.toLowerCase()) || CATALOG_BY_NAME.get(stripped);
+    }
+  }
+  if (!catalogMatch && plant?.id) {
+    catalogMatch = CATALOG_BY_ID.get(String(plant.id).toLowerCase());
+  }
+
+  const feedWindow = plant?.feedWindowUk || catalogMatch?.feedWindowUk || '';
+  const pruneWindow = plant?.pruneMonthsUk || catalogMatch?.pruneMonthsUk || '';
+  const rhsRating = String(plant?.rhsRating || catalogMatch?.rhsRating || 'H4');
+
+  const feedDue = doesTextMentionUkMonth(feedWindow, safeMonthIdx);
+  const pruneDue = doesTextMentionUkMonth(pruneWindow, safeMonthIdx);
+  const isColdSeason = [9, 10, 11, 0, 1].includes(safeMonthIdx); // Oct - Feb
+  const winterProtectDue =
+    isColdSeason && ['H1a', 'H1b', 'H1c', 'H2', 'H3'].includes(rhsRating);
+
+  const isDueThisMonth = feedDue || pruneDue || winterProtectDue;
+
+  let badgeLabel: string | null = null;
+  if (pruneDue && feedDue) {
+    badgeLabel = `Prune & Feed (${monthName.slice(0, 3)})`;
+  } else if (pruneDue) {
+    badgeLabel = `Prune Due (${monthName.slice(0, 3)})`;
+  } else if (feedDue) {
+    badgeLabel = `Feed Due (${monthName.slice(0, 3)})`;
+  } else if (winterProtectDue) {
+    badgeLabel = 'Winter Protection';
+  }
+
+  return {
+    isDueThisMonth,
+    feedDue,
+    pruneDue,
+    winterProtectDue,
+    badgeLabel,
+    monthName
+  };
+}
+

@@ -59,7 +59,9 @@ import {
   PLANT_CATEGORY_DEFINITIONS,
   PlantGroupCategoryId,
   resolvePlantGroupCategory,
-  groupPlantInventoryByCategory
+  groupPlantInventoryByCategory,
+  getPlantMonthlyCareStatus,
+  PlantMonthlyCareStatus
 } from './utils/rhsPlantCatalog';
 import { HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR } from './utils/hadstonMasterGuide';
 import { getCurrentUkMonthIndex } from './utils/monthlyClayChecklist';
@@ -109,10 +111,19 @@ export interface GardenProfile {
   microclimateNotes: string;
 }
 
+export interface PlantCareLogEntry {
+  lastFed?: string;
+  lastPruned?: string;
+  lastProtected?: string;
+  notes?: string;
+}
+
 const UI_CONFIG = {
   STORAGE_KEYS: {
     INVENTORY: 'gws_garden_inventory_v3',
     COMPLETED_TASKS: 'gws_completed_tasks_v3',
+    PLANT_CARE_LOGS: 'gws_plant_care_logs_v1',
+    PROTECTED_ALERT_PLANTS: 'gws_protected_alert_plants_v1',
     GARDEN_PROFILE: GARDEN_PROFILE_STORAGE_KEY
   },
   AUTO_RUN_ON_MOUNT: true,
@@ -417,14 +428,35 @@ export default function App() {
     };
   }, [locationInputText, isLocationSuggestionsOpen]);
 
-  // Inventory search, collapsible category headings & care modal state
+  // Inventory search, Due-This-Month filter, collapsible category headings & care modal state
   const [inventoryFilterText, setInventoryFilterText] = useState<string>('');
+  const [filterDueThisMonth, setFilterDueThisMonth] = useState<boolean>(false);
   const [expandedPlantCategories, setExpandedPlantCategories] = useState<Record<string, boolean>>({});
   const [activeCareModalPlant, setActiveCareModalPlant] = useState<RhsCatalogPlant | null>(null);
 
   const [completedTasks, setCompletedTasks] = useState<Record<string, boolean>>(() => {
     try {
       const saved = localStorage.getItem(UI_CONFIG.STORAGE_KEYS.COMPLETED_TASKS);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Per-plant care logs & personal notes persisted in localStorage
+  const [plantCareLogs, setPlantCareLogs] = useState<Record<string, PlantCareLogEntry>>(() => {
+    try {
+      const saved = localStorage.getItem(UI_CONFIG.STORAGE_KEYS.PLANT_CARE_LOGS);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Frost / Waterlogging alert plant protection checklist persisted in localStorage
+  const [protectedAlertPlants, setProtectedAlertPlants] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem(UI_CONFIG.STORAGE_KEYS.PROTECTED_ALERT_PLANTS);
       return saved ? JSON.parse(saved) : {};
     } catch {
       return {};
@@ -550,6 +582,25 @@ export default function App() {
       console.error('[GardenDashboard] Failed to save task status:', err);
     }
   }, [completedTasks]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(UI_CONFIG.STORAGE_KEYS.PLANT_CARE_LOGS, JSON.stringify(plantCareLogs));
+    } catch (err) {
+      console.error('[GardenDashboard] Failed to save plant care logs:', err);
+    }
+  }, [plantCareLogs]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        UI_CONFIG.STORAGE_KEYS.PROTECTED_ALERT_PLANTS,
+        JSON.stringify(protectedAlertPlants)
+      );
+    } catch (err) {
+      console.error('[GardenDashboard] Failed to save protected alert plants:', err);
+    }
+  }, [protectedAlertPlants]);
 
   const hasAutoAnalyzedOnMountRef = useRef(false);
   useEffect(() => {
@@ -812,6 +863,75 @@ export default function App() {
         lowerName.includes(c.commonName.toLowerCase())
     );
     return bySubstring || null;
+  }, []);
+
+  // Precompute monthly care status for each plant in inventory for the current UK month
+  const plantMonthlyCareMap = useMemo(() => {
+    const map = new Map<string, PlantMonthlyCareStatus>();
+    for (const p of plantInventory) {
+      const master = findMatchingMasterPlant(p);
+      map.set(
+        p.id,
+        getPlantMonthlyCareStatus(
+          {
+            id: p.id,
+            name: p.name,
+            rhsRating: p.rhsRating,
+            feedWindowUk: master?.feedWindowUk,
+            pruneMonthsUk: master?.pruneMonthsUk
+          },
+          currentUkMonthIdx
+        )
+      );
+    }
+    return map;
+  }, [plantInventory, findMatchingMasterPlant, currentUkMonthIdx]);
+
+  const dueThisMonthTotalCount = useMemo(() => {
+    let count = 0;
+    for (const status of plantMonthlyCareMap.values()) {
+      if (status.isDueThisMonth) count++;
+    }
+    return count;
+  }, [plantMonthlyCareMap]);
+
+  const displayedGroupedPlotInventory = useMemo(() => {
+    if (!filterDueThisMonth) return groupedPlotInventory;
+    const dueFiltered = filteredPlotInventory.filter(
+      (p) => plantMonthlyCareMap.get(p.id)?.isDueThisMonth
+    );
+    return groupPlantInventoryByCategory(dueFiltered, false);
+  }, [groupedPlotInventory, filteredPlotInventory, filterDueThisMonth, plantMonthlyCareMap]);
+
+  const recordPlantCareAction = useCallback(
+    (catalogId: string, actionField: 'lastFed' | 'lastPruned' | 'lastProtected') => {
+      const stamp = formatUkDateTime(new Date());
+      setPlantCareLogs((prev) => ({
+        ...prev,
+        [catalogId]: {
+          ...(prev[catalogId] || {}),
+          [actionField]: stamp
+        }
+      }));
+    },
+    []
+  );
+
+  const updatePlantPersonalNote = useCallback((catalogId: string, notes: string) => {
+    setPlantCareLogs((prev) => ({
+      ...prev,
+      [catalogId]: {
+        ...(prev[catalogId] || {}),
+        notes
+      }
+    }));
+  }, []);
+
+  const toggleProtectedAlertPlant = useCallback((alertKey: string) => {
+    setProtectedAlertPlants((prev) => ({
+      ...prev,
+      [alertKey]: !prev[alertKey]
+    }));
   }, []);
 
   // Extract current conditions in UK units (°C, mph, mm)
@@ -1665,7 +1785,7 @@ export default function App() {
               ) : (
                 <div
                   data-testid="seven-day-forecast-strip"
-                  className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 overflow-hidden"
+                  className="grid grid-cols-1 lg:grid-cols-7 gap-1.5 sm:gap-2 overflow-hidden"
                 >
                   {dailyForecast.slice(0, 7).map((day: any, idx: number) => {
                     const isFrost =
@@ -1685,7 +1805,7 @@ export default function App() {
                         onClick={() =>
                           setExpandedForecastDayIdx((prev) => (prev === idx ? null : idx))
                         }
-                        className={`text-left min-w-0 overflow-hidden rounded-xl p-2.5 sm:p-3 border transition cursor-pointer flex flex-col justify-between gap-1.5 ${
+                        className={`text-left min-w-0 overflow-hidden rounded-xl px-3 py-2 lg:p-3 border transition cursor-pointer flex flex-col justify-between gap-1 ${
                           isFrost
                             ? 'bg-sky-50/60 border-sky-200 hover:border-sky-300'
                             : isHighWind
@@ -1693,60 +1813,82 @@ export default function App() {
                             : 'bg-stone-50/60 border-stone-200/80 hover:border-stone-300'
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-1 w-full">
-                          <span
-                            title={formattedDayLabel}
-                            className="text-xs font-bold text-slate-900 truncate"
-                          >
-                            {formattedDayLabel}
-                          </span>
-                          <span
-                            className={`w-2 h-2 rounded-full shrink-0 ${
-                              isFrost
-                                ? 'bg-sky-600'
-                                : isHighWind
-                                ? 'bg-amber-500'
-                                : 'bg-emerald-500/60'
-                            }`}
-                            title={isFrost ? 'Frost risk' : isHighWind ? 'High wind' : 'Normal'}
-                          />
-                        </div>
-
-                        <div className="flex items-baseline justify-between gap-1 tabular-nums w-full pt-0.5">
-                          <span className="text-sm sm:text-base font-bold text-slate-900">
-                            {day.maxTempC !== null && day.maxTempC !== undefined
-                              ? `${day.maxTempC}°`
-                              : '--'}
-                          </span>
-                          <span className="text-xs text-slate-500">
-                            {day.minTempC !== null && day.minTempC !== undefined
-                              ? `${day.minTempC}°C`
-                              : '--'}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-1 text-[11px] text-slate-600 tabular-nums w-full">
-                          <span className="truncate">
-                            {day.precipSumMm !== undefined && day.precipSumMm !== null
-                              ? `${day.precipSumMm} mm`
-                              : '0 mm'}
-                          </span>
-                          {(isFrost || isHighWind) && (
+                        {/* Compact single-row layout on mobile/tablet, stacked card on lg+ */}
+                        <div className="flex items-center justify-between gap-2 lg:flex-col lg:items-stretch lg:gap-1.5 w-full">
+                          <div className="flex items-center gap-2 lg:justify-between min-w-0">
                             <span
-                              className={`text-[10px] font-bold uppercase px-1.5 py-0.2 rounded ${
+                              className={`w-2 h-2 rounded-full shrink-0 lg:order-2 ${
                                 isFrost
-                                  ? 'bg-sky-700 text-white'
-                                  : 'bg-amber-600 text-white'
+                                  ? 'bg-sky-600'
+                                  : isHighWind
+                                  ? 'bg-amber-500'
+                                  : 'bg-emerald-500/60'
                               }`}
+                              title={isFrost ? 'Frost risk' : isHighWind ? 'High wind' : 'Normal'}
+                            />
+                            <span
+                              title={formattedDayLabel}
+                              className="text-xs font-bold text-slate-900 truncate w-20 sm:w-24 lg:w-auto lg:order-1"
                             >
-                              {isFrost ? 'Frost' : 'Wind'}
+                              {formattedDayLabel}
                             </span>
-                          )}
+                            {(isFrost || isHighWind) && (
+                              <span
+                                className={`lg:hidden text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0 ${
+                                  isFrost
+                                    ? 'bg-sky-700 text-white'
+                                    : 'bg-amber-600 text-white'
+                                }`}
+                              >
+                                {isFrost ? 'Frost' : 'Wind'}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-end lg:justify-between gap-3 lg:gap-1 tabular-nums shrink-0 lg:w-full lg:pt-0.5">
+                            <span className="text-[11px] text-slate-600 lg:hidden w-14 text-right">
+                              {day.precipSumMm !== undefined && day.precipSumMm !== null
+                                ? `${day.precipSumMm} mm`
+                                : '0 mm'}
+                            </span>
+                            <div className="flex items-baseline gap-1.5 lg:justify-between lg:w-full">
+                              <span className="text-xs text-slate-500 lg:order-2">
+                                {day.minTempC !== null && day.minTempC !== undefined
+                                  ? `${day.minTempC}°C`
+                                  : '--'}
+                              </span>
+                              <span className="text-xs text-slate-300 lg:hidden">/</span>
+                              <span className="text-sm sm:text-base font-bold text-slate-900 lg:order-1">
+                                {day.maxTempC !== null && day.maxTempC !== undefined
+                                  ? `${day.maxTempC}°`
+                                  : '--'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="hidden lg:flex items-center justify-between gap-1 text-[11px] text-slate-600 tabular-nums w-full">
+                            <span className="truncate">
+                              {day.precipSumMm !== undefined && day.precipSumMm !== null
+                                ? `${day.precipSumMm} mm`
+                                : '0 mm'}
+                            </span>
+                            {(isFrost || isHighWind) && (
+                              <span
+                                className={`text-[10px] font-bold uppercase px-1.5 py-0.2 rounded ${
+                                  isFrost
+                                    ? 'bg-sky-700 text-white'
+                                    : 'bg-amber-600 text-white'
+                                }`}
+                              >
+                                {isFrost ? 'Frost' : 'Wind'}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {isDayExpanded && (
                           <div className="pt-1.5 mt-1 border-t border-stone-200/70 text-[11px] text-slate-600 tabular-nums w-full flex items-center justify-between">
-                            <span>Gust</span>
+                            <span>Peak Wind Gust</span>
                             <span className="font-semibold text-slate-800">
                               {dayGustMph !== null ? `${dayGustMph} mph` : '--'}
                             </span>
@@ -1759,7 +1901,7 @@ export default function App() {
               )}
             </section>
 
-            {/* 3. EXPANDABLE 1-LINE WEATHER ALERTS (Recommendation 2) */}
+            {/* 3. EXPANDABLE 1-LINE WEATHER ALERTS WITH INTERACTIVE PROTECTION CHECKLIST */}
             <section className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -1778,7 +1920,7 @@ export default function App() {
                   </span>
                 ) : (
                   weatherAlerts.length > 0 && (
-                    <span className="text-[11px] text-slate-500">Tap an alert to view actions</span>
+                    <span className="text-[11px] text-slate-500">Tap an alert to tick off protected plants</span>
                   )
                 )}
               </div>
@@ -1794,7 +1936,12 @@ export default function App() {
                     const style =
                       UI_CONFIG.SEVERITY_STYLES[alert.severity] || UI_CONFIG.SEVERITY_STYLES.INFO;
                     const isExpanded = Boolean(expandedAlertIndices[idx]);
-                    const plantCount = (alert.affectedPlants || []).length;
+                    const affectedList: string[] = alert.affectedPlants || [];
+                    const plantCount = affectedList.length;
+                    const protectedCount = affectedList.filter(
+                      (pName) => protectedAlertPlants[`${alert.hazardType}::${pName}`]
+                    ).length;
+                    const allProtected = plantCount > 0 && protectedCount === plantCount;
 
                     return (
                       <div
@@ -1827,6 +1974,18 @@ export default function App() {
                           </div>
 
                           <div className="flex items-center gap-2 shrink-0">
+                            {protectedCount > 0 && (
+                              <span
+                                data-testid={`alert-protected-counter-${idx}`}
+                                className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
+                                  allProtected
+                                    ? 'bg-emerald-700 text-white border-emerald-700'
+                                    : 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                                }`}
+                              >
+                                {protectedCount}/{plantCount} protected
+                              </span>
+                            )}
                             <span className="text-[11px] font-semibold text-slate-700 bg-white/80 px-2 py-0.5 rounded-md border border-stone-200/80">
                               {plantCount} {plantCount === 1 ? 'plant' : 'plants'}
                             </span>
@@ -1839,21 +1998,56 @@ export default function App() {
                         </button>
 
                         {isExpanded && (
-                          <div className="px-3.5 pb-3.5 pt-2 border-t border-stone-200/60 space-y-2.5 bg-white/60">
-                            <div className="flex flex-wrap gap-1.5">
-                              {(alert.affectedPlants || []).slice(0, 8).map((plantName: string, pIdx: number) => (
-                                <span
-                                  key={pIdx}
-                                  className="text-xs font-medium bg-white text-slate-800 px-2 py-0.5 rounded-md border border-stone-300"
+                          <div className="px-3.5 pb-3.5 pt-2.5 border-t border-stone-200/60 space-y-2.5 bg-white/75">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-[11px] font-semibold text-slate-600">
+                                Quick Protection Checklist — tap each plant as you fleece, mulch, or shelter it:
+                              </span>
+                              {plantCount > 0 && (
+                                <button
+                                  type="button"
+                                  data-testid={`alert-mark-all-protected-${idx}`}
+                                  onClick={() => {
+                                    setProtectedAlertPlants((prev) => {
+                                      const next = { ...prev };
+                                      for (const pName of affectedList) {
+                                        next[`${alert.hazardType}::${pName}`] = !allProtected;
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                  className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
                                 >
-                                  {plantName}
-                                </span>
-                              ))}
-                              {(alert.affectedPlants || []).length > 8 && (
-                                <span className="text-xs font-medium text-slate-600 px-1.5 py-0.5">
-                                  +{alert.affectedPlants.length - 8} more
-                                </span>
+                                  {allProtected ? 'Reset checklist' : 'Mark all protected'}
+                                </button>
                               )}
+                            </div>
+
+                            <div className="flex flex-wrap gap-1.5">
+                              {affectedList.map((plantName: string, pIdx: number) => {
+                                const alertKey = `${alert.hazardType}::${plantName}`;
+                                const isProtected = Boolean(protectedAlertPlants[alertKey]);
+                                return (
+                                  <button
+                                    key={pIdx}
+                                    type="button"
+                                    data-testid={`alert-plant-check-${idx}-${pIdx}`}
+                                    onClick={() => toggleProtectedAlertPlant(alertKey)}
+                                    className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border transition cursor-pointer ${
+                                      isProtected
+                                        ? 'bg-emerald-50 text-emerald-900 border-emerald-300 line-through decoration-emerald-600/70'
+                                        : 'bg-white text-slate-800 border-stone-300 hover:border-emerald-600'
+                                    }`}
+                                  >
+                                    {isProtected ? (
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                                    ) : (
+                                      <Circle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                    )}
+                                    <span>{plantName}</span>
+                                  </button>
+                                );
+                              })}
                             </div>
 
                             <p className="text-xs sm:text-sm text-slate-800 leading-relaxed">
@@ -2315,7 +2509,22 @@ export default function App() {
                     )}
                   </div>
 
-                  {groupedPlotInventory.length > 0 && !isSearchingInventory && (
+                  <button
+                    type="button"
+                    data-testid="filter-due-this-month-button"
+                    onClick={() => setFilterDueThisMonth((prev) => !prev)}
+                    aria-pressed={filterDueThisMonth}
+                    className={`min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer shrink-0 ${
+                      filterDueThisMonth
+                        ? 'bg-emerald-800 text-white border-emerald-800'
+                        : 'bg-emerald-50/80 hover:bg-emerald-100/80 text-emerald-950 border-emerald-200'
+                    }`}
+                  >
+                    <Calendar className="w-3.5 h-3.5 shrink-0" />
+                    <span>Due This Month ({dueThisMonthTotalCount})</span>
+                  </button>
+
+                  {displayedGroupedPlotInventory.length > 0 && !isSearchingInventory && !filterDueThisMonth && (
                     <button
                       type="button"
                       data-testid="toggle-all-plant-categories-button"
@@ -2644,15 +2853,22 @@ export default function App() {
               )}
 
               {/* Grouped Plant Inventory with Collapsible Category Headings */}
-              {groupedPlotInventory.length === 0 ? (
+              {displayedGroupedPlotInventory.length === 0 ? (
                 <div className="p-6 text-center rounded-xl bg-stone-50 border border-stone-200/80 text-xs sm:text-sm text-slate-500">
-                  No plants match &ldquo;{inventoryFilterText}&rdquo;.
+                  {filterDueThisMonth
+                    ? 'No plants match your current "Due This Month" filter.'
+                    : `No plants match “${inventoryFilterText}”.`}
                 </div>
               ) : (
                 <div data-testid="plant-category-groups" className="space-y-3">
-                  {groupedPlotInventory.map((group) => {
+                  {displayedGroupedPlotInventory.map((group) => {
                     const isGroupOpen =
-                      isSearchingInventory || Boolean(expandedPlantCategories[group.id]);
+                      isSearchingInventory ||
+                      filterDueThisMonth ||
+                      Boolean(expandedPlantCategories[group.id]);
+                    const groupDueCount = group.plants.filter(
+                      (p) => plantMonthlyCareMap.get(p.id)?.isDueThisMonth
+                    ).length;
 
                     return (
                       <div
@@ -2677,6 +2893,11 @@ export default function App() {
                                 {group.plants.length}{' '}
                                 {group.plants.length === 1 ? 'plant' : 'plants'}
                               </span>
+                              {groupDueCount > 0 && (
+                                <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[11px] font-semibold text-emerald-900">
+                                  {groupDueCount} due this month
+                                </span>
+                              )}
                               {group.tenderCount > 0 && (
                                 <span className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-900">
                                   {group.tenderCount} tender
@@ -2707,6 +2928,16 @@ export default function App() {
                                 plant.rhsRating
                               );
                               const masterMatch = findMatchingMasterPlant(plant);
+                              const monthlyCare = plantMonthlyCareMap.get(plant.id);
+                              const careLogKey = masterMatch?.catalogId || plant.id;
+                              const careLog = plantCareLogs[careLogKey];
+                              const hasCareLog = Boolean(
+                                careLog &&
+                                  (careLog.lastFed ||
+                                    careLog.lastPruned ||
+                                    careLog.lastProtected ||
+                                    (careLog.notes && careLog.notes.trim() !== ''))
+                              );
 
                               return (
                                 <div
@@ -2751,6 +2982,28 @@ export default function App() {
                                           >
                                             RHS {plant.rhsRating}
                                           </span>
+                                          {monthlyCare?.isDueThisMonth && (
+                                            <span
+                                              data-testid={`plant-due-badge-${plant.id}`}
+                                              className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                                                monthlyCare.pruneDue
+                                                  ? 'bg-amber-100/90 text-amber-950 border-amber-300'
+                                                  : monthlyCare.feedDue
+                                                  ? 'bg-emerald-100/90 text-emerald-950 border-emerald-300'
+                                                  : 'bg-sky-100/90 text-sky-950 border-sky-300'
+                                              }`}
+                                            >
+                                              {monthlyCare.badgeLabel}
+                                            </span>
+                                          )}
+                                          {hasCareLog && (
+                                            <span
+                                              data-testid={`plant-care-logged-badge-${plant.id}`}
+                                              className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-stone-200/80 text-slate-800"
+                                            >
+                                              Care Logged ✓
+                                            </span>
+                                          )}
                                         </div>
                                         <p className="text-xs text-slate-600 mt-1">
                                           {plant.location}
@@ -2758,8 +3011,8 @@ export default function App() {
                                         {masterMatch && (
                                           <p className="text-[11px] font-semibold text-emerald-800 mt-1.5 inline-flex items-center gap-0.5">
                                             <span>
-                                              View Feed ({masterMatch.feedWindowUk}) &amp; Prune (
-                                              {masterMatch.pruneMonthsUk})
+                                              View Feed ({masterMatch.feedWindowUk}), Prune (
+                                              {masterMatch.pruneMonthsUk}) &amp; Care Log
                                             </span>
                                             <ChevronRight className="w-3.5 h-3.5" />
                                           </p>
@@ -2889,6 +3142,95 @@ export default function App() {
               <div className="p-3.5 rounded-xl bg-sky-50/70 border border-sky-200">
                 <strong className="text-sky-950">Overwintering Protocol:</strong>{' '}
                 <span className="text-slate-800">{activeCareModalPlant.overwinteringProtocol}</span>
+              </div>
+
+              {/* Per-Plant Care Log & Personal Notes (Saved Locally) */}
+              <div
+                data-testid="plant-care-log-section"
+                className="p-3.5 rounded-xl bg-stone-50 border border-stone-200/90 space-y-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <strong className="text-slate-900 text-xs sm:text-sm">
+                    My Care Log &amp; Personal Notes
+                  </strong>
+                  <span className="text-[11px] text-slate-500">Saved on this device</span>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    data-testid="log-fed-today-btn"
+                    onClick={() => recordPlantCareAction(activeCareModalPlant.catalogId, 'lastFed')}
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-800 hover:bg-emerald-700 text-white transition cursor-pointer"
+                  >
+                    + Fed Today
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="log-pruned-today-btn"
+                    onClick={() =>
+                      recordPlantCareAction(activeCareModalPlant.catalogId, 'lastPruned')
+                    }
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-700 hover:bg-amber-600 text-white transition cursor-pointer"
+                  >
+                    + Pruned Today
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="log-protected-today-btn"
+                    onClick={() =>
+                      recordPlantCareAction(activeCareModalPlant.catalogId, 'lastProtected')
+                    }
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-sky-800 hover:bg-sky-700 text-white transition cursor-pointer"
+                  >
+                    + Mulched / Protected Today
+                  </button>
+                </div>
+
+                {(plantCareLogs[activeCareModalPlant.catalogId]?.lastFed ||
+                  plantCareLogs[activeCareModalPlant.catalogId]?.lastPruned ||
+                  plantCareLogs[activeCareModalPlant.catalogId]?.lastProtected) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-[11px] text-slate-700 bg-white p-2.5 rounded-lg border border-stone-200">
+                    {plantCareLogs[activeCareModalPlant.catalogId]?.lastFed && (
+                      <div>
+                        <span className="font-semibold text-emerald-900">Last Fed:</span>{' '}
+                        {plantCareLogs[activeCareModalPlant.catalogId]?.lastFed}
+                      </div>
+                    )}
+                    {plantCareLogs[activeCareModalPlant.catalogId]?.lastPruned && (
+                      <div>
+                        <span className="font-semibold text-amber-900">Last Pruned:</span>{' '}
+                        {plantCareLogs[activeCareModalPlant.catalogId]?.lastPruned}
+                      </div>
+                    )}
+                    {plantCareLogs[activeCareModalPlant.catalogId]?.lastProtected && (
+                      <div>
+                        <span className="font-semibold text-sky-900">Protected:</span>{' '}
+                        {plantCareLogs[activeCareModalPlant.catalogId]?.lastProtected}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <label
+                    htmlFor="plant-personal-note-input"
+                    className="block text-xs font-semibold text-slate-700 mb-1"
+                  >
+                    Personal Garden Notes
+                  </label>
+                  <textarea
+                    id="plant-personal-note-input"
+                    data-testid="plant-personal-note-input"
+                    rows={2}
+                    placeholder="e.g. Moved pot to south porch, applied 5cm bark mulch, or spotted new basal shoots..."
+                    value={plantCareLogs[activeCareModalPlant.catalogId]?.notes || ''}
+                    onChange={(e) =>
+                      updatePlantPersonalNote(activeCareModalPlant.catalogId, e.target.value)
+                    }
+                    className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl bg-white border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-700"
+                  />
+                </div>
               </div>
             </div>
           </div>

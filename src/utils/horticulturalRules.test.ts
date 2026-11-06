@@ -34,7 +34,9 @@ import {
   getHadston32InventoryRecords,
   PLANT_CATEGORY_DEFINITIONS,
   resolvePlantGroupCategory,
-  groupPlantInventoryByCategory
+  groupPlantInventoryByCategory,
+  doesTextMentionUkMonth,
+  getPlantMonthlyCareStatus
 } from './rhsPlantCatalog';
 import {
   HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR,
@@ -585,3 +587,24 @@ test('groupPlantInventoryByCategory organizes garden plants into Shrubs, Flowers
   assert.equal(resolvePlantGroupCategory({ name: "Rosa 'Gertrude Jekyll'" }), 'SHRUBS');
   assert.equal(resolvePlantGroupCategory({ name: 'Scaly Male Fern (Dryopteris affinis)' }), 'FOLIAGE');
 });
+
+test('doesTextMentionUkMonth and getPlantMonthlyCareStatus identify plants due for feeding, pruning, or winter protection', () => {
+  // 1. Month range and seasonal keyword matching
+  assert.equal(doesTextMentionUkMonth('March to August', 3), true); // April (3)
+  assert.equal(doesTextMentionUkMonth('March to August', 10), false); // November (10)
+  assert.equal(doesTextMentionUkMonth('November to February (dormant)', 10), true); // November (10)
+  assert.equal(doesTextMentionUkMonth('November to February (dormant)', 0), true); // January (0)
+
+  // 2. Plant #1 (Salvia farinacea, H3) in November (month 10) -> Winter Protection due
+  const salvia = HADSTON_GARDEN_COLLECTION_32[0];
+  const novSalviaStatus = getPlantMonthlyCareStatus(salvia, 10);
+  assert.equal(novSalviaStatus.winterProtectDue, true);
+  assert.equal(novSalviaStatus.isDueThisMonth, true);
+  assert.ok(novSalviaStatus.badgeLabel && novSalviaStatus.badgeLabel.length > 0);
+
+  // 3. Plant #1 (Salvia farinacea) in May (month 4) -> Feed due (May to August)
+  const maySalviaStatus = getPlantMonthlyCareStatus(salvia, 4);
+  assert.equal(maySalviaStatus.feedDue, true);
+  assert.equal(maySalviaStatus.isDueThisMonth, true);
+});
+

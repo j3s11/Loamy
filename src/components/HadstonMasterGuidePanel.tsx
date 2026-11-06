@@ -13,7 +13,9 @@ import {
   X,
   Sun,
   MapPin,
-  ChevronRight
+  ChevronRight,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import {
   HADSTON_GARDEN_COLLECTION_32,
@@ -53,12 +55,25 @@ export default function HadstonMasterGuidePanel({
   onLoadAllHadston32,
   onAddSingleCatalogPlant
 }: HadstonMasterGuidePanelProps) {
-  const [activeSection, setActiveSection] = useState<GuideSectionId>('SEC1_INVENTORY');
+  // Collapsible chapters: collapsed by default so the guide tab feels calm & minimalist
+  const [openSections, setOpenSections] = useState<Record<GuideSectionId, boolean>>({
+    SEC1_INVENTORY: false,
+    SEC3_NUTRITION: false,
+    SEC4_PRUNING: false,
+    SEC5_CLIMATE_RISK: false
+  });
   const [plantFilterQuery, setPlantFilterQuery] = useState<string>('');
   const [rhsFilter, setRhsFilter] = useState<string>('ALL');
   const [loadFeedback, setLoadFeedback] = useState<string | null>(null);
   const [selectedPlantDossier, setSelectedPlantDossier] = useState<RhsCatalogPlant | null>(null);
   const [showDisambiguationNotes, setShowDisambiguationNotes] = useState<boolean>(false);
+
+  const toggleSection = (sectionId: GuideSectionId) => {
+    setOpenSections((prev) => ({
+      ...prev,
+      [sectionId]: !prev[sectionId]
+    }));
+  };
 
   const filteredHadstonPlants = useMemo(() => {
     const q = plantFilterQuery.trim().toLowerCase();
@@ -77,6 +92,8 @@ export default function HadstonMasterGuidePanel({
       );
     });
   }, [plantFilterQuery, rhsFilter]);
+
+  const isSearchingGuide = plantFilterQuery.trim() !== '' || rhsFilter !== 'ALL';
 
   const handleDownloadMarkdown = () => {
     try {
@@ -132,434 +149,488 @@ export default function HadstonMasterGuidePanel({
     <section
       data-testid="hadston-master-guide-panel"
       aria-label="Master Horticulturist Guide"
-      className="space-y-6"
+      className="space-y-4"
     >
-      {/* Clean Editorial Header Card */}
-      <div className="bg-white border border-stone-200/90 rounded-2xl p-5 sm:p-6 shadow-xs">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="space-y-1.5">
+      {/* Compact Editorial Header Card */}
+      <div className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-900 border border-emerald-200">
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-800">
                 <BookOpen className="w-3.5 h-3.5 text-emerald-700" />
                 Master Horticulturist Guide
               </span>
-              <span className="text-xs font-medium text-stone-600">
-                {locationName || 'Your Garden Plot'} · RHS {rhsHardinessZone}
+              <span className="text-xs text-slate-500">
+                · {locationName || 'Your Garden Plot'} (RHS {rhsHardinessZone})
               </span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-              Your 32-Plant Botanical Care &amp; Seasonal Playbook
+            <h2 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight mt-0.5">
+              32-Plant Botanical Playbook
             </h2>
-            <p className="text-sm text-slate-600 leading-relaxed max-w-3xl">
-              Calibrated for your local garden microclimate (heavy clay to alluvial loam, pH 6.0–6.8, RHS {rhsHardinessZone}). Select any section below or click any plant to read its full care card.
+            <p className="text-xs text-slate-500 mt-0.5">
+              Tap any chapter below to expand its reference cards, or search across all 32 plants.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               type="button"
               data-testid="load-hadston-32-button"
               onClick={handleLoadAllClick}
-              className="min-h-[42px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-800 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer"
+              className="min-h-[36px] inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-800 hover:bg-emerald-700 text-white shadow-2xs transition cursor-pointer"
             >
-              <Sparkles className="w-4 h-4 shrink-0" />
-              <span>Sync All 32 Plants to Plot</span>
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              <span>Sync All 32</span>
             </button>
 
             <button
               type="button"
               onClick={handleDownloadMarkdown}
-              className="min-h-[42px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-stone-100 hover:bg-stone-200 text-slate-800 border border-stone-300 transition cursor-pointer"
+              className="min-h-[36px] inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-stone-100 hover:bg-stone-200 text-slate-800 border border-stone-300 transition cursor-pointer"
             >
-              <Download className="w-4 h-4 text-slate-700 shrink-0" />
-              <span>Download Guide (.md)</span>
+              <Download className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+              <span>Export (.md)</span>
             </button>
           </div>
         </div>
 
         {loadFeedback && (
-          <div className="mt-4 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-900 flex items-center gap-2.5">
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs sm:text-sm text-emerald-900 flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
             <span className="font-medium">{loadFeedback}</span>
           </div>
         )}
 
-        {/* 4-Section Chapter Navigation */}
-        <div
-          data-testid="master-guide-section-tabs"
-          className="mt-5 pt-5 border-t border-stone-200 flex lg:grid lg:grid-cols-4 items-center gap-2 overflow-x-auto lg:overflow-visible pb-1 lg:pb-0"
-        >
-          {[
-            {
-              id: 'SEC1_INVENTORY' as GuideSectionId,
-              label: '1. Plant Inventory (32)',
-              icon: Sprout
-            },
-            {
-              id: 'SEC3_NUTRITION' as GuideSectionId,
-              label: '2. Feed & NPK Guide',
-              icon: Droplets
-            },
-            {
-              id: 'SEC4_PRUNING' as GuideSectionId,
-              label: '3. Pruning Playbook',
-              icon: Scissors
-            },
-            {
-              id: 'SEC5_CLIMATE_RISK' as GuideSectionId,
-              label: '4. Frost & Winter Care',
-              icon: ShieldAlert
-            }
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isSelected = activeSection === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                data-testid={`guide-tab-${tab.id}`}
-                onClick={() => setActiveSection(tab.id)}
-                className={`min-h-[42px] inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition whitespace-nowrap shrink-0 cursor-pointer ${
-                  isSelected
-                    ? 'bg-emerald-800 text-white border-emerald-800 shadow-xs'
-                    : 'bg-stone-50 text-slate-700 border-stone-200 hover:bg-stone-100 hover:text-slate-900'
-                }`}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span className="truncate">{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Shared Search & Filter Bar for Plant Sections */}
-      <div className="bg-white border border-stone-200/90 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="text"
-            value={plantFilterQuery}
-            onChange={(e) => setPlantFilterQuery(e.target.value)}
-            placeholder="Search your 32 plants by name, #number (e.g. #16), pH, or pruning month..."
-            className="w-full min-h-[42px] pl-10 pr-9 py-2 text-sm rounded-xl bg-stone-50 border border-stone-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
-          />
-          {plantFilterQuery && (
-            <button
-              type="button"
-              onClick={() => setPlantFilterQuery('')}
-              aria-label="Clear filter"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1.5 overflow-x-auto">
-          {[
-            { id: 'ALL', label: `All Plants (${HADSTON_GARDEN_COLLECTION_32.length})` },
-            { id: 'TENDER_H3_H4', label: 'Tender / Borderline (H3–H4)' },
-            { id: 'HARDY_H5_H7', label: 'Fully Hardy (H5–H7)' }
-          ].map((pill) => (
-            <button
-              key={pill.id}
-              type="button"
-              onClick={() => setRhsFilter(pill.id)}
-              className={`min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-semibold border transition whitespace-nowrap shrink-0 cursor-pointer ${
-                rhsFilter === pill.id
-                  ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
-                  : 'bg-white text-slate-600 border-stone-200 hover:bg-stone-50'
-              }`}
-            >
-              {pill.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* =====================================================================
-          SECTION 1: PLANT INVENTORY & IDENTIFICATION SUMMARY
-      ===================================================================== */}
-      {activeSection === 'SEC1_INVENTORY' && (
-        <div data-testid="guide-section-1" className="space-y-4">
-          {/* Collapsible Identification Notes so they don't clutter the view */}
-          <div className="bg-amber-50/70 border border-amber-200/90 rounded-2xl p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <Info className="w-4 h-4 text-amber-700 shrink-0" />
-                <span className="text-sm font-bold text-amber-950">
-                  Botanical Identification Notes (#3 Fuchsia, #5/#14/#22 Roses, #24/#28 Hydrangeas &amp; #29 Clematis)
-                </span>
-              </div>
+        {/* Compact Search & Hardiness Filter Bar */}
+        <div className="pt-2 border-t border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="relative flex-1">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={plantFilterQuery}
+              onChange={(e) => setPlantFilterQuery(e.target.value)}
+              placeholder="Search 32 plants by name, #ref (e.g. #16), pH, or pruning month..."
+              className="w-full min-h-[38px] pl-9 pr-8 py-1.5 text-xs sm:text-sm rounded-xl bg-stone-50 border border-stone-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
+            />
+            {plantFilterQuery && (
               <button
                 type="button"
-                onClick={() => setShowDisambiguationNotes((prev) => !prev)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-amber-900 border border-amber-300 hover:bg-amber-100/50 transition shrink-0 cursor-pointer"
+                onClick={() => setPlantFilterQuery('')}
+                aria-label="Clear filter"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700"
               >
-                {showDisambiguationNotes ? 'Hide Notes' : 'Read ID Notes'}
+                <X className="w-3.5 h-3.5" />
               </button>
-            </div>
-
-            {showDisambiguationNotes && (
-              <div className="mt-3 pt-3 border-t border-amber-200/80 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs sm:text-sm text-amber-950 leading-relaxed">
-                {HADSTON_GARDEN_COLLECTION_32.filter((p) => p.idDisambiguationNote).map((p) => (
-                  <div key={p.catalogId} className="p-3 rounded-xl bg-white border border-amber-200/70">
-                    <strong className="font-bold text-slate-900">
-                      #{p.photoRef} {p.commonName}:
-                    </strong>{' '}
-                    <span className="text-slate-700">{p.idDisambiguationNote}</span>
-                  </div>
-                ))}
-              </div>
             )}
           </div>
 
-          {/* Clean, High-Readability Plant Directory */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredHadstonPlants.map((plant) => {
-              const inPlot = isPlantInActivePlot(plant);
-              const isBorderline = ['H3', 'H4'].includes(plant.rhsRating);
-              return (
-                <div
-                  key={plant.catalogId}
-                  className="bg-white border border-stone-200/90 hover:border-emerald-600/60 rounded-2xl p-5 shadow-xs transition flex flex-col justify-between gap-4"
-                >
-                  <div className="space-y-2.5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <PlantThumbnailWithModal
-                          plantId={plant.catalogId}
-                          plantName={plant.commonName}
-                          photoRef={plant.photoRef}
-                          size="md"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-mono font-bold text-emerald-900">
-                              #{plant.photoRef}
-                            </span>
-                            <span className="text-xs italic text-slate-500 truncate">{plant.botanicalName}</span>
-                          </div>
-                          <h3 className="text-base font-bold text-slate-900 leading-snug mt-0.5">
-                            {plant.commonName}
-                          </h3>
-                        </div>
-                      </div>
-
-                      <span
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 ${
-                          isBorderline
-                            ? 'bg-amber-50 text-amber-900 border border-amber-200'
-                            : 'bg-stone-100 text-slate-700 border border-stone-200'
-                        }`}
-                      >
-                        RHS {plant.rhsRating}
-                      </span>
-                    </div>
-
-                    <div className="pt-2 border-t border-stone-100 space-y-1.5 text-xs sm:text-sm text-slate-700">
-                      <p>
-                        <strong className="font-semibold text-slate-900">Soil &amp; Sun:</strong>{' '}
-                        {plant.soilAndSun}
-                      </p>
-                      <p>
-                        <strong className="font-semibold text-slate-900">Characteristics &amp; Origin:</strong>{' '}
-                        {plant.characteristicsAndNative}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="pt-3 border-t border-stone-100 flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPlantDossier(plant)}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 hover:text-emerald-600 cursor-pointer"
-                    >
-                      <span>View Feed, Pruning &amp; Winter Care</span>
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={inPlot}
-                      onClick={() => onAddSingleCatalogPlant(plant)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                        inPlot
-                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-default'
-                          : 'bg-emerald-800 hover:bg-emerald-700 text-white'
-                      }`}
-                    >
-                      {inPlot ? 'In Garden Plot ✓' : '+ Add to Plot'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* =====================================================================
-          SECTION 3: SPECIALIZED FEED & NUTRITION STRATEGY
-      ===================================================================== */}
-      {activeSection === 'SEC3_NUTRITION' && (
-        <div data-testid="guide-section-3" className="space-y-4">
-          <div className="bg-emerald-50/80 border border-emerald-200 rounded-2xl p-4 text-xs sm:text-sm text-emerald-950 leading-relaxed">
-            <strong className="font-bold">Seasonal Feeding Rule:</strong> Begin granular slow-release feeding in late March as 6cm clay temperatures pass <span className="font-mono font-semibold">7°C</span>, and stop all high-nitrogen feeds by <strong className="font-semibold">31 July</strong> so new wood ripens before autumn frosts.
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredHadstonPlants.map((plant) => (
-              <div
-                key={plant.catalogId}
-                className="bg-white border border-stone-200/90 rounded-2xl p-5 shadow-xs space-y-3"
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            {[
+              { id: 'ALL', label: `All (${HADSTON_GARDEN_COLLECTION_32.length})` },
+              { id: 'TENDER_H3_H4', label: 'Tender (H3–H4)' },
+              { id: 'HARDY_H5_H7', label: 'Hardy (H5–H7)' }
+            ].map((pill) => (
+              <button
+                key={pill.id}
+                type="button"
+                onClick={() => setRhsFilter(pill.id)}
+                className={`min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-semibold border transition whitespace-nowrap shrink-0 cursor-pointer ${
+                  rhsFilter === pill.id
+                    ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                    : 'bg-white text-slate-600 border-stone-200 hover:bg-stone-50'
+                }`}
               >
-                <div className="flex items-start justify-between gap-2 border-b border-stone-100 pb-2.5">
-                  <div>
-                    <span className="text-xs font-mono font-bold text-emerald-800">
-                      #{plant.photoRef}
-                    </span>{' '}
-                    <h4 className="inline text-base font-bold text-slate-900">
-                      {plant.commonName}
-                    </h4>
-                    <p className="text-xs italic text-slate-500">{plant.botanicalName}</p>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-900 border border-emerald-200 text-xs font-semibold shrink-0">
-                    {plant.feedWindowUk}
-                  </span>
-                </div>
-
-                <div className="space-y-2 text-xs sm:text-sm leading-relaxed">
-                  <p className="text-slate-800">
-                    <strong className="font-semibold text-slate-900">Specific Feed &amp; NPK:</strong>{' '}
-                    {plant.feedTypeNpk}
-                  </p>
-                  <p className="text-slate-700">
-                    <strong className="font-semibold text-slate-900">Dosage &amp; Method:</strong>{' '}
-                    {plant.feedFrequencyDosage}
-                  </p>
-                </div>
-              </div>
+                {pill.label}
+              </button>
             ))}
           </div>
         </div>
-      )}
+      </div>
 
       {/* =====================================================================
-          SECTION 4: PRECISION PRUNING & SHAPING GUIDE
+          4 COLLAPSIBLE ACCORDION CHAPTERS (Minimalist Progressive Disclosure)
       ===================================================================== */}
-      {activeSection === 'SEC4_PRUNING' && (
-        <div data-testid="guide-section-4" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredHadstonPlants.map((plant) => (
-              <div
-                key={plant.catalogId}
-                className="bg-white border border-stone-200/90 rounded-2xl p-5 shadow-xs space-y-3"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2 border-b border-stone-100 pb-2.5">
-                  <div>
-                    <span className="text-xs font-mono font-bold text-emerald-800">
-                      #{plant.photoRef}
-                    </span>{' '}
-                    <h4 className="inline text-base font-bold text-slate-900">
-                      {plant.commonName}
-                    </h4>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5">{plant.pruneType}</p>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 text-xs font-semibold">
-                    {plant.pruneMonthsUk}
-                  </span>
-                </div>
-
-                <div className="space-y-2 text-xs sm:text-sm leading-relaxed">
-                  <p className="text-slate-800">
-                    <strong className="font-semibold text-slate-900">Step-by-Step Technique:</strong>{' '}
-                    {plant.pruneTechnique}
-                  </p>
-                  <div className="p-3 rounded-xl bg-rose-50/70 border border-rose-200/80 text-rose-950">
-                    <strong className="font-semibold">What to Avoid:</strong> {plant.pruneAvoid}
-                  </div>
-                </div>
+      <div data-testid="master-guide-section-tabs" className="space-y-3">
+        {/* CHAPTER 1: PLANT INVENTORY & IDENTIFICATION SUMMARY */}
+        <div className="bg-white border border-stone-200/90 rounded-2xl shadow-xs overflow-hidden">
+          <button
+            type="button"
+            data-testid="guide-tab-SEC1_INVENTORY"
+            onClick={() => toggleSection('SEC1_INVENTORY')}
+            aria-expanded={openSections.SEC1_INVENTORY || isSearchingGuide}
+            className="w-full px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-stone-50/80 transition cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Sprout className="w-4 h-4 text-emerald-700 shrink-0" />
+              <div className="min-w-0">
+                <span className="text-sm sm:text-base font-bold text-slate-900 block truncate">
+                  1. Plant Inventory &amp; Identification ({filteredHadstonPlants.length})
+                </span>
+                <span className="text-xs text-slate-500 block truncate">
+                  Botanical names, soil pH, sun aspect, and diagnostic notes
+                </span>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* =====================================================================
-          SECTION 5: CLIMATE & SEASONAL RISK MANAGEMENT
-      ===================================================================== */}
-      {activeSection === 'SEC5_CLIMATE_RISK' && (
-        <div data-testid="guide-section-5" className="space-y-6">
-          {/* Local Risk Mitigation Cards */}
-          <div className="bg-white border border-stone-200/90 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
-            <h3 className="text-base sm:text-lg font-bold text-slate-900">
-              {locationName || 'Local Garden'} Climate Risk Mitigation (RHS {rhsHardinessZone})
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {HADSTON_LOCAL_RISK_MITIGATION.map((risk) => (
-                <div
-                  key={risk.id}
-                  className="p-4 rounded-xl bg-stone-50 border border-stone-200/90 space-y-2.5"
-                >
-                  <h4 className="text-sm font-bold text-slate-900">{risk.hazardTitle}</h4>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    {risk.hadstonMicroclimateTrigger}
-                  </p>
-                  <p className="text-xs font-medium text-emerald-800">
-                    Key Plants: {risk.affectedPlants.join(', ')}
-                  </p>
-                  <ul className="space-y-1 text-xs sm:text-sm text-slate-700 leading-relaxed list-disc pl-4">
-                    {risk.actionableSteps.map((step, sIdx) => (
-                      <li key={sIdx}>{step}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
             </div>
-          </div>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 shrink-0">
+              <span>{openSections.SEC1_INVENTORY || isSearchingGuide ? 'Hide' : 'View'}</span>
+              {openSections.SEC1_INVENTORY || isSearchingGuide ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </span>
+          </button>
 
-          {/* Plant-by-Plant Overwintering Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredHadstonPlants.map((plant) => {
-              const isTenderOrBorderline = ['H3', 'H4'].includes(plant.rhsRating);
-              return (
-                <div
-                  key={plant.catalogId}
-                  className={`rounded-2xl p-5 border shadow-xs space-y-2 ${
-                    isTenderOrBorderline
-                      ? 'bg-amber-50/40 border-amber-200'
-                      : 'bg-white border-stone-200/90'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-emerald-800">
-                        #{plant.photoRef}
-                      </span>
-                      <h4 className="text-base font-bold text-slate-900">{plant.commonName}</h4>
-                    </div>
-                    <span
-                      className={`text-xs font-bold px-2.5 py-0.5 rounded-lg ${
-                        isTenderOrBorderline
-                          ? 'bg-amber-100 text-amber-900'
-                          : 'bg-emerald-50 text-emerald-900'
-                      }`}
-                    >
-                      RHS {plant.rhsRating}
+          {(openSections.SEC1_INVENTORY || isSearchingGuide) && (
+            <div data-testid="guide-section-1" className="border-t border-stone-100 p-4 space-y-4 bg-stone-50/40">
+              {/* Collapsible Identification Notes */}
+              <div className="bg-amber-50/70 border border-amber-200/90 rounded-xl p-3.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Info className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span className="text-xs sm:text-sm font-bold text-amber-950 truncate">
+                      Botanical ID Notes (#3 Fuchsia, #5/#14/#22 Roses, #24/#28 Hydrangeas &amp; #29 Clematis)
                     </span>
                   </div>
-                  <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
-                    <strong className="font-semibold text-slate-900">Overwintering Protocol:</strong>{' '}
-                    {plant.overwinteringProtocol}
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowDisambiguationNotes((prev) => !prev)}
+                    className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-amber-900 border border-amber-300 hover:bg-amber-100/50 transition shrink-0 cursor-pointer"
+                  >
+                    {showDisambiguationNotes ? 'Hide Notes' : 'Read ID Notes'}
+                  </button>
                 </div>
-              );
-            })}
-          </div>
+
+                {showDisambiguationNotes && (
+                  <div className="mt-3 pt-3 border-t border-amber-200/80 grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs text-amber-950 leading-relaxed">
+                    {HADSTON_GARDEN_COLLECTION_32.filter((p) => p.idDisambiguationNote).map((p) => (
+                      <div key={p.catalogId} className="p-2.5 rounded-xl bg-white border border-amber-200/70">
+                        <strong className="font-bold text-slate-900">
+                          #{p.photoRef} {p.commonName}:
+                        </strong>{' '}
+                        <span className="text-slate-700">{p.idDisambiguationNote}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {filteredHadstonPlants.map((plant) => {
+                  const inPlot = isPlantInActivePlot(plant);
+                  const isBorderline = ['H3', 'H4'].includes(plant.rhsRating);
+                  return (
+                    <div
+                      key={plant.catalogId}
+                      className="bg-white border border-stone-200/90 hover:border-emerald-600/60 rounded-xl p-4 shadow-2xs transition flex flex-col justify-between gap-3"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2.5">
+                          <div className="flex items-start gap-3 min-w-0 flex-1">
+                            <PlantThumbnailWithModal
+                              plantId={plant.catalogId}
+                              plantName={plant.commonName}
+                              photoRef={plant.photoRef}
+                              size="md"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[11px] font-mono font-bold text-emerald-900">
+                                  #{plant.photoRef}
+                                </span>
+                                <span className="text-xs italic text-slate-500 truncate">
+                                  {plant.botanicalName}
+                                </span>
+                              </div>
+                              <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-snug mt-0.5">
+                                {plant.commonName}
+                              </h3>
+                            </div>
+                          </div>
+
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-bold shrink-0 ${
+                              isBorderline
+                                ? 'bg-amber-50 text-amber-900 border border-amber-200'
+                                : 'bg-stone-100 text-slate-700 border border-stone-200'
+                            }`}
+                          >
+                            RHS {plant.rhsRating}
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-slate-600 leading-relaxed pt-1 border-t border-stone-100">
+                          <strong className="font-semibold text-slate-800">Soil &amp; Sun:</strong>{' '}
+                          {plant.soilAndSun}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-stone-100 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPlantDossier(plant)}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 hover:text-emerald-600 cursor-pointer"
+                        >
+                          <span>Full Care Card</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={inPlot}
+                          onClick={() => onAddSingleCatalogPlant(plant)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                            inPlot
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-default'
+                              : 'bg-emerald-800 hover:bg-emerald-700 text-white'
+                          }`}
+                        >
+                          {inPlot ? 'In Plot ✓' : '+ Add'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* CHAPTER 2: SPECIALIZED FEED & NUTRITION STRATEGY */}
+        <div className="bg-white border border-stone-200/90 rounded-2xl shadow-xs overflow-hidden">
+          <button
+            type="button"
+            data-testid="guide-tab-SEC3_NUTRITION"
+            onClick={() => toggleSection('SEC3_NUTRITION')}
+            aria-expanded={openSections.SEC3_NUTRITION}
+            className="w-full px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-stone-50/80 transition cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Droplets className="w-4 h-4 text-emerald-700 shrink-0" />
+              <div className="min-w-0">
+                <span className="text-sm sm:text-base font-bold text-slate-900 block truncate">
+                  2. Feed &amp; NPK Nutrition Strategy
+                </span>
+                <span className="text-xs text-slate-500 block truncate">
+                  Specific NPK formulations, UK feeding windows, and clay dosages
+                </span>
+              </div>
+            </div>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 shrink-0">
+              <span>{openSections.SEC3_NUTRITION ? 'Hide' : 'View'}</span>
+              {openSections.SEC3_NUTRITION ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </span>
+          </button>
+
+          {openSections.SEC3_NUTRITION && (
+            <div data-testid="guide-section-3" className="border-t border-stone-100 p-4 space-y-3 bg-stone-50/40">
+              <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3.5 text-xs sm:text-sm text-emerald-950 leading-relaxed">
+                <strong className="font-bold">Seasonal Feeding Rule:</strong> Begin granular slow-release feeding in late March as 6cm clay temperatures pass <span className="font-mono font-semibold">7°C</span>, and stop all high-nitrogen feeds by <strong className="font-semibold">31 July</strong> so new wood ripens before autumn frosts.
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {filteredHadstonPlants.map((plant) => (
+                  <div
+                    key={plant.catalogId}
+                    className="bg-white border border-stone-200/90 rounded-xl p-4 shadow-2xs space-y-2"
+                  >
+                    <div className="flex items-start justify-between gap-2 border-b border-stone-100 pb-2">
+                      <div>
+                        <span className="text-xs font-mono font-bold text-emerald-800">
+                          #{plant.photoRef}
+                        </span>{' '}
+                        <h4 className="inline text-sm sm:text-base font-bold text-slate-900">
+                          {plant.commonName}
+                        </h4>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200 text-[11px] font-semibold shrink-0">
+                        {plant.feedWindowUk}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 text-xs text-slate-700 leading-relaxed">
+                      <p>
+                        <strong className="font-semibold text-slate-900">Feed &amp; NPK:</strong>{' '}
+                        {plant.feedTypeNpk}
+                      </p>
+                      <p>
+                        <strong className="font-semibold text-slate-900">Dosage:</strong>{' '}
+                        {plant.feedFrequencyDosage}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* CHAPTER 3: PRECISION PRUNING & SHAPING PLAYBOOK */}
+        <div className="bg-white border border-stone-200/90 rounded-2xl shadow-xs overflow-hidden">
+          <button
+            type="button"
+            data-testid="guide-tab-SEC4_PRUNING"
+            onClick={() => toggleSection('SEC4_PRUNING')}
+            aria-expanded={openSections.SEC4_PRUNING}
+            className="w-full px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-stone-50/80 transition cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Scissors className="w-4 h-4 text-amber-700 shrink-0" />
+              <div className="min-w-0">
+                <span className="text-sm sm:text-base font-bold text-slate-900 block truncate">
+                  3. Precision Pruning &amp; Shaping Playbook
+                </span>
+                <span className="text-xs text-slate-500 block truncate">
+                  Exact UK pruning months, step-by-step cuts, and mistakes to avoid
+                </span>
+              </div>
+            </div>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 shrink-0">
+              <span>{openSections.SEC4_PRUNING ? 'Hide' : 'View'}</span>
+              {openSections.SEC4_PRUNING ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </span>
+          </button>
+
+          {openSections.SEC4_PRUNING && (
+            <div data-testid="guide-section-4" className="border-t border-stone-100 p-4 bg-stone-50/40">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {filteredHadstonPlants.map((plant) => (
+                  <div
+                    key={plant.catalogId}
+                    className="bg-white border border-stone-200/90 rounded-xl p-4 shadow-2xs space-y-2"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2 border-b border-stone-100 pb-2">
+                      <div>
+                        <span className="text-xs font-mono font-bold text-emerald-800">
+                          #{plant.photoRef}
+                        </span>{' '}
+                        <h4 className="inline text-sm sm:text-base font-bold text-slate-900">
+                          {plant.commonName}
+                        </h4>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200 text-[11px] font-semibold">
+                        {plant.pruneMonthsUk}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 text-xs leading-relaxed">
+                      <p className="text-slate-800">
+                        <strong className="font-semibold text-slate-900">Technique:</strong>{' '}
+                        {plant.pruneTechnique}
+                      </p>
+                      <div className="p-2.5 rounded-lg bg-rose-50/70 border border-rose-200/80 text-rose-950">
+                        <strong className="font-semibold">Avoid:</strong> {plant.pruneAvoid}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* CHAPTER 4: CLIMATE & WINTER OVERWINTERING PROTOCOL */}
+        <div className="bg-white border border-stone-200/90 rounded-2xl shadow-xs overflow-hidden">
+          <button
+            type="button"
+            data-testid="guide-tab-SEC5_CLIMATE_RISK"
+            onClick={() => toggleSection('SEC5_CLIMATE_RISK')}
+            aria-expanded={openSections.SEC5_CLIMATE_RISK}
+            className="w-full px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-stone-50/80 transition cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <ShieldAlert className="w-4 h-4 text-sky-700 shrink-0" />
+              <div className="min-w-0">
+                <span className="text-sm sm:text-base font-bold text-slate-900 block truncate">
+                  4. Frost, Wind-Rock &amp; Overwintering Guide
+                </span>
+                <span className="text-xs text-slate-500 block truncate">
+                  Regional heavy clay risk mitigation and plant-by-plant winter care
+                </span>
+              </div>
+            </div>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 shrink-0">
+              <span>{openSections.SEC5_CLIMATE_RISK ? 'Hide' : 'View'}</span>
+              {openSections.SEC5_CLIMATE_RISK ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </span>
+          </button>
+
+          {openSections.SEC5_CLIMATE_RISK && (
+            <div data-testid="guide-section-5" className="border-t border-stone-100 p-4 space-y-4 bg-stone-50/40">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {HADSTON_LOCAL_RISK_MITIGATION.map((risk) => (
+                  <div
+                    key={risk.id}
+                    className="p-3.5 rounded-xl bg-white border border-stone-200/90 space-y-1.5"
+                  >
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900">{risk.hazardTitle}</h4>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      {risk.hadstonMicroclimateTrigger}
+                    </p>
+                    <ul className="space-y-1 text-xs text-slate-700 leading-relaxed list-disc pl-4">
+                      {risk.actionableSteps.map((step, sIdx) => (
+                        <li key={sIdx}>{step}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {filteredHadstonPlants.map((plant) => {
+                  const isTenderOrBorderline = ['H3', 'H4'].includes(plant.rhsRating);
+                  return (
+                    <div
+                      key={plant.catalogId}
+                      className={`rounded-xl p-4 border shadow-2xs space-y-1.5 ${
+                        isTenderOrBorderline
+                          ? 'bg-amber-50/40 border-amber-200'
+                          : 'bg-white border-stone-200/90'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-mono font-bold text-emerald-800">
+                            #{plant.photoRef}
+                          </span>
+                          <h4 className="text-sm sm:text-base font-bold text-slate-900">
+                            {plant.commonName}
+                          </h4>
+                        </div>
+                        <span
+                          className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
+                            isTenderOrBorderline
+                              ? 'bg-amber-100 text-amber-900'
+                              : 'bg-emerald-50 text-emerald-900'
+                          }`}
+                        >
+                          RHS {plant.rhsRating}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-700 leading-relaxed">
+                        <strong className="font-semibold text-slate-900">Winter Care:</strong>{' '}
+                        {plant.overwinteringProtocol}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* =====================================================================
           PLANT CARE DOSSIER MODAL (Clean, Full-Readability Single Plant View)
