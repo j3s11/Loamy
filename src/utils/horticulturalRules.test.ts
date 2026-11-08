@@ -32,6 +32,7 @@ import {
   RHS_PLANT_CATALOG,
   HADSTON_GARDEN_COLLECTION_32,
   getHadston32InventoryRecords,
+  getAllRhsCatalogInventoryRecords,
   PLANT_CATEGORY_DEFINITIONS,
   resolvePlantGroupCategory,
   groupPlantInventoryByCategory,
@@ -607,4 +608,31 @@ test('doesTextMentionUkMonth and getPlantMonthlyCareStatus identify plants due f
   assert.equal(maySalviaStatus.feedDue, true);
   assert.equal(maySalviaStatus.isDueThisMonth, true);
 });
+
+test('Full RHS Plant Catalogue contains 100+ UK plants with complete care schedules and supports category & keyword search', () => {
+  assert.ok(RHS_PLANT_CATALOG.length >= 100);
+
+  // Every single plant in the RHS Catalogue has full Care Card fields
+  for (const plant of RHS_PLANT_CATALOG) {
+    assert.ok(plant.catalogId, `Missing catalogId for ${plant.name}`);
+    assert.ok(plant.soilAndSun, `Missing soilAndSun for ${plant.name}`);
+    assert.ok(plant.feedWindowUk, `Missing feedWindowUk for ${plant.name}`);
+    assert.ok(plant.pruneMonthsUk, `Missing pruneMonthsUk for ${plant.name}`);
+    assert.ok(plant.overwinteringProtocol, `Missing overwinteringProtocol for ${plant.name}`);
+  }
+
+  // Verify searching across extended RHS categories
+  assert.ok(searchRhsPlantCatalog('Tomato', 'ALL').length >= 1);
+  assert.ok(searchRhsPlantCatalog('Blueberry', 'VEGETABLES').length >= 1);
+  assert.ok(searchRhsPlantCatalog('Acer', 'SHRUBS').length >= 1);
+  assert.ok(searchRhsPlantCatalog('Dahlia', 'FLOWERS').length >= 1);
+  assert.ok(searchRhsPlantCatalog('Tree Fern', 'FOLIAGE').length >= 1);
+
+  // Verify getAllRhsCatalogInventoryRecords converts all catalogue plants
+  const allRecords = getAllRhsCatalogInventoryRecords();
+  assert.equal(allRecords.length, RHS_PLANT_CATALOG.length);
+  const groupedAll = groupPlantInventoryByCategory(allRecords);
+  assert.equal(groupedAll.length, 4);
+});
+
 

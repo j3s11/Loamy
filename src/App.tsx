@@ -54,7 +54,9 @@ import {
   searchRhsPlantCatalog,
   CatalogPlantItem,
   getHadston32InventoryRecords,
+  getAllRhsCatalogInventoryRecords,
   HADSTON_GARDEN_COLLECTION_32,
+  RHS_PLANT_CATALOG,
   RhsCatalogPlant,
   PLANT_CATEGORY_DEFINITIONS,
   PlantGroupCategoryId,
@@ -71,15 +73,20 @@ const SoilSaturationLogPanel = lazy(() => import('./components/SoilSaturationLog
 const MonthlyClayChecklistPanel = lazy(() => import('./components/MonthlyClayChecklistPanel'));
 const HadstonMasterGuidePanel = lazy(() => import('./components/HadstonMasterGuidePanel'));
 
-// Pre-index the 32 master plants once at module load for O(1) lookup per card render
+// Pre-index all RHS Catalogue plants once at module load for O(1) lookup per card render
 const HADSTON_BY_REF_MAP = new Map<number, RhsCatalogPlant>();
 const HADSTON_BY_LOWER_NAME_MAP = new Map<string, RhsCatalogPlant>();
-for (const masterPlant of HADSTON_GARDEN_COLLECTION_32) {
-  if (typeof masterPlant.photoRef === 'number') {
-    HADSTON_BY_REF_MAP.set(masterPlant.photoRef, masterPlant);
+const CATALOG_BY_ID_MAP = new Map<string, RhsCatalogPlant>();
+for (const catalogPlant of RHS_PLANT_CATALOG) {
+  if (typeof catalogPlant.photoRef === 'number') {
+    HADSTON_BY_REF_MAP.set(catalogPlant.photoRef, catalogPlant);
   }
-  HADSTON_BY_LOWER_NAME_MAP.set(masterPlant.name.toLowerCase(), masterPlant);
-  HADSTON_BY_LOWER_NAME_MAP.set(masterPlant.commonName.toLowerCase(), masterPlant);
+  CATALOG_BY_ID_MAP.set(catalogPlant.catalogId.toLowerCase(), catalogPlant);
+  HADSTON_BY_LOWER_NAME_MAP.set(catalogPlant.name.toLowerCase(), catalogPlant);
+  HADSTON_BY_LOWER_NAME_MAP.set(catalogPlant.commonName.toLowerCase(), catalogPlant);
+  if (catalogPlant.botanicalName) {
+    HADSTON_BY_LOWER_NAME_MAP.set(catalogPlant.botanicalName.toLowerCase(), catalogPlant);
+  }
 }
 
 // ============================================================================
@@ -485,10 +492,16 @@ export default function App() {
     [catalogSearchQuery, catalogCategory]
   );
 
-  const activeInventoryNameSet = useMemo(
-    () => new Set(plantInventory.map((p: PlantRecord) => p.name.toLowerCase())),
-    [plantInventory]
-  );
+  const activeInventoryNameSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of plantInventory) {
+      const lower = p.name.toLowerCase();
+      set.add(lower);
+      set.add(lower.replace(/^#\d+\s+/, ''));
+      if (p.id) set.add(p.id.toLowerCase());
+    }
+    return set;
+  }, [plantInventory]);
 
   const filteredPlotInventory = useMemo(() => {
     const q = inventoryFilterText.trim().toLowerCase();
@@ -810,16 +823,26 @@ export default function App() {
     }
   };
 
+  const handleLoadAllRhsCatalogPlants = () => {
+    const allCatalogRecords = getAllRhsCatalogInventoryRecords() as PlantRecord[];
+    setPlantInventory(allCatalogRecords);
+    if (hasConfiguredLocation) {
+      runGardenAnalysis(false, gardenProfile);
+    }
+  };
+
   const handleQuickAddCatalogPlant = useCallback(
     (catalogPlant: CatalogPlantItem) => {
-      if (activeInventoryNameSet.has(catalogPlant.name.toLowerCase())) return;
+      const lowerName = catalogPlant.name.toLowerCase();
+      const lowerId = catalogPlant.catalogId.toLowerCase();
+      if (activeInventoryNameSet.has(lowerName) || activeInventoryNameSet.has(lowerId)) return;
 
       const resolvedCategory = resolvePlantGroupCategory(catalogPlant);
       const newPlant: PlantRecord = {
-        id: catalogPlant.photoRef
-          ? `hadston-plt-${String(catalogPlant.photoRef).padStart(2, '0')}`
-          : `plt-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-        name: catalogPlant.name,
+        id: catalogPlant.catalogId,
+        name: catalogPlant.photoRef
+          ? `#${catalogPlant.photoRef} ${catalogPlant.name}`
+          : catalogPlant.name,
         category: resolvedCategory,
         rhsRating: catalogPlant.rhsRating,
         location: catalogPlant.recommendedLocation,
@@ -832,6 +855,36 @@ export default function App() {
     [activeInventoryNameSet, setPlantInventory]
   );
 
+  const handleAddAllMatchingCatalogPlants = useCallback(() => {
+    const toAdd = matchingCatalogPlants.filter(
+      (item) =>
+        !activeInventoryNameSet.has(item.name.toLowerCase()) &&
+        !activeInventoryNameSet.has(item.catalogId.toLowerCase())
+    );
+    if (toAdd.length === 0) return;
+
+    const newRecords: PlantRecord[] = toAdd.map((catalogPlant) => ({
+      id: catalogPlant.catalogId,
+      name: catalogPlant.photoRef
+        ? `#${catalogPlant.photoRef} ${catalogPlant.name}`
+        : catalogPlant.name,
+      category: resolvePlantGroupCategory(catalogPlant),
+      rhsRating: catalogPlant.rhsRating,
+      location: catalogPlant.recommendedLocation,
+      growthStage: catalogPlant.defaultOctGrowthStage,
+      vulnerabilities: [...catalogPlant.vulnerabilities]
+    }));
+
+    setPlantInventory((prev: PlantRecord[]) => [...newRecords, ...prev]);
+    setExpandedPlantCategories((prev) => {
+      const next = { ...prev };
+      for (const rec of newRecords) {
+        if (rec.category) next[rec.category] = true;
+      }
+      return next;
+    });
+  }, [matchingCatalogPlants, activeInventoryNameSet, setPlantInventory]);
+
   const toggleTaskCompleted = (taskTitle: string) => {
     setCompletedTasks((prev) => ({
       ...prev,
@@ -839,7 +892,7 @@ export default function App() {
     }));
   };
 
-  // Match an inventory plant to its rich Hadston Master Guide record in O(1) via pre-indexed Maps
+  // Match an inventory plant to its rich RHS Catalogue / Hadston Master Guide record in O(1) via pre-indexed Maps
   const findMatchingMasterPlant = useCallback((plant: PlantRecord): RhsCatalogPlant | null => {
     const refFromName = plant.name.match(/^#(\d+)\b/);
     if (refFromName) {
@@ -847,20 +900,26 @@ export default function App() {
       if (byRef) return byRef;
     }
 
-    const refFromId = plant.id.match(/hadston-plt-0*(\d+)/i);
+    const refFromId = plant.id.match(/hadston-(?:plt-)?0*(\d+)/i);
     if (refFromId) {
       const byIdRef = HADSTON_BY_REF_MAP.get(Number(refFromId[1]));
       if (byIdRef) return byIdRef;
     }
 
+    const byId = CATALOG_BY_ID_MAP.get(plant.id.toLowerCase());
+    if (byId) return byId;
+
     const lowerName = plant.name.toLowerCase();
-    const directHit = HADSTON_BY_LOWER_NAME_MAP.get(lowerName);
+    const strippedLowerName = lowerName.replace(/^#\d+\s+/, '');
+    const directHit =
+      HADSTON_BY_LOWER_NAME_MAP.get(lowerName) ||
+      HADSTON_BY_LOWER_NAME_MAP.get(strippedLowerName);
     if (directHit) return directHit;
 
-    const bySubstring = HADSTON_GARDEN_COLLECTION_32.find(
+    const bySubstring = RHS_PLANT_CATALOG.find(
       (c) =>
-        lowerName.includes(c.name.toLowerCase()) ||
-        lowerName.includes(c.commonName.toLowerCase())
+        strippedLowerName.includes(c.name.toLowerCase()) ||
+        strippedLowerName.includes(c.commonName.toLowerCase())
     );
     return bySubstring || null;
   }, []);
@@ -2488,14 +2547,14 @@ export default function App() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="relative flex-1 sm:flex-initial">
+                  <div className="relative w-full sm:w-auto">
                     <input
                       type="text"
                       data-testid="plant-inventory-filter-input"
                       value={inventoryFilterText}
                       onChange={(e) => setInventoryFilterText(e.target.value)}
-                      placeholder={`Filter ${plantInventory.length} plants...`}
-                      className="min-h-[38px] px-3 py-1.5 text-xs sm:text-sm rounded-xl bg-stone-50 border border-stone-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700 w-full sm:w-48"
+                      placeholder={`Filter ${plantInventory.length} plants in plot...`}
+                      className="min-h-[38px] px-3 py-1.5 text-xs sm:text-sm rounded-xl bg-stone-50 border border-stone-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700 w-full sm:w-52"
                     />
                     {inventoryFilterText && (
                       <button
@@ -2557,12 +2616,83 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Hidden by default: RHS Catalogue Search & Inventory Management Controls */}
-              {(showPlantManagerDrawer || isCatalogOpen || catalogSearchQuery.trim() !== '') && (
-                <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/90 space-y-3.5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
+              {/* Always-Accessible RHS Plant Catalogue Search Bar to Add More Plants */}
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-stone-50/90 border border-stone-200/90 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Sprout className="w-4 h-4 text-emerald-700 shrink-0" />
+                    <span className="text-xs sm:text-sm font-bold text-slate-900">
+                      Search RHS Plant Catalogue ({RHS_PLANT_CATALOG.length} UK Plants)
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-500">
+                    Search by common name, botanical name, category, or RHS rating to add plants to your garden
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <label htmlFor="plant-catalog-search" className="sr-only">
+                      Search RHS plant catalogue to add
+                    </label>
+                    <input
+                      id="plant-catalog-search"
+                      data-testid="rhs-catalog-search-input"
+                      type="text"
+                      placeholder={`Search all ${RHS_PLANT_CATALOG.length} RHS catalogue plants to add (e.g. Rose, Tomato, Acer, Dahlia, Blueberry, Fern)...`}
+                      value={catalogSearchQuery}
+                      onFocus={() => setIsCatalogOpen(true)}
+                      onChange={(e) => {
+                        setCatalogSearchQuery(e.target.value);
+                        setIsCatalogOpen(true);
+                      }}
+                      className="w-full min-h-[40px] pl-9 pr-8 py-1.5 text-xs sm:text-sm rounded-xl bg-white border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-700"
+                    />
+                    {(catalogSearchQuery || isCatalogOpen) && (
+                      <button
+                        type="button"
+                        aria-label="Clear plant search"
+                        onClick={() => {
+                          setCatalogSearchQuery('');
+                          setIsCatalogOpen(false);
+                        }}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      data-testid="browse-rhs-catalogue-btn"
+                      onClick={() => setIsCatalogOpen((prev) => !prev)}
+                      className="min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-stone-100 text-slate-800 border border-stone-300 transition whitespace-nowrap cursor-pointer"
+                    >
+                      {isCatalogOpen
+                        ? 'Hide Catalogue'
+                        : `Browse All (${RHS_PLANT_CATALOG.length})`}
+                    </button>
+
+                    <button
+                      type="button"
+                      data-testid="add-all-rhs-catalogue-btn"
+                      onClick={handleAddAllMatchingCatalogPlants}
+                      className="min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-800 hover:bg-emerald-700 text-white transition whitespace-nowrap cursor-pointer"
+                      title="Add all matching RHS catalogue plants that are not yet in your plot"
+                    >
+                      + Add All RHS Plants
+                    </button>
+                  </div>
+                </div>
+
+                {/* Secondary Plot Management Controls (Custom Plant, Starter 32, Full 92, Reset, CSV) */}
+                {showPlantManagerDrawer && (
+                  <div className="pt-2.5 border-t border-stone-200/80 flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
-                      Add from RHS Catalogue or Manage Plot
+                      Plot &amp; Inventory Tools
                     </span>
 
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -2577,12 +2707,22 @@ export default function App() {
 
                       <button
                         type="button"
+                        data-testid="inventory-load-all-rhs"
+                        onClick={handleLoadAllRhsCatalogPlants}
+                        className="min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-emerald-50 text-emerald-900 border border-stone-300 transition cursor-pointer"
+                      >
+                        <Sprout className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Load All RHS ({RHS_PLANT_CATALOG.length})</span>
+                      </button>
+
+                      <button
+                        type="button"
                         data-testid="inventory-load-hadston-32"
                         onClick={handleLoadAllHadston32Plants}
                         className="min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-emerald-50 text-emerald-900 border border-stone-300 transition cursor-pointer"
                       >
                         <BookOpen className="w-3.5 h-3.5 text-emerald-700" />
-                        <span>Load All 32</span>
+                        <span>Reset to Starter 32</span>
                       </button>
 
                       <button
@@ -2605,137 +2745,104 @@ export default function App() {
                       </button>
                     </div>
                   </div>
+                )}
 
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <label htmlFor="plant-catalog-search" className="sr-only">
-                        Search RHS plant catalogue to add
-                      </label>
-                      <input
-                        id="plant-catalog-search"
-                        type="text"
-                        placeholder="Search RHS catalogue to add plants (e.g. Salvia, Rose, Garlic)..."
-                        value={catalogSearchQuery}
-                        onFocus={() => setIsCatalogOpen(true)}
-                        onChange={(e) => {
-                          setCatalogSearchQuery(e.target.value);
-                          setIsCatalogOpen(true);
-                        }}
-                        className="w-full min-h-[38px] pl-9 pr-8 py-1.5 text-xs sm:text-sm rounded-xl bg-white border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-700"
-                      />
-                      {(catalogSearchQuery || isCatalogOpen) && (
-                        <button
-                          type="button"
-                          aria-label="Clear plant search"
-                          onClick={() => {
-                            setCatalogSearchQuery('');
-                            setIsCatalogOpen(false);
-                          }}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
+                {(isCatalogOpen || catalogSearchQuery.trim() !== '') && (
+                  <div
+                    data-testid="rhs-plant-search-results"
+                    className="pt-2 space-y-2.5 border-t border-stone-200/80"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                        {[
+                          { id: 'ALL', label: `All (${RHS_PLANT_CATALOG.length})` },
+                          { id: 'SHRUBS', label: 'Shrubs & Trees' },
+                          { id: 'FLOWERS', label: 'Flowers & Perennials' },
+                          { id: 'VEGETABLES', label: 'Vegetables, Fruit & Herbs' },
+                          { id: 'FOLIAGE', label: 'Ferns & Foliage' },
+                          { id: 'HADSTON_32', label: 'Starter 32' }
+                        ].map((cat) => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            data-testid={`rhs-catalog-filter-${cat.id}`}
+                            onClick={() => setCatalogCategory(cat.id)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition whitespace-nowrap cursor-pointer ${
+                              catalogCategory === cat.id
+                                ? 'bg-emerald-800 text-white'
+                                : 'bg-white text-slate-600 border border-stone-200 hover:bg-stone-100'
+                            }`}
+                          >
+                            {cat.label}
+                          </button>
+                        ))}
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">
+                        {matchingCatalogPlants.length} {matchingCatalogPlants.length === 1 ? 'plant' : 'plants'} found
+                      </span>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setIsCatalogOpen((prev) => !prev)}
-                      className="min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-stone-100 text-slate-800 border border-stone-300 transition whitespace-nowrap cursor-pointer"
-                    >
-                      {isCatalogOpen ? 'Hide List' : 'Browse (46)'}
-                    </button>
-                  </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-80 overflow-y-auto pr-1">
+                      {matchingCatalogPlants.map((item) => {
+                        const isAlreadyInPlot =
+                          activeInventoryNameSet.has(item.name.toLowerCase()) ||
+                          activeInventoryNameSet.has(item.catalogId.toLowerCase());
+                        return (
+                          <div
+                            key={item.catalogId}
+                            className="p-2.5 rounded-xl bg-white border border-stone-200 flex items-center justify-between gap-2.5 hover:border-emerald-600/50 transition"
+                          >
+                            <div
+                              className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                              onClick={() => setActiveCareModalPlant(item)}
+                              title="Tap to preview RHS care guide"
+                            >
+                              <PlantThumbnailWithModal
+                                plantId={item.catalogId}
+                                plantName={item.name}
+                                photoRef={item.photoRef}
+                                size="sm"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {item.photoRef && (
+                                    <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] font-mono font-bold text-emerald-900">
+                                      #{item.photoRef}
+                                    </span>
+                                  )}
+                                  <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                                    {item.name}
+                                  </span>
+                                  <span className="text-xs font-semibold text-emerald-800">
+                                    · RHS {item.rhsRating}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-0.5 truncate">
+                                  {item.recommendedLocation}
+                                </p>
+                              </div>
+                            </div>
 
-                  {(isCatalogOpen || catalogSearchQuery.trim() !== '') && (
-                    <div
-                      data-testid="rhs-plant-search-results"
-                      className="pt-2 space-y-2.5"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                          {[
-                            { id: 'ALL', label: 'All (46)' },
-                            { id: 'HADSTON_32', label: 'My 32 Plants' },
-                            { id: 'SHRUB_TREE', label: 'Shrubs & Trees' },
-                            { id: 'ORNAMENTAL', label: 'Perennials' },
-                            { id: 'EDIBLE_ALLOTMENT', label: 'Edibles' }
-                          ].map((cat) => (
                             <button
-                              key={cat.id}
                               type="button"
-                              onClick={() => setCatalogCategory(cat.id)}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition whitespace-nowrap cursor-pointer ${
-                                catalogCategory === cat.id
-                                  ? 'bg-emerald-800 text-white'
-                                  : 'bg-white text-slate-600 border border-stone-200 hover:bg-stone-100'
+                              data-testid={`rhs-catalog-add-${item.catalogId}`}
+                              disabled={isAlreadyInPlot}
+                              onClick={() => handleQuickAddCatalogPlant(item)}
+                              className={`min-h-[34px] px-3 py-1 rounded-lg text-xs font-semibold shrink-0 transition cursor-pointer ${
+                                isAlreadyInPlot
+                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-default'
+                                  : 'bg-emerald-800 hover:bg-emerald-700 text-white'
                               }`}
                             >
-                              {cat.label}
+                              {isAlreadyInPlot ? 'In Plot ✓' : '+ Add'}
                             </button>
-                          ))}
-                        </div>
-                        <span className="text-xs text-slate-500">
-                          {matchingCatalogPlants.length} matches
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-64 overflow-y-auto pr-1">
-                        {matchingCatalogPlants.map((item) => {
-                          const isAlreadyInPlot = activeInventoryNameSet.has(item.name.toLowerCase());
-                          return (
-                            <div
-                              key={item.catalogId}
-                              className="p-2.5 rounded-xl bg-white border border-stone-200 flex items-center justify-between gap-2.5"
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                <PlantThumbnailWithModal
-                                  plantId={item.catalogId}
-                                  plantName={item.name}
-                                  photoRef={item.photoRef}
-                                  size="sm"
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-1.5">
-                                    {item.photoRef && (
-                                      <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] font-mono font-bold text-emerald-900">
-                                        #{item.photoRef}
-                                      </span>
-                                    )}
-                                    <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
-                                      {item.name}
-                                    </span>
-                                    <span className="text-xs font-semibold text-emerald-800">
-                                      · RHS {item.rhsRating}
-                                    </span>
-                                  </div>
-                                  <p className="text-xs text-slate-500 mt-0.5 truncate">
-                                    {item.recommendedLocation}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <button
-                                type="button"
-                                disabled={isAlreadyInPlot}
-                                onClick={() => handleQuickAddCatalogPlant(item)}
-                                className={`min-h-[34px] px-3 py-1 rounded-lg text-xs font-semibold shrink-0 transition cursor-pointer ${
-                                  isAlreadyInPlot
-                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-default'
-                                    : 'bg-emerald-800 hover:bg-emerald-700 text-white'
-                                }`}
-                              >
-                                {isAlreadyInPlot ? 'In Plot ✓' : '+ Add'}
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
 
               {/* Add / Edit Custom Plant Form */}
               {isFormOpen && (
@@ -3089,9 +3196,11 @@ export default function App() {
                 />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-mono font-bold text-emerald-900">
-                      #{activeCareModalPlant.photoRef}
-                    </span>
+                    {activeCareModalPlant.photoRef && (
+                      <span className="px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-mono font-bold text-emerald-900">
+                        #{activeCareModalPlant.photoRef}
+                      </span>
+                    )}
                     <span className="px-2.5 py-0.5 rounded-lg bg-stone-100 text-slate-800 text-xs font-bold">
                       RHS {activeCareModalPlant.rhsRating}
                     </span>

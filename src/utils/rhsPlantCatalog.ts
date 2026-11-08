@@ -1,8 +1,10 @@
 /**
  * RHS Plant & Cultivar Catalog (UK Zone 8b / RHS H4–H5)
- * Includes the complete 32-plant Garden Collection (Photo Refs #1–#32) plus
- * regional UK allotment & border staples.
+ * Includes the complete 32-plant Garden Collection (Photo Refs #1–#32),
+ * regional UK allotment & border staples, and the extended RHS UK Garden & Allotment Catalogue.
  */
+
+import { EXTENDED_RHS_CATALOG_PLANTS } from './rhsExtendedCatalogData';
 
 export interface RhsCatalogPlant {
   catalogId: string;
@@ -822,161 +824,316 @@ export const REGIONAL_UK_STAPLES: RhsCatalogPlant[] = [
     catalogId: 'cat-01',
     name: "Rosa 'Gertrude Jekyll' (English Shrub Rose)",
     commonName: 'Rose Gertrude Jekyll',
+    botanicalName: "Rosa 'Gertrude Jekyll' (Ausbord)",
     category: 'SHRUB_TREE',
     rhsRating: 'H6',
     recommendedLocation: 'South-Facing Mixed Border (Heavy Clay)',
     defaultOctGrowthStage: 'Leaf Drop / Autumn Dormancy',
     vulnerabilities: ['Blackspot in damp summers', 'Autumn wind-rock on tall canes in wet clay'],
-    clayNotes: 'Thrives in deep, fertile heavy clay; shorten tall canes by one-third in October to prevent winter wind-rock.'
+    clayNotes: 'Thrives in deep, fertile heavy clay; shorten tall canes by one-third in October to prevent winter wind-rock.',
+    soilAndSun: 'pH 6.0–7.0; Full Sun; deep moisture-retentive heavy clay loam.',
+    characteristicsAndNative: 'Quintessential rich pink English shrub rose prized for its powerful classic damask-rose fragrance.',
+    feedTypeNpk: 'Specialist Rose Fertiliser with Magnesium (NPK 6-5-10 + MgO).',
+    feedWindowUk: 'March and Late June (after first flush)',
+    feedFrequencyDosage: 'Apply 60g/m² in March and again after the first flower flush in late June.',
+    pruneMonthsUk: 'Late October (1/3 wind reduction) & Mid-February to Early March',
+    pruneType: 'Winter open-goblet prune',
+    pruneTechnique: 'Prune in February/March by reducing stems by one-third to half to an outward-facing bud and removing dead or crossing canes.',
+    pruneAvoid: 'Never feed with nitrogen after July or hard-prune in autumn.',
+    overwinteringProtocol: 'Mulch with 8cm well-rotted manure in late winter, keeping mulch clear of the stem collar.'
   },
   {
     catalogId: 'cat-02',
     name: "Rhubarb 'Timperley Early' (Rheum × hybridum)",
     commonName: 'Rhubarb Timperley Early',
+    botanicalName: "Rheum × hybridum 'Timperley Early'",
     category: 'EDIBLE_ALLOTMENT',
     rhsRating: 'H6',
     recommendedLocation: 'Open Allotment Bed (Exposed)',
     defaultOctGrowthStage: 'Winter Dormant',
     vulnerabilities: ['Crown rot in waterlogged winter clay', 'Slugs around emerging buds'],
-    clayNotes: 'Expose dormant crowns to November/December frosts to break dormancy early, but plant on a raised clay ridge to prevent crown rot.'
+    clayNotes: 'Expose dormant crowns to November/December frosts to break dormancy early, but plant on a raised clay ridge to prevent crown rot.',
+    soilAndSun: 'pH 6.0–7.0; Full Sun to Light Shade; deep manure-enriched clay ridge.',
+    characteristicsAndNative: 'Earliest outdoor and forcing rhubarb cultivar producing tender pink-crimson stalks from February/March.',
+    feedTypeNpk: 'Well-rotted manure mulch + General Purpose Fertiliser (NPK 7-7-7).',
+    feedWindowUk: 'February to March',
+    feedFrequencyDosage: 'Apply 100g/m² general fertiliser in February and mulch around (never over) the crown.',
+    pruneMonthsUk: 'April to June (pull stalks, never cut) & stop harvesting by July',
+    pruneType: 'Pull stalks & remove flowering spikes immediately',
+    pruneTechnique: 'Twist and pull stalks cleanly from the base from April to June; cut off any tall hollow flower stems as soon as they appear.',
+    pruneAvoid: 'Never harvest more than half the stalks or pull stalks after June.',
+    overwinteringProtocol: 'Leave dormant crown exposed to November frosts before mulching around the edges.'
   },
   {
     catalogId: 'cat-03',
     name: "Allium sativum 'Solent Wight' (Autumn Garlic)",
     commonName: 'Garlic Solent Wight',
+    botanicalName: "Allium sativum 'Solent Wight'",
     category: 'EDIBLE_ALLOTMENT',
     rhsRating: 'H6',
     recommendedLocation: 'Raised Bed (Compost / Loam Mix)',
     defaultOctGrowthStage: 'Active Vegetative Growth',
     vulnerabilities: ['Bulb basal rot in ungritted heavy clay', 'Allium white rot', 'Rust in damp spring'],
-    clayNotes: 'Plant cloves in October on a 2cm layer of sharp horticultural grit or start in modules over winter if clay beds are waterlogged.'
+    clayNotes: 'Plant cloves in October on a 2cm layer of sharp horticultural grit or start in modules over winter if clay beds are waterlogged.',
+    soilAndSun: 'pH 6.5–7.0; Full Sun; well-drained raised bed or gritted loam.',
+    characteristicsAndNative: 'Isle of Wight softneck garlic with vigorous UK performance, large aromatic bulbs, and 9-month storage life.',
+    feedTypeNpk: 'Sulphate of Potash in autumn + light Chicken Manure Pellets in March.',
+    feedWindowUk: 'October (at planting) and February/March',
+    feedFrequencyDosage: 'Apply 35g/m² potash at planting and 40g/m² nitrogen-rich pellets in late February.',
+    pruneMonthsUk: 'June (snip off any flower scapes) & July (lift when lower leaves yellow)',
+    pruneType: 'June scape removal & July harvest',
+    pruneTechnique: 'Snip off any curly flower stems in June so all energy swells the bulb; lift in July when the bottom 4–5 leaves turn yellow.',
+    pruneAvoid: 'Never add fresh manure before planting garlic.',
+    overwinteringProtocol: 'Needs 4–6 weeks of winter cold below 5°C to split single cloves into full segmented bulbs.'
   },
   {
     catalogId: 'cat-04',
     name: "Vicia faba 'Aquadulce Claudia' (Overwintering Broad Bean)",
     commonName: 'Broad Bean Aquadulce Claudia',
+    botanicalName: "Vicia faba 'Aquadulce Claudia'",
     category: 'EDIBLE_ALLOTMENT',
     rhsRating: 'H5',
     recommendedLocation: 'Open Allotment Bed (Exposed)',
     defaultOctGrowthStage: 'Seedling / Young Plug',
-    vulnerabilities: ['Seed rot in cold waterlogged clay', 'Wind-scorch if over 15cm tall before mid-winter', 'chocolate spot'],
-    clayNotes: 'Sow late October/early November or start in deep rootrainers under cold glass for firmer root establishment.'
+    vulnerabilities: ['Seed rot in cold waterlogged clay', 'Wind-scorch if over 15cm tall before mid-winter', 'Chocolate spot'],
+    clayNotes: 'Sow late October/early November or start in deep rootrainers under cold glass for firmer root establishment.',
+    soilAndSun: 'pH 6.5–7.5; Full Sun (sheltered); firm moisture-retentive clay loam.',
+    characteristicsAndNative: 'Hardiest autumn-sown broad bean producing early May–June harvests of long white-seeded pods.',
+    feedTypeNpk: 'Sulphate of Potash (fixes its own nitrogen).',
+    feedWindowUk: 'March',
+    feedFrequencyDosage: 'Apply 30g/m² potash in early spring.',
+    pruneMonthsUk: 'May (pinch out top 8cm shoot tips to deter blackfly)',
+    pruneType: 'May shoot-tip pinch against blackfly',
+    pruneTechnique: 'Once the lowest flowers set tiny bean pods in May, pinch out the soft top 8cm of every stem to remove blackfly breeding tips.',
+    pruneAvoid: 'Do not sow too early in September or plants become too tall and frost-soft before winter.',
+    overwinteringProtocol: 'Support rows with string between corner stakes in November to prevent winter wind-rock.'
   },
   {
     catalogId: 'cat-05',
     name: "Brassica oleracea 'Nero di Toscana' (Cavolo Nero Kale)",
     commonName: 'Cavolo Nero Tuscan Kale',
+    botanicalName: "Brassica oleracea (Acephala Group) 'Nero di Toscana'",
     category: 'EDIBLE_ALLOTMENT',
     rhsRating: 'H5',
     recommendedLocation: 'Open Allotment Bed (Exposed)',
     defaultOctGrowthStage: 'Overwintering Vegetative Growth',
     vulnerabilities: ['Wind-rock in wet clay creating water sockets', 'Wood pigeon grazing', 'Clubroot in acidic clay'],
-    clayNotes: 'Earth up stems 8–10cm and stake firmly in heavy clay; frost sweetens leaf flavour.'
+    clayNotes: 'Earth up stems 8–10cm and stake firmly in heavy clay; frost sweetens leaf flavour.',
+    soilAndSun: 'pH 6.8–7.5; Full Sun to Light Shade; firm alkaline heavy clay.',
+    characteristicsAndNative: 'Architectural Italian black kale with savoyed dark blue-green strap leaves harvested all autumn and winter.',
+    feedTypeNpk: 'Pelleted Chicken Manure in spring/summer.',
+    feedWindowUk: 'June to August, then February',
+    feedFrequencyDosage: 'Feed at transplanting and again in early February for spring side-shoots.',
+    pruneMonthsUk: 'October to March (pick lower leaves upwards)',
+    pruneType: 'Bottom-up leaf harvesting',
+    pruneTechnique: 'Harvest a few lower outer leaves at a time from October onwards, always leaving the central top rosette intact to keep growing.',
+    pruneAvoid: 'Never cut off the top growing crown until final spring clearance.',
+    overwinteringProtocol: 'Firm soil around stem, earth up, and cover with fine bird netting against winter pigeons.'
   },
   {
     catalogId: 'cat-06',
     name: "Agapanthus 'Northern Star' (African Lily)",
     commonName: 'Agapanthus Northern Star',
+    botanicalName: "Agapanthus 'Northern Star'",
     category: 'TENDER_PATIO',
     rhsRating: 'H3',
     recommendedLocation: 'Terracotta Patio Pot',
     defaultOctGrowthStage: 'Late Flowering / Pre-Dormancy',
     vulnerabilities: ['Crown rot in wet winter compost', 'Terracotta pot freeze-cracking below -3°C'],
-    clayNotes: 'Move pots into a rain-shadowed porch or cold greenhouse over winter; winter wet kills more Agapanthus than cold alone.'
+    clayNotes: 'Move pots into a rain-shadowed porch or cold greenhouse over winter; winter wet kills more Agapanthus than cold alone.',
+    soilAndSun: 'pH 6.0–7.2; Full Sun; gritty John Innes No. 3 in a snug terracotta pot.',
+    characteristicsAndNative: 'Deciduous hardier Agapanthus bred in the UK with deep violet-blue starry umbels on dark stems in July–August.',
+    feedTypeNpk: 'High-Potash Liquid Tomato Feed (NPK 4-3-8).',
+    feedWindowUk: 'April to August',
+    feedFrequencyDosage: 'Feed fortnightly from April until flowers open in August, then stop.',
+    pruneMonthsUk: 'September (cut spent flower stalks, leave leaves to yellow)',
+    pruneType: 'Post-flowering stem removal',
+    pruneTechnique: 'Cut spent flower stalks at the base in autumn so energy isn’t wasted on seed, leaving strap leaves to die down naturally.',
+    pruneAvoid: 'Do not repot into an oversized container—Agapanthus flowers best when roots are slightly pot-bound.',
+    overwinteringProtocol: 'Move pots under a dry south eaves or unheated greenhouse from November to March.'
   },
   {
     catalogId: 'cat-07',
     name: "Hydrangea arborescens 'Annabelle'",
     commonName: 'Smooth Hydrangea Annabelle',
+    botanicalName: "Hydrangea arborescens 'Annabelle'",
     category: 'SHRUB_TREE',
     rhsRating: 'H6',
     recommendedLocation: 'North-Facing Shaded Border (Heavy Clay)',
     defaultOctGrowthStage: 'Leaf Drop / Autumn Dormancy',
     vulnerabilities: ['Heavy rain/snow snapping large flower heads', 'Spring frost on new shoots'],
-    clayNotes: 'Loves moisture-retentive clay; leave faded flower heads on over winter to shield buds from frosts and prune in late March.'
+    clayNotes: 'Loves moisture-retentive clay; leave faded flower heads on over winter to shield buds from frosts and prune in late March.',
+    soilAndSun: 'pH 5.5–7.5; Partial Shade to Sun (sheltered from wind); moist clay loam.',
+    characteristicsAndNative: 'Deciduous shrub producing enormous 25cm spherical heads of lime-to-creamy-white flowers on current season’s stems.',
+    feedTypeNpk: 'Balanced Organic Shrub Feed (Vitax Q4).',
+    feedWindowUk: 'March to April',
+    feedFrequencyDosage: 'Apply 50g/m² in spring and mulch with 5cm compost.',
+    pruneMonthsUk: 'Mid-to-Late March',
+    pruneType: 'Annual spring cut-back to 30–40cm framework',
+    pruneTechnique: 'Because Annabelle flowers on new wood, prune all stems back to 30–40cm above ground in March (leaving a knee-high framework prevents flopping).',
+    pruneAvoid: 'Avoid cutting right to ground level if you want sturdier stems that hold up the huge snowball heads.',
+    overwinteringProtocol: 'Fully hardy (H6).'
   },
   {
     catalogId: 'cat-08',
     name: "Hosta 'Halcyon' (Plantain Lily)",
     commonName: 'Hosta Halcyon',
+    botanicalName: "Hosta (Tardiana Group) 'Halcyon'",
     category: 'ORNAMENTAL',
     rhsRating: 'H7',
     recommendedLocation: 'North-Facing Shaded Border (Heavy Clay)',
     defaultOctGrowthStage: 'Leaf Drop / Autumn Dormancy',
     vulnerabilities: ['Heavy keeled slug & snail grazing in damp clay', 'Late May frost scorch on unfurling leaves'],
-    clayNotes: 'Clear decaying yellow autumn foliage promptly so slugs do not overwinter in the crown; top-dress with sharp grit.'
+    clayNotes: 'Clear decaying yellow autumn foliage promptly so slugs do not overwinter in the crown; top-dress with sharp grit.',
+    soilAndSun: 'pH 5.8–7.2; Partial to Full Shade; moist humus-rich clay or patio pot.',
+    characteristicsAndNative: 'Thick-textured chalky blue-grey ribbed leaves (more slug-resistant than thin green hostas) with pale lilac summer bells.',
+    feedTypeNpk: 'Balanced Slow-Release Feed + organic mulch.',
+    feedWindowUk: 'March to June',
+    feedFrequencyDosage: 'Apply 40g/m² in March as bullet buds poke through.',
+    pruneMonthsUk: 'August (cut spent flower scapes) & November (clear yellow leaves)',
+    pruneType: 'Autumn hygiene leaf clearance',
+    pruneTechnique: 'Remove yellowed slimy leaves in November to eliminate hiding places for overwintering slugs and their eggs.',
+    pruneAvoid: 'Avoid hot afternoon sun which melts the blue wax bloom on the leaves.',
+    overwinteringProtocol: 'Extremely hardy (H7); top-dress dormant crown with 2cm sharp horticultural grit.'
   },
   {
     catalogId: 'cat-09',
     name: "Lavandula × intermedia 'Grosso' (English Lavender)",
     commonName: 'Lavender Grosso',
+    botanicalName: "Lavandula × intermedia 'Grosso'",
     category: 'ORNAMENTAL',
     rhsRating: 'H5',
     recommendedLocation: 'Raised Bed (Compost / Loam Mix)',
     defaultOctGrowthStage: 'Overwintering Vegetative Growth',
     vulnerabilities: ['Root rot in unamended heavy winter clay', 'Woody legginess if pruned into old wood'],
-    clayNotes: 'Must be planted on a gritted mound or raised bed—flat winter-wet clay rapidly suffocates lavender roots.'
+    clayNotes: 'Must be planted on a gritted mound or raised bed—flat winter-wet clay rapidly suffocates lavender roots.',
+    soilAndSun: 'pH 6.5–8.0 (neutral to alkaline); Full Sun; sharply drained gritty soil.',
+    characteristicsAndNative: 'Vigorous aromatic evergreen sub-shrub with silver-grey leaves and long, intensely scented violet flower wands in July–August.',
+    feedTypeNpk: 'Light Sulphate of Potash in spring (never feed nitrogen or manure).',
+    feedWindowUk: 'April',
+    feedFrequencyDosage: 'Minimal feeding—20g/m² potash in April only.',
+    pruneMonthsUk: 'Mid-to-Late August (RHS "8-8-8" rule: 8th month, cut to 8 inches)',
+    pruneType: 'Late-summer post-flowering shear above old wood',
+    pruneTechnique: 'Every August right after flowering, shear off all flower stalks and 2.5cm of the grey leafy tips, always leaving green/grey shoots below the cut.',
+    pruneAvoid: 'NEVER cut into bare brown leafless wood—lavender will not regrow from old wood.',
+    overwinteringProtocol: 'Ensure free winter drainage; never mulch with wet organic compost around the stem neck.'
   },
   {
     catalogId: 'cat-10',
     name: "Salvia 'Amistad' (Shrubby Sage)",
     commonName: 'Salvia Amistad',
+    botanicalName: "Salvia 'Amistad'",
     category: 'TENDER_PATIO',
     rhsRating: 'H3',
     recommendedLocation: 'Sheltered Courtyard Pot',
     defaultOctGrowthStage: 'Late Flowering / Pre-Dormancy',
     vulnerabilities: ['Air frost blackens top growth', 'Winter waterlogging rots woody base'],
-    clayNotes: 'Take August/September nodal cuttings as insurance; leave top growth unpruned until May and mulch crown deeply with dry bark.'
+    clayNotes: 'Take August/September nodal cuttings as insurance; leave top growth unpruned until May and mulch crown deeply with dry bark.',
+    soilAndSun: 'pH 6.0–7.5; Full Sun; well-drained loam or large patio container.',
+    characteristicsAndNative: 'Half-hardy shrubby perennial producing velvety royal-purple flowers with near-black calyxes nonstop from May to November.',
+    feedTypeNpk: 'High-Potash Liquid Tomato Feed.',
+    feedWindowUk: 'May to September',
+    feedFrequencyDosage: 'Feed fortnightly during summer for continuous flower spikes.',
+    pruneMonthsUk: 'Late April to May (ONLY after frost risk ends and green basal shoots appear)',
+    pruneType: 'Late-spring cut-back of old winter stems',
+    pruneTechnique: 'Leave all woody top stems untouched through winter to shield the crown, then cut old stems back to new green basal shoots in late April/May.',
+    pruneAvoid: 'Never cut back in autumn—autumn pruning lets frost and winter rain straight into the hollow crown.',
+    overwinteringProtocol: 'Mulch crown with 8cm dry bark in November and root 3–4 softwood cuttings on a windowsill in August.'
   },
   {
     catalogId: 'cat-11',
     name: "Malus domestica 'Discovery' (MM106 Rootstock Apple)",
     commonName: 'Apple Tree Discovery',
+    botanicalName: "Malus domestica 'Discovery' (MM106)",
     category: 'SHRUB_TREE',
     rhsRating: 'H6',
-    recommendedLocation: 'Sheltered Lawn Corner',
+    recommendedLocation: 'South-Facing Mixed Border (Heavy Clay)',
     defaultOctGrowthStage: 'Leaf Drop / Autumn Dormancy',
     vulnerabilities: ['Apple canker in poorly drained heavy clay', 'Late May blossom frost in valley frost pockets'],
-    clayNotes: 'MM106 rootstock tolerates heavier soils well; winter-prune in January to maintain open airflow.'
+    clayNotes: 'MM106 rootstock tolerates heavier soils well; winter-prune in January to maintain open airflow.',
+    soilAndSun: 'pH 6.0–7.0; Full Sun; fertile moisture-retentive clay loam.',
+    characteristicsAndNative: 'Early-season British dessert apple with good disease resistance and crisp crimson-flushed apples harvested in August.',
+    feedTypeNpk: 'Sulphate of Potash + Balanced Fruit Feed.',
+    feedWindowUk: 'February to March',
+    feedFrequencyDosage: 'Apply 60g/m² around the canopy drip line in late winter.',
+    pruneMonthsUk: 'November to February (when fully dormant)',
+    pruneType: 'Winter open-goblet pruning',
+    pruneTechnique: 'Remove dead, diseased, or crossing branches first (the 3 Ds), then shorten last year’s leader growth by one-third to an outward bud.',
+    pruneAvoid: 'Discovery is a tip/partial-tip bearer—avoid cutting back all short side-shoots (<20cm) which carry the fruit buds at their tips.',
+    overwinteringProtocol: 'Apply winter tree wash or grease band in autumn; prune on a dry frost-free winter day.'
   },
   {
     catalogId: 'cat-12',
     name: "Pelargonium 'Graveolens' (Scented Geranium)",
     commonName: 'Scented Pelargonium Geranium',
+    botanicalName: 'Pelargonium graveolens',
     category: 'TENDER_PATIO',
     rhsRating: 'H1c',
-    recommendedLocation: 'Unheated Greenhouse',
+    recommendedLocation: 'Terracotta Patio Pot',
     defaultOctGrowthStage: 'Overwintering Vegetative Growth',
     vulnerabilities: ['Killed outright by 0°C air frost', 'Botrytis grey mould in damp unventilated glass'],
-    clayNotes: 'Bring indoors to a bright frost-free windowsill (min 5°C) before October frosts and keep compost barely moist.'
+    clayNotes: 'Bring indoors to a bright frost-free windowsill (min 5°C) before October frosts and keep compost barely moist.',
+    soilAndSun: 'pH 6.0–7.2; Full Sun; gritty John Innes No. 2 compost in terracotta pot.',
+    characteristicsAndNative: 'Tender sub-shrub with deeply incised leaves releasing a rich Turkish-delight rose scent when brushed.',
+    feedTypeNpk: 'High-Potash Liquid Tomato Feed.',
+    feedWindowUk: 'April to September',
+    feedFrequencyDosage: 'Feed fortnightly from spring to early autumn; zero feed in winter.',
+    pruneMonthsUk: 'March (cut back leggy winter stems by half)',
+    pruneType: 'Spring framework reshape & cutting propagation',
+    pruneTechnique: 'In March, cut leggy overwintered stems back by half to a leaf node and use the trimmings as nodal cuttings.',
+    pruneAvoid: 'Never overwater in winter.',
+    overwinteringProtocol: 'Overwinter indoors on a sunny cool windowsill or frost-free conservatory (min 5–7°C) from October to May.'
   },
   {
     catalogId: 'cat-13',
     name: "Helleborus × hybridus (Lenten Rose)",
     commonName: 'Hellebore Lenten Rose',
+    botanicalName: 'Helleborus × hybridus',
     category: 'ORNAMENTAL',
     rhsRating: 'H7',
     recommendedLocation: 'North-Facing Shaded Border (Heavy Clay)',
     defaultOctGrowthStage: 'Overwintering Vegetative Growth',
     vulnerabilities: ['Hellebore black death / leaf spot on old foliage', 'Aphids on emerging flower buds'],
-    clayNotes: 'Excels in alkaline-to-neutral heavy clay; cut away leathery old leaves in December/January to expose emerging flower buds.'
+    clayNotes: 'Excels in alkaline-to-neutral heavy clay; cut away leathery old leaves in December/January to expose emerging flower buds.',
+    soilAndSun: 'pH 6.5–7.8; Partial Shade; deep, fertile heavy clay enriched with leafmould.',
+    characteristicsAndNative: 'Evergreen winter-flowering perennial bearing nodding saucer blooms in plum, slate, rose, and cream from January to April.',
+    feedTypeNpk: 'Bone Meal & Well-Rotted Compost Mulch.',
+    feedWindowUk: 'February and September',
+    feedFrequencyDosage: 'Apply 50g/m² Bone Meal and mulch around crowns in autumn and late winter.',
+    pruneMonthsUk: 'Late December to Early January (remove old leathery leaves)',
+    pruneType: 'Mid-winter old-leaf removal',
+    pruneTechnique: 'In late December or January as fat flower buds appear at the base, cut ALL old tattered leathery leaves off at ground level to stop fungal leaf spot jumping onto the flowers.',
+    pruneAvoid: 'Do not disturb established roots.',
+    overwinteringProtocol: 'Extremely hardy (H7).'
   },
   {
     catalogId: 'cat-14',
     name: "Lathyrus odoratus 'Matucana' (Autumn-Sown Sweet Pea)",
     commonName: 'Sweet Pea Matucana',
+    botanicalName: "Lathyrus odoratus 'Matucana'",
     category: 'ORNAMENTAL',
     rhsRating: 'H4',
     recommendedLocation: 'Cold Frame / Cloche',
     defaultOctGrowthStage: 'Seedling / Young Plug',
     vulnerabilities: ['Mouse predation on seeds', 'Leggy etiolation if kept too warm indoors', 'Damping off'],
-    clayNotes: 'Sow in deep rootrainers in mid-October in a cold frame; pinch out shoots after 3 pairs of leaves for deep fibrous roots.'
+    clayNotes: 'Sow in deep rootrainers in mid-October in a cold frame; pinch out shoots after 3 pairs of leaves for deep fibrous roots.',
+    soilAndSun: 'pH 6.5–7.5; Full Sun; deep manure-lined trench in moisture-retentive clay.',
+    characteristicsAndNative: 'Heirloom grandiflora sweet pea renowned for the strongest old-fashioned fragrance and bicolour maroon-and-violet blooms.',
+    feedTypeNpk: 'High-Potash Liquid Tomato Feed.',
+    feedWindowUk: 'May to August',
+    feedFrequencyDosage: 'Feed fortnightly once flower buds show in May.',
+    pruneMonthsUk: 'November/December (pinch out tip above 2–3 leaf pairs) & June–August (daily flower picking)',
+    pruneType: 'Seedling tip pinch & continuous flower cutting',
+    pruneTechnique: 'Pinch out the central shoot when seedlings have 3 pairs of leaves to force sturdy basal side-shoots; cut flowers every 2 days in summer.',
+    pruneAvoid: 'Never allow a single seed pod to form in summer or flowering stops immediately.',
+    overwinteringProtocol: 'Overwinter autumn-sown rootrainers in a bright, ventilated cold frame (lift lid on frost-free days so plants stay stocky).'
   }
 ];
 
 export const RHS_PLANT_CATALOG: RhsCatalogPlant[] = [
   ...HADSTON_GARDEN_COLLECTION_32,
-  ...REGIONAL_UK_STAPLES
+  ...REGIONAL_UK_STAPLES,
+  ...EXTENDED_RHS_CATALOG_PLANTS
 ];
 
 export type PlantGroupCategoryId = 'SHRUBS' | 'FLOWERS' | 'VEGETABLES' | 'FOLIAGE';
@@ -1099,7 +1256,7 @@ export function resolvePlantGroupCategory(plant: {
 
   // 1. Ferns, Hostas, Bamboo & Architectural Foliage
   if (
-    /\b(fern|dryopteris|polystichum|hosta|plantain lily|bamboo|fargesia|cypress|cupressus|cordyline|cabbage palm|torbay palm|grass|carex|miscanthus)\b/i.test(
+    /\b(fern|dryopteris|polystichum|asplenium|athyrium|dicksonia|hosta|plantain lily|bamboo|fargesia|cypress|cupressus|cordyline|cabbage palm|torbay palm|grass|sedge|carex|miscanthus|stipa|nassella|festuca|fatsia|bergenia|euphorbia|phormium)\b/i.test(
       effectiveText
     )
   ) {
@@ -1109,7 +1266,7 @@ export function resolvePlantGroupCategory(plant: {
   // 2. Vegetables, Culinary Herbs & Edibles
   if (
     catalogCategory === 'EDIBLE_ALLOTMENT' ||
-    /\b(thyme|thymus|rosemary|mint|basil|parsley|chive|oregano|broccoli|brassica|kale|cavolo|bean|vicia|garlic|allium|rhubarb|rheum|tomato|potato|carrot|lettuce|courgette|onion|leek|chilli|pepper|strawberry|raspberry|currant|gooseberry|citrus|meyer lemon|lemon tree|vegetable|edible)\b/i.test(
+    /\b(thyme|thymus|rosemary|mint|mentha|basil|parsley|chive|oregano|bay tree|laurus|broccoli|brassica|kale|cavolo|bean|vicia|phaseolus|garlic|rhubarb|rheum|tomato|solanum|potato|carrot|daucus|beetroot|beta|lettuce|courgette|cucurbita|onion|leek|porrum|chilli|pepper|strawberry|fragaria|raspberry|rubus|currant|ribes|gooseberry|blueberry|vaccinium|citrus|meyer lemon|lemon tree|vegetable|edible)\b/i.test(
       effectiveText
     )
   ) {
@@ -1119,7 +1276,7 @@ export function resolvePlantGroupCategory(plant: {
   // 3. Shrubs & Trees
   if (
     catalogCategory === 'SHRUB_TREE' ||
-    /\b(rose|rosa|hydrangea|spruce|picea|skimmia|crabapple|malus|cherry|prunus|willow|salix|elder|elderberry|sambucus|weigela|camellia|lilac|syringa|buddleja|butterfly bush|ceanothus|acer|maple|azalea|rhododendron|viburnum|forsythia|magnolia|holly|ilex|yew|taxus|box|buxus|shrub|tree)\b/i.test(
+    /\b(rose|rosa|hydrangea|spruce|picea|skimmia|crabapple|malus|apple|cherry|plum|prunus|pear|pyrus|willow|salix|elder|elderberry|sambucus|weigela|camellia|lilac|syringa|buddleja|butterfly bush|ceanothus|acer|maple|azalea|rhododendron|pieris|viburnum|forsythia|hamamelis|witch hazel|cornus|dogwood|choisya|photinia|magnolia|holly|ilex|yew|taxus|box|buxus|amelanchier|juneberry|wisteria|trachelospermum|star jasmine|lonicera|honeysuckle|shrub|tree)\b/i.test(
       effectiveText
     )
   ) {
@@ -1184,8 +1341,24 @@ export function getHadston32InventoryRecords() {
 }
 
 /**
+ * Converts ALL plants in the complete RHS Plant Catalogue into active PlantInventory records.
+ */
+export function getAllRhsCatalogInventoryRecords() {
+  return RHS_PLANT_CATALOG.map((item) => ({
+    id: item.catalogId,
+    name: item.photoRef ? `#${item.photoRef} ${item.name}` : item.name,
+    category: resolvePlantGroupCategory(item),
+    rhsRating: item.rhsRating,
+    location: item.recommendedLocation,
+    growthStage: item.defaultOctGrowthStage,
+    vulnerabilities: [...item.vulnerabilities]
+  }));
+}
+
+/**
  * Searches the RHS Plant Catalog by query string and optional category filter.
- * Supports categoryFilter === 'HADSTON_32' to show only the user's 32 garden plants.
+ * Supports categoryFilter === 'HADSTON_32' to show only the user's 32 garden plants,
+ * or any display group ('SHRUBS', 'FLOWERS', 'VEGETABLES', 'FOLIAGE') or raw category.
  */
 export function searchRhsPlantCatalog(
   query: string = '',
@@ -1194,13 +1367,17 @@ export function searchRhsPlantCatalog(
   const cleanQuery = query.trim().toLowerCase();
 
   return RHS_PLANT_CATALOG.filter((item) => {
+    const resolvedGroup = resolvePlantGroupCategory(item);
     const matchesCategory =
       categoryFilter === 'ALL' ||
       (categoryFilter === 'HADSTON_32' && Boolean(item.isHadstonCollection)) ||
       item.category === categoryFilter ||
-      resolvePlantGroupCategory(item) === categoryFilter;
+      resolvedGroup === categoryFilter;
     if (!matchesCategory) return false;
     if (!cleanQuery) return true;
+
+    const groupDef = PLANT_CATEGORY_DEFINITIONS.find((d) => d.id === resolvedGroup);
+    const groupSearchable = groupDef ? `${groupDef.label} ${groupDef.shortLabel}`.toLowerCase() : '';
 
     return (
       item.name.toLowerCase().includes(cleanQuery) ||
@@ -1209,6 +1386,10 @@ export function searchRhsPlantCatalog(
       (item.photoRef !== undefined && `#${item.photoRef}` === cleanQuery) ||
       item.rhsRating.toLowerCase().includes(cleanQuery) ||
       item.recommendedLocation.toLowerCase().includes(cleanQuery) ||
+      (item.clayNotes && item.clayNotes.toLowerCase().includes(cleanQuery)) ||
+      (item.soilAndSun && item.soilAndSun.toLowerCase().includes(cleanQuery)) ||
+      (item.characteristicsAndNative && item.characteristicsAndNative.toLowerCase().includes(cleanQuery)) ||
+      groupSearchable.includes(cleanQuery) ||
       item.vulnerabilities.some((v) => v.toLowerCase().includes(cleanQuery))
     );
   });

@@ -29,7 +29,7 @@ export default function PlantThumbnailWithModal({
   const [imageError, setImageError] = useState(false);
 
   const imageInfo = useMemo(
-    () => getPlantImageInfo(plantId || plantName, photoRef),
+    () => getPlantImageInfo(`${plantId || ''} ${plantName || ''}`.trim(), photoRef),
     [plantId, plantName, photoRef]
   );
 
