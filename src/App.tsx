@@ -63,7 +63,9 @@ import {
   resolvePlantGroupCategory,
   groupPlantInventoryByCategory,
   getPlantMonthlyCareStatus,
-  PlantMonthlyCareStatus
+  PlantMonthlyCareStatus,
+  calculatePlantHealthScore,
+  PlantHealthAssessment
 } from './utils/rhsPlantCatalog';
 import { HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR } from './utils/hadstonMasterGuide';
 import { getCurrentUkMonthIndex } from './utils/monthlyClayChecklist';
@@ -439,7 +441,17 @@ export default function App() {
   const [inventoryFilterText, setInventoryFilterText] = useState<string>('');
   const [filterDueThisMonth, setFilterDueThisMonth] = useState<boolean>(false);
   const [expandedPlantCategories, setExpandedPlantCategories] = useState<Record<string, boolean>>({});
+  const [expandedHealthFactorPlantIds, setExpandedHealthFactorPlantIds] = useState<
+    Record<string, boolean>
+  >({});
   const [activeCareModalPlant, setActiveCareModalPlant] = useState<RhsCatalogPlant | null>(null);
+
+  const togglePlantHealthFactors = useCallback((plantId: string) => {
+    setExpandedHealthFactorPlantIds((prev) => ({
+      ...prev,
+      [plantId]: !prev[plantId]
+    }));
+  }, []);
 
   const [completedTasks, setCompletedTasks] = useState<Record<string, boolean>>(() => {
     try {
@@ -945,6 +957,57 @@ export default function App() {
     }
     return map;
   }, [plantInventory, findMatchingMasterPlant, currentUkMonthIdx]);
+
+  // Precompute health score for each plant in inventory based on growth stage and recent weather alerts
+  const plantHealthMap = useMemo(() => {
+    const map = new Map<string, PlantHealthAssessment>();
+    const activeWeatherAlerts = advice?.weatherAlerts || [];
+    const activeHazardSummary = weatherData?.hazardSummary || {};
+    const protectedEntries = Object.entries(protectedAlertPlants);
+
+    for (const p of plantInventory) {
+      const master = findMatchingMasterPlant(p);
+      const careLogKey = master?.catalogId || p.id;
+      const careLog = plantCareLogs[careLogKey];
+      const strippedName = p.name.replace(/^#\d+\s+/, '').toLowerCase();
+
+      const isProtectedInAlertChecklist = protectedEntries.some(
+        ([key, isChecked]) =>
+          Boolean(isChecked) && key.toLowerCase().includes(strippedName)
+      );
+
+      map.set(
+        p.id,
+        calculatePlantHealthScore(
+          {
+            id: p.id,
+            name: p.name,
+            rhsRating: p.rhsRating,
+            growthStage: p.growthStage,
+            location: p.location,
+            vulnerabilities:
+              Array.isArray(p.vulnerabilities) && p.vulnerabilities.length > 0
+                ? p.vulnerabilities
+                : master?.vulnerabilities || []
+          },
+          {
+            weatherAlerts: activeWeatherAlerts,
+            hazardSummary: activeHazardSummary,
+            isProtectedInAlertChecklist,
+            careLog
+          }
+        )
+      );
+    }
+    return map;
+  }, [
+    plantInventory,
+    advice?.weatherAlerts,
+    weatherData?.hazardSummary,
+    protectedAlertPlants,
+    plantCareLogs,
+    findMatchingMasterPlant
+  ]);
 
   const dueThisMonthTotalCount = useMemo(() => {
     let count = 0;
@@ -2941,6 +3004,25 @@ export default function App() {
                     </div>
                   </div>
 
+                  <div>
+                    <label htmlFor="plant-growth-stage-select" className="block text-xs font-semibold text-slate-700 mb-1">
+                      Current Growth Stage
+                    </label>
+                    <select
+                      id="plant-growth-stage-select"
+                      data-testid="plant-growth-stage-select"
+                      value={plantForm.growthStage}
+                      onChange={(e) => setPlantForm({ ...plantForm, growthStage: e.target.value })}
+                      className="w-full min-h-[38px] px-2.5 py-1.5 text-xs rounded-xl bg-white border border-stone-300 text-slate-900"
+                    >
+                      {UI_CONFIG.GROWTH_STAGE_PRESETS.map((stage) => (
+                        <option key={stage} value={stage}>
+                          {stage}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="flex justify-end gap-2 pt-1">
                     <button
                       type="button"
@@ -3036,6 +3118,7 @@ export default function App() {
                               );
                               const masterMatch = findMatchingMasterPlant(plant);
                               const monthlyCare = plantMonthlyCareMap.get(plant.id);
+                              const health = plantHealthMap.get(plant.id);
                               const careLogKey = masterMatch?.catalogId || plant.id;
                               const careLog = plantCareLogs[careLogKey];
                               const hasCareLog = Boolean(
@@ -3080,6 +3163,47 @@ export default function App() {
                                               ? plant.name.replace(/^#\d+\s+/, '')
                                               : plant.name}
                                           </h4>
+                                          {health && (
+                                            <button
+                                              type="button"
+                                              data-testid={`plant-health-indicator-${plant.id}`}
+                                              aria-expanded={Boolean(
+                                                expandedHealthFactorPlantIds[plant.id]
+                                              )}
+                                              aria-label={`Health score ${health.score}% ${health.label} for ${plant.name} — tap to view contributing factors`}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                togglePlantHealthFactors(plant.id);
+                                              }}
+                                              title="Click to view contributing health score factors"
+                                              className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded-md border tabular-nums transition cursor-pointer ${
+                                                health.status === 'THRIVING'
+                                                  ? 'bg-emerald-50/90 hover:bg-emerald-100/90 text-emerald-950 border-emerald-200'
+                                                  : health.status === 'WATCH'
+                                                  ? 'bg-amber-50/90 hover:bg-amber-100/90 text-amber-950 border-amber-200'
+                                                  : 'bg-rose-50/90 hover:bg-rose-100/90 text-rose-950 border-rose-200'
+                                              }`}
+                                            >
+                                              <span
+                                                aria-hidden="true"
+                                                className={`w-2 h-2 rounded-full shrink-0 ${
+                                                  health.status === 'THRIVING'
+                                                    ? 'bg-emerald-500'
+                                                    : health.status === 'WATCH'
+                                                    ? 'bg-amber-500'
+                                                    : 'bg-rose-500'
+                                                }`}
+                                              />
+                                              <span>
+                                                {health.score}% {health.label}
+                                              </span>
+                                              {expandedHealthFactorPlantIds[plant.id] ? (
+                                                <ChevronUp className="w-3 h-3 opacity-75 shrink-0" />
+                                              ) : (
+                                                <ChevronDown className="w-3 h-3 opacity-75 shrink-0" />
+                                              )}
+                                            </button>
+                                          )}
                                           <span
                                             className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
                                               isTender
@@ -3115,6 +3239,66 @@ export default function App() {
                                         <p className="text-xs text-slate-600 mt-1">
                                           {plant.location}
                                         </p>
+                                        <p
+                                          data-testid={`plant-growth-stage-${plant.id}`}
+                                          className="text-[11px] text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5"
+                                        >
+                                          <span>
+                                            Stage: <strong className="font-medium text-slate-700">{plant.growthStage}</strong>
+                                          </span>
+                                          {health && health.activeAlertCount > 0 && (
+                                            <span className="text-amber-800 font-medium">
+                                              · {health.activeAlertCount} weather {health.activeAlertCount === 1 ? 'alert' : 'alerts'} active
+                                            </span>
+                                          )}
+                                        </p>
+
+                                        {/* Expandable Contributing Health Factors Breakdown */}
+                                        {health && expandedHealthFactorPlantIds[plant.id] && (
+                                          <div
+                                            data-testid={`plant-health-factors-${plant.id}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="mt-2 p-2.5 rounded-xl bg-white border border-stone-200/90 shadow-2xs space-y-1.5 text-[11px]"
+                                          >
+                                            <div className="flex items-center justify-between gap-2 pb-1 border-b border-stone-100">
+                                              <span className="font-bold text-slate-800">
+                                                Contributing Health Factors ({health.score}%)
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={() => togglePlantHealthFactors(plant.id)}
+                                                aria-label="Hide health score factors"
+                                                className="text-slate-400 hover:text-slate-700 font-semibold px-1 cursor-pointer"
+                                              >
+                                                Hide
+                                              </button>
+                                            </div>
+                                            <ul className="space-y-1.5">
+                                              {health.factorItems.map((factor, fIdx) => (
+                                                <li
+                                                  key={fIdx}
+                                                  className="flex items-start justify-between gap-2 text-slate-700"
+                                                >
+                                                  <span className="leading-snug">{factor.label}</span>
+                                                  <span
+                                                    className={`font-semibold tabular-nums shrink-0 px-1.5 py-0.5 rounded ${
+                                                      factor.tone === 'CRITICAL'
+                                                        ? 'bg-rose-50 text-rose-800'
+                                                        : factor.tone === 'WARNING'
+                                                        ? 'bg-amber-50 text-amber-900'
+                                                        : factor.tone === 'POSITIVE'
+                                                        ? 'bg-emerald-50 text-emerald-800'
+                                                        : 'bg-stone-100 text-slate-700'
+                                                    }`}
+                                                  >
+                                                    {factor.impact}
+                                                  </span>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+
                                         {masterMatch && (
                                           <p className="text-[11px] font-semibold text-emerald-800 mt-1.5 inline-flex items-center gap-0.5">
                                             <span>

@@ -635,4 +635,137 @@ test('Full RHS Plant Catalogue contains 100+ UK plants with complete care schedu
   assert.equal(groupedAll.length, 4);
 });
 
+test('calculatePlantHealthScore computes plant health score from growth stage and recent weather alerts', async () => {
+  const { calculatePlantHealthScore } = await import('./rhsPlantCatalog');
+
+  // 1. Hardy dormant plant with no alerts -> Healthy (100%)
+  const hardyDormant = calculatePlantHealthScore(
+    {
+      id: 'hadston-16',
+      name: '#16 Peony (Paeonia species)',
+      rhsRating: 'H6',
+      growthStage: 'Leaf Drop / Autumn Dormancy',
+      vulnerabilities: ['Peony wilt']
+    },
+    {
+      weatherAlerts: [],
+      hazardSummary: {
+        frostRiskDetected: false,
+        windRockRiskDetected: false,
+        waterloggingRiskDetected: false
+      }
+    }
+  );
+  assert.equal(hardyDormant.score, 100);
+  assert.equal(hardyDormant.status, 'THRIVING');
+  assert.equal(hardyDormant.label, 'Healthy');
+  assert.equal(hardyDormant.stageSensitivity, 'RESILIENT');
+
+  // 2. Tender H3 plant in Late Flowering under CRITICAL frost alert + wet clay -> At Risk (< 65)
+  const tenderAlerted = calculatePlantHealthScore(
+    {
+      id: 'hadston-01',
+      name: '#1 Mealycup Sage (Salvia farinacea)',
+      rhsRating: 'H3',
+      growthStage: 'Late Flowering / Pre-Dormancy',
+      vulnerabilities: ['Killed by sub-zero wet clay', 'Air frost blackens stems below -2°C']
+    },
+    {
+      weatherAlerts: [
+        {
+          hazardType: 'AIR_FROST',
+          severity: 'CRITICAL',
+          affectedPlants: ['Mealycup Sage (Salvia farinacea)']
+        }
+      ],
+      hazardSummary: {
+        frostRiskDetected: true,
+        lowestForecastTempC: -1.5,
+        windRockRiskDetected: false,
+        waterloggingRiskDetected: true
+      }
+    }
+  );
+  assert.ok(tenderAlerted.score < 65, `Expected score < 65, got ${tenderAlerted.score}`);
+  assert.equal(tenderAlerted.status, 'AT_RISK');
+  assert.equal(tenderAlerted.label, 'At Risk');
+  assert.ok(tenderAlerted.activeAlertCount >= 2);
+
+  // 3. Growth stage sensitivity impact under identical weather alert:
+  // Seedling / Young Plug vs Winter Dormant
+  const alertContext = {
+    weatherAlerts: [
+      {
+        hazardType: 'FROST',
+        severity: 'WARNING',
+        affectedPlants: ['Rose (Shrub Specimen #5)']
+      }
+    ],
+    hazardSummary: {
+      frostRiskDetected: true,
+      windRockRiskDetected: true
+    }
+  };
+
+  const seedlingStage = calculatePlantHealthScore(
+    {
+      id: 'hadston-05',
+      name: '#5 Rose #1 — Shrub / Bush Rose (Rosa species)',
+      rhsRating: 'H6',
+      growthStage: 'Seedling / Young Plug',
+      vulnerabilities: ['Autumn/winter wind-rock in wet clay']
+    },
+    alertContext
+  );
+
+  const dormantStage = calculatePlantHealthScore(
+    {
+      id: 'hadston-05',
+      name: '#5 Rose #1 — Shrub / Bush Rose (Rosa species)',
+      rhsRating: 'H6',
+      growthStage: 'Winter Dormant',
+      vulnerabilities: ['Autumn/winter wind-rock in wet clay']
+    },
+    alertContext
+  );
+
+  assert.ok(
+    seedlingStage.score < dormantStage.score,
+    `Expected seedling stage score (${seedlingStage.score}) < dormant stage score (${dormantStage.score})`
+  );
+
+  // 4. Logging protection / care boosts health score of an alerted plant
+  const protectedTender = calculatePlantHealthScore(
+    {
+      id: 'hadston-01',
+      name: '#1 Mealycup Sage (Salvia farinacea)',
+      rhsRating: 'H3',
+      growthStage: 'Late Flowering / Pre-Dormancy',
+      vulnerabilities: ['Killed by sub-zero wet clay']
+    },
+    {
+      weatherAlerts: [
+        {
+          hazardType: 'AIR_FROST',
+          severity: 'CRITICAL',
+          affectedPlants: ['Mealycup Sage (Salvia farinacea)']
+        }
+      ],
+      hazardSummary: { frostRiskDetected: true, waterloggingRiskDetected: true },
+      careLog: { lastProtected: '08 Nov 2026, 12:00', lastFed: '01 Sep 2026, 10:00' }
+    }
+  );
+  assert.ok(protectedTender.score > tenderAlerted.score);
+  assert.ok(Array.isArray(protectedTender.factorItems));
+  assert.ok(protectedTender.factorItems.length >= 4);
+  assert.ok(
+    protectedTender.factorItems.some((item) => item.label.includes('Base Plant Health'))
+  );
+  assert.ok(
+    protectedTender.factorItems.some((item) => item.label.includes('Winter protection'))
+  );
+});
+
+
+
 

@@ -1529,3 +1529,348 @@ export function getPlantMonthlyCareStatus(
   };
 }
 
+export type PlantHealthStatusLevel = 'THRIVING' | 'WATCH' | 'AT_RISK';
+
+export interface PlantHealthFactorItem {
+  label: string;
+  impact: string;
+  tone: 'NEUTRAL' | 'POSITIVE' | 'WARNING' | 'CRITICAL';
+}
+
+export interface PlantHealthAssessment {
+  score: number;
+  status: PlantHealthStatusLevel;
+  label: 'Healthy' | 'Watch' | 'At Risk';
+  growthStage: string;
+  stageSensitivity: 'HIGH' | 'MODERATE' | 'RESILIENT';
+  activeAlertCount: number;
+  summaryReason: string;
+  factors: string[];
+  factorItems: PlantHealthFactorItem[];
+}
+
+export interface PlantHealthWeatherContext {
+  weatherAlerts?: Array<{
+    hazardType?: string;
+    severity?: 'CRITICAL' | 'WARNING' | 'INFO' | string;
+    affectedPlants?: string[];
+  }>;
+  hazardSummary?: {
+    frostRiskDetected?: boolean;
+    lowestForecastTempC?: number | null;
+    windRockRiskDetected?: boolean;
+    maxForecastGustMph?: number | null;
+    waterloggingRiskDetected?: boolean;
+    cumulativePrecip48hMm?: number | null;
+  };
+  isProtectedInAlertChecklist?: boolean;
+  careLog?: {
+    lastFed?: string;
+    lastPruned?: string;
+    lastProtected?: string;
+  };
+}
+
+/**
+ * Calculates a deterministic 0–100 health score for an inventory plant
+ * based on its current growth stage, RHS hardiness/vulnerabilities, and recent weather alerts.
+ */
+export function calculatePlantHealthScore(
+  plant: {
+    id?: string;
+    name?: string;
+    rhsRating?: string;
+    growthStage?: string;
+    location?: string;
+    vulnerabilities?: string[];
+  },
+  context: PlantHealthWeatherContext = {}
+): PlantHealthAssessment {
+  let score = 100;
+  const factors: string[] = [];
+  const factorItems: PlantHealthFactorItem[] = [
+    {
+      label: `Base Plant Health (${String(plant?.rhsRating || 'H4').trim()} Hardiness)`,
+      impact: '100%',
+      tone: 'NEUTRAL'
+    }
+  ];
+
+  const rawStage = String(plant?.growthStage || 'Active Vegetative Growth').trim();
+  const lowerStage = rawStage.toLowerCase();
+  const rhsRating = String(plant?.rhsRating || 'H4').trim();
+  const lowerName = String(plant?.name || '')
+    .replace(/^#\d+\s+/, '')
+    .toLowerCase();
+  const vulnsText = Array.isArray(plant?.vulnerabilities)
+    ? plant.vulnerabilities.join(' ').toLowerCase()
+    : '';
+
+  // 1. Evaluate Growth Stage sensitivity
+  let stageSensitivity: 'HIGH' | 'MODERATE' | 'RESILIENT' = 'MODERATE';
+  let stageMultiplier = 1.0;
+
+  if (
+    lowerStage.includes('seedling') ||
+    lowerStage.includes('plug') ||
+    lowerStage.includes('hardening off') ||
+    lowerStage.includes('budding') ||
+    (lowerStage.includes('flowering') && !lowerStage.includes('late flowering'))
+  ) {
+    stageSensitivity = 'HIGH';
+    stageMultiplier = 1.25;
+    score -= 4;
+    factors.push(`Sensitive growth stage (${rawStage})`);
+    factorItems.push({
+      label: `Sensitive stage (${rawStage})`,
+      impact: '-4%',
+      tone: 'WARNING'
+    });
+  } else if (
+    lowerStage.includes('winter dormant') ||
+    lowerStage.includes('autumn dormancy') ||
+    lowerStage.includes('leaf drop')
+  ) {
+    stageSensitivity = 'RESILIENT';
+    stageMultiplier = 0.6;
+    factors.push(`Dormant stage resilience (${rawStage})`);
+    factorItems.push({
+      label: `Dormant resilience (${rawStage})`,
+      impact: '0%',
+      tone: 'POSITIVE'
+    });
+  } else if (lowerStage.includes('late flowering') || lowerStage.includes('pre-dormancy')) {
+    stageSensitivity = 'MODERATE';
+    stageMultiplier = 1.1;
+    score -= 2;
+    factors.push(`Transitioning to dormancy (${rawStage})`);
+    factorItems.push({
+      label: `Transitioning stage (${rawStage})`,
+      impact: '-2%',
+      tone: 'NEUTRAL'
+    });
+  } else {
+    stageSensitivity = 'MODERATE';
+    stageMultiplier = 1.0;
+    factors.push(`Stage: ${rawStage}`);
+    factorItems.push({
+      label: `Growth stage (${rawStage})`,
+      impact: '0%',
+      tone: 'NEUTRAL'
+    });
+  }
+
+  // 2. Check direct matches in recent weatherAlerts
+  const alerts = Array.isArray(context.weatherAlerts) ? context.weatherAlerts : [];
+  let matchedAlertsCount = 0;
+  const matchedHazardTypes = new Set<string>();
+
+  for (const alert of alerts) {
+    const affectedList = Array.isArray(alert?.affectedPlants) ? alert.affectedPlants : [];
+    const isPlantNamed = affectedList.some((affectedName) => {
+      const cleanAffected = String(affectedName || '')
+        .replace(/^#\d+\s+/, '')
+        .toLowerCase();
+      if (!cleanAffected || !lowerName) return false;
+      return (
+        lowerName.includes(cleanAffected) ||
+        cleanAffected.includes(lowerName) ||
+        lowerName.split('(')[0].trim() === cleanAffected.split('(')[0].trim()
+      );
+    });
+
+    if (isPlantNamed) {
+      matchedAlertsCount += 1;
+      const hazardKey = String(alert.hazardType || 'WEATHER').toUpperCase();
+      matchedHazardTypes.add(hazardKey);
+
+      const basePenalty =
+        alert.severity === 'CRITICAL' ? 24 : alert.severity === 'WARNING' ? 16 : 8;
+      const stageAdjustedPenalty = Math.round(basePenalty * stageMultiplier);
+      score -= stageAdjustedPenalty;
+      const readableHazard = hazardKey.replace(/_/g, ' ').toLowerCase();
+      factors.push(
+        `${alert.severity || 'ACTIVE'} ${readableHazard} alert (-${stageAdjustedPenalty})`
+      );
+      factorItems.push({
+        label: `Active ${alert.severity || 'Weather'} ${readableHazard} alert`,
+        impact: `-${stageAdjustedPenalty}%`,
+        tone: alert.severity === 'CRITICAL' ? 'CRITICAL' : 'WARNING'
+      });
+    }
+  }
+
+  // 3. Check general weather hazards against plant RHS hardiness, growth stage & vulnerabilities
+  const hazards = context.hazardSummary || {};
+  const isTender = ['H1a', 'H1b', 'H1c', 'H2', 'H3'].includes(rhsRating);
+  const isHalfHardyH4 = rhsRating === 'H4';
+
+  if (
+    hazards.frostRiskDetected &&
+    !matchedHazardTypes.has('FROST') &&
+    !matchedHazardTypes.has('AIR_FROST') &&
+    !matchedHazardTypes.has('GROUND_FROST')
+  ) {
+    if (isTender) {
+      const frostPenalty = Math.round(22 * stageMultiplier);
+      score -= frostPenalty;
+      matchedAlertsCount += 1;
+      factors.push(`Frost alert risk for tender ${rhsRating} plant (-${frostPenalty})`);
+      factorItems.push({
+        label: `Frost alert risk for tender RHS ${rhsRating} rating`,
+        impact: `-${frostPenalty}%`,
+        tone: 'CRITICAL'
+      });
+    } else if (isHalfHardyH4 && stageSensitivity !== 'RESILIENT') {
+      const frostPenalty = Math.round(10 * stageMultiplier);
+      score -= frostPenalty;
+      matchedAlertsCount += 1;
+      factors.push(`Frost exposure during ${rawStage} (-${frostPenalty})`);
+      factorItems.push({
+        label: `Frost exposure on RHS H4 plant during ${rawStage}`,
+        impact: `-${frostPenalty}%`,
+        tone: 'WARNING'
+      });
+    } else if (stageSensitivity === 'HIGH') {
+      const frostPenalty = 10;
+      score -= frostPenalty;
+      matchedAlertsCount += 1;
+      factors.push(`Frost risk to ${rawStage.toLowerCase()} (-${frostPenalty})`);
+      factorItems.push({
+        label: `Frost risk to sensitive ${rawStage.toLowerCase()}`,
+        impact: `-${frostPenalty}%`,
+        tone: 'WARNING'
+      });
+    } else if (vulnsText.includes('frost') && stageSensitivity !== 'RESILIENT') {
+      const frostPenalty = 8;
+      score -= frostPenalty;
+      matchedAlertsCount += 1;
+      factors.push(`Frost vulnerability active (-${frostPenalty})`);
+      factorItems.push({
+        label: 'Known frost vulnerability in active forecast',
+        impact: `-${frostPenalty}%`,
+        tone: 'WARNING'
+      });
+    }
+  }
+
+  if (hazards.windRockRiskDetected && !matchedHazardTypes.has('WIND_ROCK') && !matchedHazardTypes.has('WIND')) {
+    if (
+      vulnsText.includes('wind') ||
+      vulnsText.includes('tall') ||
+      vulnsText.includes('scorch') ||
+      lowerName.includes('rose') ||
+      lowerName.includes('cordyline')
+    ) {
+      const windPenalty = Math.round(12 * stageMultiplier);
+      score -= windPenalty;
+      matchedAlertsCount += 1;
+      factors.push(`High wind / wind-rock exposure (-${windPenalty})`);
+      factorItems.push({
+        label: 'High wind / wind-rock exposure alert',
+        impact: `-${windPenalty}%`,
+        tone: 'WARNING'
+      });
+    } else if (stageSensitivity === 'HIGH') {
+      score -= 6;
+      matchedAlertsCount += 1;
+      factors.push(`Gale exposure on young/flowering growth (-6)`);
+      factorItems.push({
+        label: 'High wind gusts on young / flowering growth',
+        impact: '-6%',
+        tone: 'WARNING'
+      });
+    }
+  }
+
+  if (
+    hazards.waterloggingRiskDetected &&
+    !matchedHazardTypes.has('WATERLOGGING') &&
+    !matchedHazardTypes.has('HEAVY_RAIN')
+  ) {
+    if (
+      vulnsText.includes('wet') ||
+      vulnsText.includes('waterlog') ||
+      vulnsText.includes('rot') ||
+      vulnsText.includes('drainage')
+    ) {
+      const rainPenalty = stageSensitivity === 'RESILIENT' ? 10 : 14;
+      score -= rainPenalty;
+      matchedAlertsCount += 1;
+      factors.push(`Wet clay / root waterlogging risk (-${rainPenalty})`);
+      factorItems.push({
+        label: 'Heavy rain / wet clay root-rot sensitivity',
+        impact: `-${rainPenalty}%`,
+        tone: 'WARNING'
+      });
+    }
+  }
+
+  if (matchedAlertsCount === 0) {
+    factorItems.push({
+      label: 'Recent weather alerts',
+      impact: 'No active stress (0%)',
+      tone: 'POSITIVE'
+    });
+  }
+
+  // 4. Positive mitigation from logged care or alert protection
+  if (context.isProtectedInAlertChecklist || context.careLog?.lastProtected) {
+    if (score < 100) {
+      const boost = Math.min(14, 100 - score);
+      score += boost;
+      factors.push(`Protected / mulched (+${boost})`);
+      factorItems.push({
+        label: 'Winter protection / mulch applied',
+        impact: `+${boost}%`,
+        tone: 'POSITIVE'
+      });
+    }
+  }
+  if (context.careLog?.lastFed || context.careLog?.lastPruned) {
+    if (score < 100) {
+      const boost = Math.min(6, 100 - score);
+      score += boost;
+      factors.push(`Recent care logged (+${boost})`);
+      factorItems.push({
+        label: 'Recent feeding / pruning logged',
+        impact: `+${boost}%`,
+        tone: 'POSITIVE'
+      });
+    }
+  }
+
+  const clampedScore = Math.max(15, Math.min(100, Math.round(score)));
+
+  let status: PlantHealthStatusLevel = 'THRIVING';
+  let label: 'Healthy' | 'Watch' | 'At Risk' = 'Healthy';
+  if (clampedScore < 65) {
+    status = 'AT_RISK';
+    label = 'At Risk';
+  } else if (clampedScore < 85) {
+    status = 'WATCH';
+    label = 'Watch';
+  }
+
+  const summaryReason =
+    matchedAlertsCount > 0
+      ? `${label} (${clampedScore}%) · ${rawStage} · ${matchedAlertsCount} weather ${
+          matchedAlertsCount === 1 ? 'hazard' : 'hazards'
+        }`
+      : `${label} (${clampedScore}%) · ${rawStage} · No active weather stress`;
+
+  return {
+    score: clampedScore,
+    status,
+    label,
+    growthStage: rawStage,
+    stageSensitivity,
+    activeAlertCount: matchedAlertsCount,
+    summaryReason,
+    factors,
+    factorItems
+  };
+}
+
+
+

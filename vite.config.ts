@@ -7,6 +7,17 @@ import {VitePWA} from 'vite-plugin-pwa';
 export default defineConfig(() => {
   return {
     plugins: [
+      {
+        name: 'disable-vite-hmr-websocket',
+        transform(code, id) {
+          if (id.includes('vite/dist/client/client.mjs')) {
+            return code.replace(
+              'transport.connect(createHMRHandler(handleMessage));',
+              '// HMR WebSocket disabled in AI Studio preview environment'
+            );
+          }
+        },
+      },
       react(),
       tailwindcss(),
       VitePWA({
