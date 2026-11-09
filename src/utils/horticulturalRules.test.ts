@@ -766,6 +766,72 @@ test('calculatePlantHealthScore computes plant health score from growth stage an
   );
 });
 
+test('serializeGardenPlantsBackup, parseAndValidatePlantsBackup, and applyPlantsBackupImport export and restore garden plants accurately', async () => {
+  const {
+    serializeGardenPlantsBackup,
+    parseAndValidatePlantsBackup,
+    applyPlantsBackupImport,
+  } = await import('./plantBackupUtils');
 
+  const starterPlants = getHadston32InventoryRecords();
+  const backupJson = serializeGardenPlantsBackup(starterPlants, {
+    locationName: 'York, North Yorkshire, UK',
+    exportedAt: '2026-11-09T09:00:00.000Z',
+  });
 
+  const parsed = parseAndValidatePlantsBackup(backupJson);
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.plants.length, 32);
+    assert.equal(parsed.locationName, 'York, North Yorkshire, UK');
+    assert.equal(parsed.exportedAt, '2026-11-09T09:00:00.000Z');
+  }
 
+  // Validation error cases
+  const emptyCheck = parseAndValidatePlantsBackup('   ');
+  assert.equal(emptyCheck.ok, false);
+
+  const invalidJsonCheck = parseAndValidatePlantsBackup('{broken json');
+  assert.equal(invalidJsonCheck.ok, false);
+
+  const missingPlantsCheck = parseAndValidatePlantsBackup(JSON.stringify({ foo: 'bar' }));
+  assert.equal(missingPlantsCheck.ok, false);
+
+  // Merge mode: adds new plant and updates existing plant without duplicates
+  const customBackupJson = JSON.stringify({
+    format: 'LOAMY_GARDEN_PLANTS_BACKUP',
+    version: 1,
+    plants: [
+      {
+        id: 'plt-custom-fig',
+        name: "Fig 'Brown Turkey' (Ficus carica)",
+        rhsRating: 'H4',
+        location: 'South Brick Wall',
+        growthStage: 'Fruiting / Dormancy Prep',
+        vulnerabilities: ['Hard frost on young figs'],
+      },
+      {
+        id: starterPlants[0].id,
+        name: starterPlants[0].name,
+        rhsRating: 'H3',
+        location: 'Updated Heated Greenhouse Shelf',
+        growthStage: 'Overwintering Under Glass',
+        vulnerabilities: ['Frost below -2C'],
+      },
+    ],
+  });
+
+  const customParsed = parseAndValidatePlantsBackup(customBackupJson);
+  assert.equal(customParsed.ok, true);
+  if (customParsed.ok) {
+    const merged = applyPlantsBackupImport(starterPlants, customParsed.plants, 'MERGE');
+    assert.equal(merged.addedCount, 1);
+    assert.equal(merged.updatedCount, 1);
+    assert.equal(merged.totalCount, 33);
+    assert.equal(merged.nextPlants[0].name, "Fig 'Brown Turkey' (Ficus carica)");
+
+    const replaced = applyPlantsBackupImport(starterPlants, customParsed.plants, 'REPLACE');
+    assert.equal(replaced.totalCount, 2);
+    assert.equal(replaced.nextPlants.length, 2);
+  }
+});
