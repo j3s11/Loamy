@@ -459,21 +459,10 @@ export default function App() {
     };
   }, [locationInputText, isLocationSuggestionsOpen]);
 
-  // Inventory search, Due-This-Month filter, collapsible category headings & care modal state
+  // Inventory search, collapsible category headings & focused Master Guide plant state
   const [inventoryFilterText, setInventoryFilterText] = useState<string>('');
-  const [filterDueThisMonth, setFilterDueThisMonth] = useState<boolean>(false);
   const [expandedPlantCategories, setExpandedPlantCategories] = useState<Record<string, boolean>>({});
-  const [expandedHealthFactorPlantIds, setExpandedHealthFactorPlantIds] = useState<
-    Record<string, boolean>
-  >({});
-  const [activeCareModalPlant, setActiveCareModalPlant] = useState<RhsCatalogPlant | null>(null);
-
-  const togglePlantHealthFactors = useCallback((plantId: string) => {
-    setExpandedHealthFactorPlantIds((prev) => ({
-      ...prev,
-      [plantId]: !prev[plantId]
-    }));
-  }, []);
+  const [focusedMasterGuidePlantId, setFocusedMasterGuidePlantId] = useState<string | null>(null);
 
   const [completedTasks, setCompletedTasks] = useState<Record<string, boolean>>(() => {
     try {
@@ -594,16 +583,6 @@ export default function App() {
       setExpandedPlantCategories(next);
     }
   }, [areAllCategoriesExpanded, groupedPlotInventory]);
-
-  // Close Plant Care modal on Escape key
-  useEffect(() => {
-    if (!activeCareModalPlant) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setActiveCareModalPlant(null);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeCareModalPlant]);
 
   // Current month & week focus from the Hadston Master Guide
   const currentUkMonthIdx = useMemo(() => getCurrentUkMonthIndex(new Date()), []);
@@ -1145,21 +1124,7 @@ export default function App() {
     plantCareLogs
   ]);
 
-  const dueThisMonthTotalCount = useMemo(() => {
-    let count = 0;
-    for (const status of plantMonthlyCareMap.values()) {
-      if (status.isDueThisMonth) count++;
-    }
-    return count;
-  }, [plantMonthlyCareMap]);
-
-  const displayedGroupedPlotInventory = useMemo(() => {
-    if (!filterDueThisMonth) return groupedPlotInventory;
-    const dueFiltered = filteredPlotInventory.filter(
-      (p) => plantMonthlyCareMap.get(p.id)?.isDueThisMonth
-    );
-    return groupPlantInventoryByCategory(dueFiltered, false);
-  }, [groupedPlotInventory, filteredPlotInventory, filterDueThisMonth, plantMonthlyCareMap]);
+  const displayedGroupedPlotInventory = groupedPlotInventory;
 
   const recordPlantCareAction = useCallback(
     (catalogId: string, actionField: 'lastFed' | 'lastPruned' | 'lastProtected') => {
@@ -2437,9 +2402,23 @@ export default function App() {
           >
             <HadstonMasterGuidePanel
               plantInventory={plantInventory}
+              plantHealthMap={plantHealthMap}
+              plantMonthlyCareMap={plantMonthlyCareMap}
+              plantCareLogs={plantCareLogs}
+              currentUkMonthIdx={currentUkMonthIdx}
+              weatherAlerts={advice?.weatherAlerts}
+              hazardSummary={weatherData?.hazardSummary}
+              focusedPlantId={focusedMasterGuidePlantId}
+              onClearFocusedPlant={() => setFocusedMasterGuidePlantId(null)}
               locationName={gardenProfile.locationName}
               rhsHardinessZone={gardenProfile.rhsHardinessZone}
               onAddSingleCatalogPlant={(item) => handleQuickAddCatalogPlant(item)}
+              onEditGardenPlant={(plant) => {
+                setActiveWorkspaceTab('PLANTS');
+                openEditPlantModal(plant as PlantRecord);
+              }}
+              onRecordPlantCareAction={recordPlantCareAction}
+              onUpdatePlantPersonalNote={updatePlantPersonalNote}
             />
           </Suspense>
         )}
@@ -2740,7 +2719,7 @@ export default function App() {
                     My Garden Plants ({plantInventory.length})
                   </h2>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Grouped by category — tap a heading to expand or tap any plant for its care guide.
+                    Basic plant name &amp; photo list — health scores, care schedules, and logs live in the Master Guide tab.
                   </p>
                 </div>
 
@@ -2766,22 +2745,7 @@ export default function App() {
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    data-testid="filter-due-this-month-button"
-                    onClick={() => setFilterDueThisMonth((prev) => !prev)}
-                    aria-pressed={filterDueThisMonth}
-                    className={`min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer shrink-0 ${
-                      filterDueThisMonth
-                        ? 'bg-emerald-800 text-white border-emerald-800'
-                        : 'bg-emerald-50/80 hover:bg-emerald-100/80 text-emerald-950 border-emerald-200'
-                    }`}
-                  >
-                    <Calendar className="w-3.5 h-3.5 shrink-0" />
-                    <span>Due This Month ({dueThisMonthTotalCount})</span>
-                  </button>
-
-                  {displayedGroupedPlotInventory.length > 0 && !isSearchingInventory && !filterDueThisMonth && (
+                  {displayedGroupedPlotInventory.length > 0 && !isSearchingInventory && (
                     <button
                       type="button"
                       data-testid="toggle-all-plant-categories-button"
@@ -3042,35 +3006,16 @@ export default function App() {
                             key={item.catalogId}
                             className="p-2.5 rounded-xl bg-white border border-stone-200 flex items-center justify-between gap-2.5 hover:border-emerald-600/50 transition"
                           >
-                            <div
-                              className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
-                              onClick={() => setActiveCareModalPlant(item)}
-                              title="Tap to preview RHS care guide"
-                            >
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
                               <PlantThumbnailWithModal
                                 plantId={item.catalogId}
-                                plantName={item.name}
+                                plantName={item.commonName || item.name}
                                 photoRef={item.photoRef}
                                 size="sm"
                               />
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  {item.photoRef && (
-                                    <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] font-mono font-bold text-emerald-900">
-                                      #{item.photoRef}
-                                    </span>
-                                  )}
-                                  <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
-                                    {item.name}
-                                  </span>
-                                  <span className="text-xs font-semibold text-emerald-800">
-                                    · RHS {item.rhsRating}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-slate-500 mt-0.5 truncate">
-                                  {item.recommendedLocation}
-                                </p>
-                              </div>
+                              <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                                {item.commonName || item.name}
+                              </span>
                             </div>
 
                             <button
@@ -3274,20 +3219,13 @@ export default function App() {
                 </div>
               ) : displayedGroupedPlotInventory.length === 0 ? (
                 <div className="p-6 text-center rounded-xl bg-stone-50 border border-stone-200/80 text-xs sm:text-sm text-slate-500">
-                  {filterDueThisMonth
-                    ? 'No plants match your current "Due This Month" filter.'
-                    : `No plants match “${inventoryFilterText}”.`}
+                  {`No plants match “${inventoryFilterText}”.`}
                 </div>
               ) : (
                 <div data-testid="plant-category-groups" className="space-y-3">
                   {displayedGroupedPlotInventory.map((group) => {
                     const isGroupOpen =
-                      isSearchingInventory ||
-                      filterDueThisMonth ||
-                      Boolean(expandedPlantCategories[group.id]);
-                    const groupDueCount = group.plants.filter(
-                      (p) => plantMonthlyCareMap.get(p.id)?.isDueThisMonth
-                    ).length;
+                      isSearchingInventory || Boolean(expandedPlantCategories[group.id]);
 
                     return (
                       <div
@@ -3312,20 +3250,7 @@ export default function App() {
                                 {group.plants.length}{' '}
                                 {group.plants.length === 1 ? 'plant' : 'plants'}
                               </span>
-                              {groupDueCount > 0 && (
-                                <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[11px] font-semibold text-emerald-900">
-                                  {groupDueCount} due this month
-                                </span>
-                              )}
-                              {group.tenderCount > 0 && (
-                                <span className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-900">
-                                  {group.tenderCount} tender
-                                </span>
-                              )}
                             </div>
-                            <p className="text-xs text-slate-500 mt-0.5 truncate pl-6">
-                              {group.description}
-                            </p>
                           </div>
 
                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 shrink-0">
@@ -3341,226 +3266,39 @@ export default function App() {
                         </button>
 
                         {isGroupOpen && (
-                          <div className="p-3 sm:p-4 bg-white border-t border-stone-200/80 grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="p-3 sm:p-4 bg-white border-t border-stone-200/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {group.plants.map((plant: PlantRecord) => {
-                              const isTender = TENDER_OR_HALF_HARDY_SET.has(plant.rhsRating);
                               const masterMatch = plantMasterMap.get(plant.id) ?? null;
-                              const monthlyCare = plantMonthlyCareMap.get(plant.id);
-                              const health = plantHealthMap.get(plant.id);
-                              const careLogKey = masterMatch?.catalogId || plant.id;
-                              const careLog = plantCareLogs[careLogKey];
-                              const hasCareLog = Boolean(
-                                careLog &&
-                                  (careLog.lastFed ||
-                                    careLog.lastPruned ||
-                                    careLog.lastProtected ||
-                                    (careLog.notes && careLog.notes.trim() !== ''))
-                              );
+                              const basicName =
+                                masterMatch?.commonName || plant.name.replace(/^#\d+\s+/, '');
 
                               return (
                                 <div
                                   key={plant.id}
-                                  onClick={() => {
-                                    if (masterMatch) setActiveCareModalPlant(masterMatch);
-                                  }}
-                                  className={`p-3.5 sm:p-4 rounded-xl bg-stone-50/70 border border-stone-200/90 hover:border-emerald-600/60 transition ${
-                                    masterMatch ? 'cursor-pointer' : ''
-                                  }`}
+                                  data-testid={`my-garden-plant-card-${plant.id}`}
+                                  className="p-3 rounded-xl bg-stone-50/70 border border-stone-200/90 flex items-center justify-between gap-3"
                                 >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="flex items-start gap-3 min-w-0 flex-1">
-                                      <PlantThumbnailWithModal
-                                        plantId={plant.id}
-                                        plantName={
-                                          masterMatch?.photoRef
-                                            ? plant.name.replace(/^#\d+\s+/, '')
-                                            : plant.name
-                                        }
-                                        photoRef={masterMatch?.photoRef}
-                                        size="md"
-                                      />
-                                      <div className="min-w-0 flex-1">
-                                        <div className="flex flex-wrap items-center gap-1.5">
-                                          {masterMatch?.photoRef && (
-                                            <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[11px] font-mono font-bold text-emerald-900">
-                                              #{masterMatch.photoRef}
-                                            </span>
-                                          )}
-                                          <h4 className="text-sm font-bold text-slate-900">
-                                            {masterMatch?.photoRef
-                                              ? plant.name.replace(/^#\d+\s+/, '')
-                                              : plant.name}
-                                          </h4>
-                                          {health && (
-                                            <button
-                                              type="button"
-                                              data-testid={`plant-health-indicator-${plant.id}`}
-                                              aria-expanded={Boolean(
-                                                expandedHealthFactorPlantIds[plant.id]
-                                              )}
-                                              aria-label={`Health score ${health.score}% ${health.label} for ${plant.name} — tap to view contributing factors`}
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                togglePlantHealthFactors(plant.id);
-                                              }}
-                                              title="Click to view contributing health score factors"
-                                              className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded-md border tabular-nums transition cursor-pointer ${
-                                                health.status === 'THRIVING'
-                                                  ? 'bg-emerald-50/90 hover:bg-emerald-100/90 text-emerald-950 border-emerald-200'
-                                                  : health.status === 'WATCH'
-                                                  ? 'bg-amber-50/90 hover:bg-amber-100/90 text-amber-950 border-amber-200'
-                                                  : 'bg-rose-50/90 hover:bg-rose-100/90 text-rose-950 border-rose-200'
-                                              }`}
-                                            >
-                                              <span
-                                                aria-hidden="true"
-                                                className={`w-2 h-2 rounded-full shrink-0 ${
-                                                  health.status === 'THRIVING'
-                                                    ? 'bg-emerald-500'
-                                                    : health.status === 'WATCH'
-                                                    ? 'bg-amber-500'
-                                                    : 'bg-rose-500'
-                                                }`}
-                                              />
-                                              <span>
-                                                {health.score}% {health.label}
-                                              </span>
-                                              {expandedHealthFactorPlantIds[plant.id] ? (
-                                                <ChevronUp className="w-3 h-3 opacity-75 shrink-0" />
-                                              ) : (
-                                                <ChevronDown className="w-3 h-3 opacity-75 shrink-0" />
-                                              )}
-                                            </button>
-                                          )}
-                                          <span
-                                            className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
-                                              isTender
-                                                ? 'bg-amber-50 text-amber-900 border border-amber-200'
-                                                : 'bg-white text-slate-700 border border-stone-200'
-                                            }`}
-                                          >
-                                            RHS {plant.rhsRating}
-                                          </span>
-                                          {monthlyCare?.isDueThisMonth && (
-                                            <span
-                                              data-testid={`plant-due-badge-${plant.id}`}
-                                              className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
-                                                monthlyCare.pruneDue
-                                                  ? 'bg-amber-100/90 text-amber-950 border-amber-300'
-                                                  : monthlyCare.feedDue
-                                                  ? 'bg-emerald-100/90 text-emerald-950 border-emerald-300'
-                                                  : 'bg-sky-100/90 text-sky-950 border-sky-300'
-                                              }`}
-                                            >
-                                              {monthlyCare.badgeLabel}
-                                            </span>
-                                          )}
-                                          {hasCareLog && (
-                                            <span
-                                              data-testid={`plant-care-logged-badge-${plant.id}`}
-                                              className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-stone-200/80 text-slate-800"
-                                            >
-                                              Care Logged ✓
-                                            </span>
-                                          )}
-                                        </div>
-                                        <p className="text-xs text-slate-600 mt-1">
-                                          {plant.location}
-                                        </p>
-                                        <p
-                                          data-testid={`plant-growth-stage-${plant.id}`}
-                                          className="text-[11px] text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5"
-                                        >
-                                          <span>
-                                            Stage: <strong className="font-medium text-slate-700">{plant.growthStage}</strong>
-                                          </span>
-                                          {health && health.activeAlertCount > 0 && (
-                                            <span className="text-amber-800 font-medium">
-                                              · {health.activeAlertCount} weather {health.activeAlertCount === 1 ? 'alert' : 'alerts'} active
-                                            </span>
-                                          )}
-                                        </p>
-
-                                        {/* Expandable Contributing Health Factors Breakdown */}
-                                        {health && expandedHealthFactorPlantIds[plant.id] && (
-                                          <div
-                                            data-testid={`plant-health-factors-${plant.id}`}
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="mt-2 p-2.5 rounded-xl bg-white border border-stone-200/90 shadow-2xs space-y-1.5 text-[11px]"
-                                          >
-                                            <div className="flex items-center justify-between gap-2 pb-1 border-b border-stone-100">
-                                              <span className="font-bold text-slate-800">
-                                                Contributing Health Factors ({health.score}%)
-                                              </span>
-                                              <button
-                                                type="button"
-                                                onClick={() => togglePlantHealthFactors(plant.id)}
-                                                aria-label="Hide health score factors"
-                                                className="text-slate-400 hover:text-slate-700 font-semibold px-1 cursor-pointer"
-                                              >
-                                                Hide
-                                              </button>
-                                            </div>
-                                            <ul className="space-y-1.5">
-                                              {health.factorItems.map((factor, fIdx) => (
-                                                <li
-                                                  key={fIdx}
-                                                  className="flex items-start justify-between gap-2 text-slate-700"
-                                                >
-                                                  <span className="leading-snug">{factor.label}</span>
-                                                  <span
-                                                    className={`font-semibold tabular-nums shrink-0 px-1.5 py-0.5 rounded ${
-                                                      factor.tone === 'CRITICAL'
-                                                        ? 'bg-rose-50 text-rose-800'
-                                                        : factor.tone === 'WARNING'
-                                                        ? 'bg-amber-50 text-amber-900'
-                                                        : factor.tone === 'POSITIVE'
-                                                        ? 'bg-emerald-50 text-emerald-800'
-                                                        : 'bg-stone-100 text-slate-700'
-                                                    }`}
-                                                  >
-                                                    {factor.impact}
-                                                  </span>
-                                                </li>
-                                              ))}
-                                            </ul>
-                                          </div>
-                                        )}
-
-                                        {masterMatch && (
-                                          <p className="text-[11px] font-semibold text-emerald-800 mt-1.5 inline-flex items-center gap-0.5">
-                                            <span>
-                                              View Feed ({masterMatch.feedWindowUk}), Prune (
-                                              {masterMatch.pruneMonthsUk}) &amp; Care Log
-                                            </span>
-                                            <ChevronRight className="w-3.5 h-3.5" />
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <div
-                                      className="flex items-center gap-1 shrink-0"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={() => openEditPlantModal(plant)}
-                                        aria-label={`Edit ${plant.name}`}
-                                        className="min-h-[40px] min-w-[40px] sm:min-h-[36px] sm:min-w-[36px] inline-flex items-center justify-center rounded-xl text-slate-500 hover:text-slate-800 hover:bg-stone-200/60 active:bg-stone-200 transition cursor-pointer"
-                                      >
-                                        <Edit3 className="w-4 h-4" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleDeletePlant(plant)}
-                                        aria-label={`Delete ${plant.name}`}
-                                        className="min-h-[40px] min-w-[40px] sm:min-h-[36px] sm:min-w-[36px] inline-flex items-center justify-center rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 active:bg-rose-100 transition cursor-pointer"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </button>
-                                    </div>
+                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    <PlantThumbnailWithModal
+                                      plantId={plant.id}
+                                      plantName={basicName}
+                                      photoRef={masterMatch?.photoRef}
+                                      size="md"
+                                    />
+                                    <h4 className="text-sm font-bold text-slate-900 truncate">
+                                      {basicName}
+                                    </h4>
                                   </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeletePlant(plant)}
+                                    aria-label={`Remove ${basicName}`}
+                                    title="Remove from my garden"
+                                    className="min-h-[38px] min-w-[38px] inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 active:bg-rose-100 transition shrink-0 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
                                 </div>
                               );
                             })}
@@ -3578,185 +3316,6 @@ export default function App() {
         )}
       </main>
 
-      {/* =====================================================================
-          PLANT CARE MODAL (Mobile Bottom Sheet + Desktop Centered Dialog)
-      ===================================================================== */}
-      {activeCareModalPlant && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Care details for ${activeCareModalPlant.commonName}`}
-          className="fixed inset-0 z-50 bg-slate-900/55 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto"
-          onClick={() => setActiveCareModalPlant(null)}
-        >
-          <div
-            className="bg-white border-t sm:border border-stone-200 rounded-t-3xl sm:rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Mobile bottom-sheet grab handle */}
-            <div className="sm:hidden flex justify-center -mt-1 pb-1">
-              <div className="w-10 h-1.5 rounded-full bg-stone-300" />
-            </div>
-
-            <div className="flex items-start justify-between gap-3 border-b border-stone-200 pb-3.5">
-              <div className="flex items-start gap-3 min-w-0">
-                <PlantThumbnailWithModal
-                  plantId={activeCareModalPlant.catalogId}
-                  plantName={activeCareModalPlant.commonName}
-                  photoRef={activeCareModalPlant.photoRef}
-                  size="lg"
-                />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {activeCareModalPlant.photoRef && (
-                      <span className="px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-mono font-bold text-emerald-900">
-                        #{activeCareModalPlant.photoRef}
-                      </span>
-                    )}
-                    <span className="px-2.5 py-0.5 rounded-lg bg-stone-100 text-slate-800 text-xs font-bold">
-                      RHS {activeCareModalPlant.rhsRating}
-                    </span>
-                  </div>
-                  <h3 className="text-lg sm:text-xl font-bold text-slate-900 mt-1">
-                    {activeCareModalPlant.commonName}
-                  </h3>
-                  <p className="text-xs sm:text-sm italic text-slate-500">
-                    {activeCareModalPlant.botanicalName}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setActiveCareModalPlant(null)}
-                aria-label="Close care card"
-                className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center p-2 rounded-xl bg-stone-100 hover:bg-stone-200 active:bg-stone-300 text-slate-700 shrink-0 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs sm:text-sm leading-relaxed">
-              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200">
-                <strong className="text-slate-900">Soil pH &amp; Sun:</strong>{' '}
-                <span className="text-slate-700">{activeCareModalPlant.soilAndSun}</span>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-1">
-                <strong className="block text-emerald-950">
-                  Feeding ({activeCareModalPlant.feedWindowUk}):
-                </strong>
-                <p className="text-slate-800">{activeCareModalPlant.feedTypeNpk}</p>
-                <p className="text-slate-700">{activeCareModalPlant.feedFrequencyDosage}</p>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 space-y-1">
-                <strong className="block text-amber-950">
-                  Pruning ({activeCareModalPlant.pruneMonthsUk}):
-                </strong>
-                <p className="text-slate-800">{activeCareModalPlant.pruneTechnique}</p>
-                <p className="text-rose-900 font-medium">
-                  Avoid: {activeCareModalPlant.pruneAvoid}
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-sky-50/70 border border-sky-200">
-                <strong className="text-sky-950">Overwintering Protocol:</strong>{' '}
-                <span className="text-slate-800">{activeCareModalPlant.overwinteringProtocol}</span>
-              </div>
-
-              {/* Per-Plant Care Log & Personal Notes (Saved Locally) */}
-              <div
-                data-testid="plant-care-log-section"
-                className="p-3.5 rounded-xl bg-stone-50 border border-stone-200/90 space-y-3"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <strong className="text-slate-900 text-xs sm:text-sm">
-                    My Care Log &amp; Personal Notes
-                  </strong>
-                  <span className="text-[11px] text-slate-500">Saved on this device</span>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    data-testid="log-fed-today-btn"
-                    onClick={() => recordPlantCareAction(activeCareModalPlant.catalogId, 'lastFed')}
-                    className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-800 hover:bg-emerald-700 text-white transition cursor-pointer"
-                  >
-                    + Fed Today
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="log-pruned-today-btn"
-                    onClick={() =>
-                      recordPlantCareAction(activeCareModalPlant.catalogId, 'lastPruned')
-                    }
-                    className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-700 hover:bg-amber-600 text-white transition cursor-pointer"
-                  >
-                    + Pruned Today
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="log-protected-today-btn"
-                    onClick={() =>
-                      recordPlantCareAction(activeCareModalPlant.catalogId, 'lastProtected')
-                    }
-                    className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-sky-800 hover:bg-sky-700 text-white transition cursor-pointer"
-                  >
-                    + Mulched / Protected Today
-                  </button>
-                </div>
-
-                {(plantCareLogs[activeCareModalPlant.catalogId]?.lastFed ||
-                  plantCareLogs[activeCareModalPlant.catalogId]?.lastPruned ||
-                  plantCareLogs[activeCareModalPlant.catalogId]?.lastProtected) && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-[11px] text-slate-700 bg-white p-2.5 rounded-lg border border-stone-200">
-                    {plantCareLogs[activeCareModalPlant.catalogId]?.lastFed && (
-                      <div>
-                        <span className="font-semibold text-emerald-900">Last Fed:</span>{' '}
-                        {plantCareLogs[activeCareModalPlant.catalogId]?.lastFed}
-                      </div>
-                    )}
-                    {plantCareLogs[activeCareModalPlant.catalogId]?.lastPruned && (
-                      <div>
-                        <span className="font-semibold text-amber-900">Last Pruned:</span>{' '}
-                        {plantCareLogs[activeCareModalPlant.catalogId]?.lastPruned}
-                      </div>
-                    )}
-                    {plantCareLogs[activeCareModalPlant.catalogId]?.lastProtected && (
-                      <div>
-                        <span className="font-semibold text-sky-900">Protected:</span>{' '}
-                        {plantCareLogs[activeCareModalPlant.catalogId]?.lastProtected}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div>
-                  <label
-                    htmlFor="plant-personal-note-input"
-                    className="block text-xs font-semibold text-slate-700 mb-1"
-                  >
-                    Personal Garden Notes
-                  </label>
-                  <textarea
-                    id="plant-personal-note-input"
-                    data-testid="plant-personal-note-input"
-                    rows={2}
-                    placeholder="e.g. Moved pot to south porch, applied 5cm bark mulch, or spotted new basal shoots..."
-                    value={plantCareLogs[activeCareModalPlant.catalogId]?.notes || ''}
-                    onChange={(e) =>
-                      updatePlantPersonalNote(activeCareModalPlant.catalogId, e.target.value)
-                    }
-                    className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl bg-white border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-700"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* =====================================================================
           GARDEN PLANTS BACKUP & RESTORE MODAL (EXPORT / IMPORT JSON)
