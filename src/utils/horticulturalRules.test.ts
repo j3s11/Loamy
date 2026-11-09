@@ -42,7 +42,8 @@ import {
 import {
   HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR,
   HADSTON_LOCAL_RISK_MITIGATION,
-  generateHadstonMasterGuideMarkdown
+  generateHadstonMasterGuideMarkdown,
+  getDynamicFortnightlyCareSchedule
 } from './hadstonMasterGuide';
 
 test('No default location is pre-set on initial load and RHS Zone H4 thresholds are preserved', () => {
@@ -835,3 +836,25 @@ test('serializeGardenPlantsBackup, parseAndValidatePlantsBackup, and applyPlants
     assert.equal(replaced.nextPlants.length, 2);
   }
 });
+
+test('getDynamicFortnightlyCareSchedule omits unselected plants when inventory is empty and tailors schedule to selected plants', () => {
+  // 1. Empty inventory in November (monthIndex 10) must NOT mention Hosta (#19) or Lemon Cypress (#2)
+  const emptyNovSchedule = getDynamicFortnightlyCareSchedule(10, []);
+  assert.equal(emptyNovSchedule.monthName, 'November');
+  assert.ok(!emptyNovSchedule.week1To2.pruningAndDeadheading.includes('Hosta (#19)'));
+  assert.ok(!emptyNovSchedule.week1To2.wateringAndSoilCare.includes('Lemon Cypress (#2)'));
+
+  // 2. Populated inventory with only Fuchsia Hybrid includes Fuchsia Hybrid and not Hosta (#19)
+  const fuchsiaOnlySchedule = getDynamicFortnightlyCareSchedule(10, [
+    {
+      id: 'hadston-03-fuchsia-hybrid',
+      name: '#3 Fuchsia Hybrid (Fuchsia × hybrida)',
+      rhsRating: 'H3',
+      location: 'Sheltered Courtyard Pot'
+    }
+  ]);
+  assert.ok(fuchsiaOnlySchedule.week1To2.wateringAndSoilCare.includes('Fuchsia Hybrid'));
+  assert.ok(fuchsiaOnlySchedule.week1To2.pestDiseaseAndFrost.includes('Fuchsia Hybrid'));
+  assert.ok(!fuchsiaOnlySchedule.week1To2.pruningAndDeadheading.includes('Hosta (#19)'));
+});
+

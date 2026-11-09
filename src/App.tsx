@@ -69,7 +69,6 @@ import {
   calculatePlantHealthScore,
   PlantHealthAssessment
 } from './utils/rhsPlantCatalog';
-import { HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR } from './utils/hadstonMasterGuide';
 import { getCurrentUkMonthIndex } from './utils/monthlyClayChecklist';
 import {
   serializeGardenPlantsBackup,
@@ -386,8 +385,6 @@ export default function App() {
   const [expandedAlertIndices, setExpandedAlertIndices] = useState<Record<number, boolean>>({});
   const [showRainfallChart, setShowRainfallChart] = useState<boolean>(false);
   const [showSoilTrendDrawer, setShowSoilTrendDrawer] = useState<boolean>(false);
-  const [showFullYearCalendar, setShowFullYearCalendar] = useState<boolean>(false);
-  const [showMonthlyClayChecklist, setShowMonthlyClayChecklist] = useState<boolean>(false);
   const [showPlantManagerDrawer, setShowPlantManagerDrawer] = useState<boolean>(false);
 
   // Location text input synced with current gardenProfile.locationName (empty on first visit)
@@ -584,17 +581,8 @@ export default function App() {
     }
   }, [areAllCategoriesExpanded, groupedPlotInventory]);
 
-  // Current month & week focus from the Hadston Master Guide
+  // Current UK month index for seasonal care calculations
   const currentUkMonthIdx = useMemo(() => getCurrentUkMonthIndex(new Date()), []);
-  const [selectedCalendarMonthIdx, setSelectedCalendarMonthIdx] = useState<number>(currentUkMonthIdx);
-  const currentMonthGuide =
-    HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR[selectedCalendarMonthIdx] ||
-    HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR[currentUkMonthIdx] ||
-    HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR[9];
-  const isSecondHalfOfMonth = new Date().getDate() >= 15;
-  const activeWeeklyFocus = isSecondHalfOfMonth
-    ? currentMonthGuide.week3To4
-    : currentMonthGuide.week1To2;
 
   useEffect(() => {
     try {
@@ -2424,287 +2412,24 @@ export default function App() {
         )}
 
         {/* ===================================================================
-            TAB 3: CALENDAR & CHECKLIST (Recommendation 4: Focus on Active Fortnight)
+            TAB 3: CALENDAR & CHECKLIST (Unified Fortnightly Schedule, Priority Tasks & Clay Soil)
         =================================================================== */}
         {activeWorkspaceTab === 'CHECKLIST' && (
-          <div className="space-y-4">
-            {/* 1. Priority Seasonal Tasks Checklist */}
-            <section className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-                  <h2 className="text-sm sm:text-base font-bold text-slate-900">
-                    Priority Seasonal Tasks ({seasonalTasks.length})
-                  </h2>
-                  <span data-testid="tasks-last-updated" className="sr-only">
-                    Last updated: {alertsLastUpdatedLabel}
-                  </span>
-                </div>
-                <span className="text-xs text-slate-500">Tap to check off</span>
+          <Suspense
+            fallback={
+              <div className="bg-white border border-stone-200/90 rounded-2xl p-6 text-center text-sm text-slate-500 animate-pulse">
+                Loading unified calendar, care schedule &amp; clay soil checklist...
               </div>
-
-              <div className="space-y-2">
-                {seasonalTasks.map((task: any, idx: number) => {
-                  const isDone = Boolean(completedTasks[task.taskTitle]);
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => toggleTaskCompleted(task.taskTitle)}
-                      className={`p-3.5 rounded-xl border transition cursor-pointer flex items-start gap-3 ${
-                        isDone
-                          ? 'bg-stone-50 border-stone-200 opacity-60'
-                          : 'bg-white border-stone-200/90 hover:border-emerald-600/60'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        className="mt-0.5 text-emerald-700 shrink-0 focus:outline-none"
-                        aria-label={`Mark ${task.taskTitle} as complete`}
-                      >
-                        {isDone ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-700" />
-                        ) : (
-                          <Circle className="w-4 h-4 text-stone-400 hover:text-emerald-700" />
-                        )}
-                      </button>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3
-                            className={`text-xs sm:text-sm font-bold ${
-                              isDone ? 'line-through text-slate-400' : 'text-slate-900'
-                            }`}
-                          >
-                            {task.taskTitle}
-                          </h3>
-                          <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-50 text-emerald-800">
-                            {task.category.replace(/_/g, ' ')}
-                          </span>
-                        </div>
-
-                        <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                          {task.instructions}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* 2. Active Fortnight Focus (with "Browse All 12 Months" progressive disclosure) */}
-            <section className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-3">
-                <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
-                    {currentMonthGuide.monthName} ·{' '}
-                    {selectedCalendarMonthIdx === currentUkMonthIdx
-                      ? `Active Focus (${isSecondHalfOfMonth ? 'Weeks 3–4' : 'Weeks 1–2'})`
-                      : 'Monthly Schedule'}
-                  </span>
-                  <h2 className="text-sm sm:text-base font-bold text-slate-900 mt-0.5">
-                    Fortnightly Care Schedule
-                  </h2>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {selectedCalendarMonthIdx !== currentUkMonthIdx && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCalendarMonthIdx(currentUkMonthIdx)}
-                      className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-900 border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer"
-                    >
-                      Current Month
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setShowFullYearCalendar((prev) => !prev)}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-stone-100 hover:bg-stone-200 text-slate-800 border border-stone-200 transition cursor-pointer"
-                  >
-                    <span>
-                      {showFullYearCalendar ? 'Show Active Fortnight Only' : 'Browse All 12 Months'}
-                    </span>
-                    {showFullYearCalendar ? (
-                      <ChevronUp className="w-3.5 h-3.5" />
-                    ) : (
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* 12-Month Selector Pills (Hidden unless Browse All 12 Months is clicked) */}
-              {showFullYearCalendar && (
-                <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-1.5">
-                  {HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR.map((m, idx) => {
-                    const isSelected = idx === selectedCalendarMonthIdx;
-                    const isCurrentMonth = idx === currentUkMonthIdx;
-                    return (
-                      <button
-                        key={m.monthName}
-                        type="button"
-                        onClick={() => setSelectedCalendarMonthIdx(idx)}
-                        className={`min-h-[34px] px-2 py-1 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-                          isSelected
-                            ? 'bg-emerald-800 border-emerald-800 text-white shadow-2xs'
-                            : isCurrentMonth
-                            ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                            : 'bg-stone-50 border-stone-200 text-slate-700 hover:bg-stone-100'
-                        }`}
-                      >
-                        {m.monthName.slice(0, 3)}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Fortnight Cards: Show only active fortnight by default, or both when expanded */}
-              <div
-                className={`grid grid-cols-1 ${
-                  showFullYearCalendar ? 'lg:grid-cols-2' : ''
-                } gap-4`}
-              >
-                {/* Weeks 1–2 */}
-                {(showFullYearCalendar || !isSecondHalfOfMonth) && (
-                  <div
-                    className={`rounded-xl border p-4 space-y-2.5 ${
-                      selectedCalendarMonthIdx === currentUkMonthIdx && !isSecondHalfOfMonth
-                        ? 'bg-emerald-50/35 border-emerald-300'
-                        : 'bg-stone-50/70 border-stone-200/90'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-sm font-bold text-slate-900">
-                        {currentMonthGuide.monthName} — Weeks 1–2
-                      </h3>
-                      {selectedCalendarMonthIdx === currentUkMonthIdx && !isSecondHalfOfMonth && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-800 text-white">
-                          Active Now
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs leading-relaxed">
-                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
-                        <span className="block text-[11px] font-bold uppercase text-sky-800 mb-0.5">
-                          Watering &amp; Soil
-                        </span>
-                        <p className="text-slate-700">{currentMonthGuide.week1To2.wateringAndSoilCare}</p>
-                      </div>
-                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
-                        <span className="block text-[11px] font-bold uppercase text-emerald-800 mb-0.5">
-                          Feeding &amp; Mulch
-                        </span>
-                        <p className="text-slate-700">{currentMonthGuide.week1To2.feedingAndMulching}</p>
-                      </div>
-                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
-                        <span className="block text-[11px] font-bold uppercase text-amber-900 mb-0.5">
-                          Pruning
-                        </span>
-                        <p className="text-slate-700">{currentMonthGuide.week1To2.pruningAndDeadheading}</p>
-                      </div>
-                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
-                        <span className="block text-[11px] font-bold uppercase text-rose-800 mb-0.5">
-                          Frost &amp; Pests
-                        </span>
-                        <p className="text-slate-700">{currentMonthGuide.week1To2.pestDiseaseAndFrost}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Weeks 3–4 */}
-                {(showFullYearCalendar || isSecondHalfOfMonth) && (
-                  <div
-                    className={`rounded-xl border p-4 space-y-2.5 ${
-                      selectedCalendarMonthIdx === currentUkMonthIdx && isSecondHalfOfMonth
-                        ? 'bg-emerald-50/35 border-emerald-300'
-                        : 'bg-stone-50/70 border-stone-200/90'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-sm font-bold text-slate-900">
-                        {currentMonthGuide.monthName} — Weeks 3–4
-                      </h3>
-                      {selectedCalendarMonthIdx === currentUkMonthIdx && isSecondHalfOfMonth && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-800 text-white">
-                          Active Now
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs leading-relaxed">
-                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
-                        <span className="block text-[11px] font-bold uppercase text-sky-800 mb-0.5">
-                          Watering &amp; Soil
-                        </span>
-                        <p className="text-slate-700">{currentMonthGuide.week3To4.wateringAndSoilCare}</p>
-                      </div>
-                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
-                        <span className="block text-[11px] font-bold uppercase text-emerald-800 mb-0.5">
-                          Feeding &amp; Mulch
-                        </span>
-                        <p className="text-slate-700">{currentMonthGuide.week3To4.feedingAndMulching}</p>
-                      </div>
-                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
-                        <span className="block text-[11px] font-bold uppercase text-amber-900 mb-0.5">
-                          Pruning
-                        </span>
-                        <p className="text-slate-700">{currentMonthGuide.week3To4.pruningAndDeadheading}</p>
-                      </div>
-                      <div className="p-2.5 rounded-lg bg-white border border-stone-200/80">
-                        <span className="block text-[11px] font-bold uppercase text-rose-800 mb-0.5">
-                          Frost &amp; Pests
-                        </span>
-                        <p className="text-slate-700">{currentMonthGuide.week3To4.pestDiseaseAndFrost}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            {/* 3. Collapsible Monthly Clay Soil Checklist Drawer */}
-            <div className="bg-white border border-stone-200/90 rounded-2xl shadow-xs overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowMonthlyClayChecklist((prev) => !prev)}
-                aria-expanded={showMonthlyClayChecklist}
-                className="w-full px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-stone-50/80 transition cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <Calendar className="w-4 h-4 text-emerald-700 shrink-0" />
-                  <span className="text-sm font-bold text-slate-900 truncate">
-                    Monthly Clay Soil &amp; Drainage Checklist
-                  </span>
-                </div>
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 shrink-0">
-                  <span>{showMonthlyClayChecklist ? 'Hide checklist' : 'View checklist'}</span>
-                  {showMonthlyClayChecklist ? (
-                    <ChevronUp className="w-4 h-4" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4" />
-                  )}
-                </span>
-              </button>
-
-              {showMonthlyClayChecklist && (
-                <div className="border-t border-stone-100 p-2 sm:p-3">
-                  <Suspense
-                    fallback={
-                      <div className="p-6 text-center text-sm text-slate-500 animate-pulse">
-                        Loading monthly clay checklist...
-                      </div>
-                    }
-                  >
-                    <MonthlyClayChecklistPanel />
-                  </Suspense>
-                </div>
-              )}
-            </div>
-          </div>
+            }
+          >
+            <MonthlyClayChecklistPanel
+              plantInventory={plantInventory}
+              seasonalTasks={seasonalTasks}
+              completedSeasonalTasks={completedTasks}
+              onToggleSeasonalTask={toggleTaskCompleted}
+              alertsLastUpdatedLabel={alertsLastUpdatedLabel}
+            />
+          </Suspense>
         )}
 
         {/* ===================================================================
