@@ -38,7 +38,7 @@ interface HadstonMasterGuidePanelProps {
     growthStage: string;
     vulnerabilities: string[];
   }>;
-  onLoadAllHadston32: () => void;
+  onLoadAllHadston32?: () => void;
   onAddSingleCatalogPlant: (plant: RhsCatalogPlant) => void;
 }
 
@@ -113,7 +113,7 @@ export default function HadstonMasterGuidePanel({
   };
 
   const handleLoadAllClick = () => {
-    onLoadAllHadston32();
+    onLoadAllHadston32?.();
     setLoadFeedback('All 32 garden plants (#1–#32) are loaded in your active garden plot.');
     setTimeout(() => setLoadFeedback(null), 4500);
   };

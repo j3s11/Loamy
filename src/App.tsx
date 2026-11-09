@@ -143,7 +143,7 @@ export interface PlantCareLogEntry {
 
 const UI_CONFIG = {
   STORAGE_KEYS: {
-    INVENTORY: 'gws_garden_inventory_v3',
+    INVENTORY: 'gws_garden_inventory_v4',
     COMPLETED_TASKS: 'gws_completed_tasks_v3',
     PLANT_CARE_LOGS: 'gws_plant_care_logs_v1',
     PROTECTED_ALERT_PLANTS: 'gws_protected_alert_plants_v1',
@@ -321,18 +321,19 @@ function exportGardenReportToCsv(
 // ============================================================================
 
 export default function App() {
-  // Default to the user's 32 garden plants (#1–#32)
+  // Start with an empty garden plant inventory unless the user has added or imported plants
   const initialSavedInventory = useMemo<PlantRecord[]>(() => {
     try {
+      localStorage.removeItem('gws_garden_inventory_v3');
       const saved = localStorage.getItem(UI_CONFIG.STORAGE_KEYS.INVENTORY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (err) {
       console.warn('[GardenDashboard] Failed to read inventory from localStorage:', err);
     }
-    return getHadston32InventoryRecords() as PlantRecord[];
+    return [];
   }, []);
 
   // Restore previously selected location & direction from localStorage, or ask on first visit
@@ -854,15 +855,7 @@ export default function App() {
   };
 
   const handleResetInventory = () => {
-    setPlantInventory(getHadston32InventoryRecords() as PlantRecord[]);
-  };
-
-  const handleLoadAllHadston32Plants = () => {
-    const gardenRecords = getHadston32InventoryRecords() as PlantRecord[];
-    setPlantInventory(gardenRecords);
-    if (hasConfiguredLocation) {
-      runGardenAnalysis(false, gardenProfile);
-    }
+    setPlantInventory([]);
   };
 
   const handleLoadAllRhsCatalogPlants = () => {
@@ -2447,7 +2440,6 @@ export default function App() {
               locationName={gardenProfile.locationName}
               rhsHardinessZone={gardenProfile.rhsHardinessZone}
               onAddSingleCatalogPlant={(item) => handleQuickAddCatalogPlant(item)}
-              onLoadAllHadston32={handleLoadAllHadston32Plants}
             />
           </Suspense>
         )}
@@ -2964,25 +2956,17 @@ export default function App() {
                         <span>Load All RHS ({RHS_PLANT_CATALOG.length})</span>
                       </button>
 
-                      <button
-                        type="button"
-                        data-testid="inventory-load-hadston-32"
-                        onClick={handleLoadAllHadston32Plants}
-                        className="min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-emerald-50 text-emerald-900 border border-stone-300 transition cursor-pointer"
-                      >
-                        <BookOpen className="w-3.5 h-3.5 text-emerald-700" />
-                        <span>Reset to Starter 32</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleResetInventory}
-                        aria-label="Reset plant inventory"
-                        className="min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-white hover:bg-stone-100 text-slate-700 border border-stone-300 transition cursor-pointer"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        <span>Reset</span>
-                      </button>
+                      {plantInventory.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleResetInventory}
+                          aria-label="Clear all plants from inventory"
+                          className="min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-white hover:bg-rose-50 text-rose-800 border border-stone-300 transition cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Clear All Plants</span>
+                        </button>
+                      )}
 
                       <button
                         type="button"
@@ -3026,8 +3010,7 @@ export default function App() {
                           { id: 'SHRUBS', label: 'Shrubs & Trees' },
                           { id: 'FLOWERS', label: 'Flowers & Perennials' },
                           { id: 'VEGETABLES', label: 'Vegetables, Fruit & Herbs' },
-                          { id: 'FOLIAGE', label: 'Ferns & Foliage' },
-                          { id: 'HADSTON_32', label: 'Starter 32' }
+                          { id: 'FOLIAGE', label: 'Ferns & Foliage' }
                         ].map((cat) => (
                           <button
                             key={cat.id}
@@ -3246,7 +3229,50 @@ export default function App() {
               )}
 
               {/* Grouped Plant Inventory with Collapsible Category Headings */}
-              {displayedGroupedPlotInventory.length === 0 ? (
+              {plantInventory.length === 0 ? (
+                <div
+                  data-testid="empty-plant-inventory-state"
+                  className="p-6 sm:p-8 text-center rounded-2xl bg-stone-50/80 border border-dashed border-stone-300 space-y-3"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center mx-auto">
+                    <Sprout className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1 max-w-md mx-auto">
+                    <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                      No plants in your garden yet
+                    </h3>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Search the RHS Plant Catalogue above to add plants to your plot, create a custom plant, or import a saved backup file.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsCatalogOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-800 hover:bg-emerald-700 text-white transition cursor-pointer"
+                    >
+                      <Search className="w-3.5 h-3.5 shrink-0" />
+                      <span>Browse RHS Catalogue</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openAddPlantModal}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-stone-100 text-slate-800 border border-stone-300 transition cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                      <span>Add Custom Plant</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleOpenBackupModal}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-stone-100 text-slate-800 border border-stone-300 transition cursor-pointer"
+                    >
+                      <Upload className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                      <span>Import Backup (.json)</span>
+                    </button>
+                  </div>
+                </div>
+              ) : displayedGroupedPlotInventory.length === 0 ? (
                 <div className="p-6 text-center rounded-xl bg-stone-50 border border-stone-200/80 text-xs sm:text-sm text-slate-500">
                   {filterDueThisMonth
                     ? 'No plants match your current "Due This Month" filter.'

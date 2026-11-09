@@ -1923,7 +1923,7 @@ export async function generateHorticulturalAdvice({
 // ============================================================================
 
 export function useGardenAdvisor(
-  initialInventory = ADVISOR_CONFIG.DEFAULT_PLANT_INVENTORY,
+  initialInventory = /** @type {any[]} */ ([]),
   initialProfile = /** @type {any} */ (ADVISOR_CONFIG.DEFAULT_GARDEN_PROFILE)
 ) {
   const [plantInventory, setPlantInventory] = useState(initialInventory);
