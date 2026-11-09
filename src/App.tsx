@@ -1180,11 +1180,11 @@ export default function App() {
         <div className="max-w-6xl mx-auto px-3.5 sm:px-6 lg:px-8 pt-2 sm:pt-3 pb-2.5 space-y-2">
           {/* Row 1: Brand Title & Quick Action Buttons */}
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-stone-900 border border-stone-700/80 flex items-center justify-center shrink-0 shadow-2xs">
                 <PixelSunflowerLogo className="w-5 h-5 sm:w-7 sm:h-7" />
               </div>
-              <div className="flex items-baseline gap-2 min-w-0">
+              <div className="flex items-baseline gap-2 shrink-0">
                 <h1
                   data-testid="app-brand-title"
                   className="text-lg sm:text-2xl font-extrabold tracking-tight text-slate-900 shrink-0"
@@ -1205,7 +1205,7 @@ export default function App() {
                     type="button"
                     data-testid="toggle-location-editor-button"
                     onClick={() => setShowLocationEditor((prev) => !prev)}
-                    className={`inline-flex items-center justify-center gap-1.5 min-h-[34px] sm:min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                    className={`appearance-none inline-flex items-center justify-center gap-1 sm:gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3 rounded-xl text-xs font-semibold leading-none whitespace-nowrap border transition cursor-pointer ${
                       showLocationEditor
                         ? 'bg-emerald-50 border-emerald-600 text-emerald-900'
                         : 'bg-stone-100 hover:bg-stone-200 text-slate-800 border-stone-300'
@@ -1219,7 +1219,7 @@ export default function App() {
                     type="button"
                     onClick={() => runGardenAnalysis(true)}
                     disabled={isLoading}
-                    className="inline-flex items-center justify-center gap-1.5 min-h-[34px] sm:min-h-[38px] px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-800 hover:bg-emerald-700 disabled:bg-emerald-800/60 text-white shadow-2xs transition cursor-pointer"
+                    className="appearance-none inline-flex items-center justify-center gap-1 sm:gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3.5 rounded-xl text-xs sm:text-sm font-semibold leading-none whitespace-nowrap bg-emerald-800 hover:bg-emerald-700 disabled:bg-emerald-800/60 text-white shadow-2xs transition cursor-pointer"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isLoading ? 'animate-spin' : ''}`} />
                     <span className="sm:hidden">{isLoading ? '...' : 'Refresh'}</span>
@@ -1747,14 +1747,14 @@ export default function App() {
               className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3"
             >
               <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                  <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
                     Today at a Glance
                   </span>
                   {(hazardSummary.frostRiskDetected ||
                     hazardSummary.windRockRiskDetected ||
                     hazardSummary.waterloggingRiskDetected) && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200 whitespace-nowrap shrink-0">
                       <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
                       <span>
                         {hazardSummary.frostRiskDetected
@@ -1771,13 +1771,13 @@ export default function App() {
                   type="button"
                   data-testid="toggle-weather-details-button"
                   onClick={() => setShowWeatherDetails((prev) => !prev)}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 hover:text-emerald-950 px-2.5 py-1 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200/80 transition cursor-pointer"
+                  className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-emerald-800 hover:text-emerald-950 px-2 sm:px-2.5 py-1 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200/80 whitespace-nowrap shrink-0 transition cursor-pointer"
                 >
                   <span>{showWeatherDetails ? 'Hide details' : 'More details'}</span>
                   {showWeatherDetails ? (
-                    <ChevronUp className="w-3.5 h-3.5" />
+                    <ChevronUp className="w-3.5 h-3.5 shrink-0" />
                   ) : (
-                    <ChevronDown className="w-3.5 h-3.5" />
+                    <ChevronDown className="w-3.5 h-3.5 shrink-0" />
                   )}
                 </button>
               </div>
@@ -1787,7 +1787,7 @@ export default function App() {
                 <div
                   data-testid="metric-temperature-card"
                   onClick={() => setShowWeatherDetails((prev) => !prev)}
-                  className={`p-3 sm:p-4 rounded-xl border transition cursor-pointer ${
+                  className={`p-2.5 sm:p-4 rounded-xl border transition cursor-pointer ${
                     hazardSummary.frostRiskDetected
                       ? 'bg-sky-50/60 border-sky-200'
                       : 'bg-stone-50/70 border-stone-200/80 hover:border-stone-300'
@@ -1803,7 +1803,7 @@ export default function App() {
                   </div>
                   <div
                     data-testid="current-temperature-value"
-                    className="mt-1 text-xl sm:text-2xl font-bold text-slate-900 tabular-nums"
+                    className="mt-1 text-lg sm:text-2xl font-bold text-slate-900 tabular-nums whitespace-nowrap"
                   >
                     {currentTempC.toFixed(1)}°C
                   </div>
@@ -1825,7 +1825,7 @@ export default function App() {
                 <div
                   data-testid="metric-wind-card"
                   onClick={() => setShowWeatherDetails((prev) => !prev)}
-                  className={`p-3 sm:p-4 rounded-xl border transition cursor-pointer ${
+                  className={`p-2.5 sm:p-4 rounded-xl border transition cursor-pointer ${
                     hazardSummary.windRockRiskDetected
                       ? 'bg-amber-50/60 border-amber-200'
                       : 'bg-stone-50/70 border-stone-200/80 hover:border-stone-300'
@@ -1841,7 +1841,7 @@ export default function App() {
                   </div>
                   <div
                     data-testid="current-wind-mph-value"
-                    className="mt-1 text-xl sm:text-2xl font-bold text-slate-900 tabular-nums"
+                    className="mt-1 text-lg sm:text-2xl font-bold text-slate-900 tabular-nums whitespace-nowrap"
                   >
                     {currentWindSpeedMph.toFixed(1)} <span className="text-xs sm:text-sm font-semibold">mph</span>
                   </div>
@@ -1863,7 +1863,7 @@ export default function App() {
                 <div
                   data-testid="metric-rainfall-card"
                   onClick={() => setShowWeatherDetails((prev) => !prev)}
-                  className={`p-3 sm:p-4 rounded-xl border transition cursor-pointer ${
+                  className={`p-2.5 sm:p-4 rounded-xl border transition cursor-pointer ${
                     hazardSummary.waterloggingRiskDetected
                       ? 'bg-blue-50/60 border-blue-200'
                       : 'bg-stone-50/70 border-stone-200/80 hover:border-stone-300'
@@ -1879,7 +1879,7 @@ export default function App() {
                   </div>
                   <div
                     data-testid="current-rainfall-mm-value"
-                    className="mt-1 text-xl sm:text-2xl font-bold text-slate-900 tabular-nums"
+                    className="mt-1 text-lg sm:text-2xl font-bold text-slate-900 tabular-nums whitespace-nowrap"
                   >
                     {todayRainfallMm.toFixed(1)} <span className="text-xs sm:text-sm font-semibold">mm</span>
                   </div>
