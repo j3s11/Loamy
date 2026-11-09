@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -69,7 +69,28 @@ function getRainfallCategory(mm: number): {
   };
 }
 
-export default function SevenDayRainfallRecharts({
+function CustomTooltip({ active, payload }: any) {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-slate-900/95 text-white p-3 rounded-xl shadow-xl text-xs space-y-1 border border-slate-700 backdrop-blur-xs min-w-[170px]">
+        <div className="font-bold text-slate-100 flex items-center justify-between border-b border-slate-700 pb-1.5">
+          <span>{data.label}</span>
+          <span className="font-mono text-sky-400 font-extrabold text-sm">
+            {data.rainfallMm.toFixed(1)} mm
+          </span>
+        </div>
+        <p className="text-slate-300 pt-1">
+          <span className="font-semibold text-slate-200">Category:</span> {data.category}
+        </p>
+        <p className="text-[11px] text-slate-400 leading-tight">{data.description}</p>
+      </div>
+    );
+  }
+  return null;
+}
+
+const SevenDayRainfallRecharts = React.memo(function SevenDayRainfallRecharts({
   dailyForecast = [],
   locationName = 'Your Garden',
   formatDayFn,
@@ -77,58 +98,44 @@ export default function SevenDayRainfallRecharts({
 }: SevenDayRainfallRechartsProps) {
   const [activeBarIndex, setActiveBarIndex] = useState<number | null>(null);
 
-  // Transform up to next 7 days for Recharts
-  const chartData = (dailyForecast || []).slice(0, 7).map((day, idx) => {
-    const rawVal =
-      day.precipSumMm !== undefined && day.precipSumMm !== null
-        ? Number(day.precipSumMm)
-        : 0;
-    const rainfallMm = Number.isFinite(rawVal) && rawVal >= 0 ? Number(rawVal.toFixed(1)) : 0;
-    const dayLabel = formatDayFn
-      ? formatDayFn(day.date)
-      : idx === 0
-      ? 'Today'
-      : `Day ${idx + 1}`;
+  const { chartData, total7DayRainfallMm, maxSingleDayMm, yAxisMax } = useMemo(() => {
+    let total = 0;
+    let maxDay = 0;
+    const data = (dailyForecast || []).slice(0, 7).map((day, idx) => {
+      const rawVal =
+        day.precipSumMm !== undefined && day.precipSumMm !== null
+          ? Number(day.precipSumMm)
+          : 0;
+      const rainfallMm = Number.isFinite(rawVal) && rawVal >= 0 ? Number(rawVal.toFixed(1)) : 0;
+      total += rainfallMm;
+      if (rainfallMm > maxDay) maxDay = rainfallMm;
 
-    const cat = getRainfallCategory(rainfallMm);
+      const dayLabel = formatDayFn
+        ? formatDayFn(day.date)
+        : idx === 0
+        ? 'Today'
+        : `Day ${idx + 1}`;
+
+      const cat = getRainfallCategory(rainfallMm);
+
+      return {
+        id: day.date || `day-${idx}`,
+        date: day.date,
+        label: dayLabel,
+        rainfallMm,
+        category: cat.label,
+        barColor: cat.barColor,
+        description: cat.description
+      };
+    });
 
     return {
-      id: day.date || `day-${idx}`,
-      date: day.date,
-      label: dayLabel,
-      rainfallMm,
-      category: cat.label,
-      barColor: cat.barColor,
-      description: cat.description
+      chartData: data,
+      total7DayRainfallMm: total,
+      maxSingleDayMm: maxDay,
+      yAxisMax: Math.max(Math.ceil((maxDay + 3) / 5) * 5, 10)
     };
-  });
-
-  const total7DayRainfallMm = chartData.reduce((acc, d) => acc + d.rainfallMm, 0);
-  const maxSingleDayMm = Math.max(...chartData.map((d) => d.rainfallMm), 0);
-  const yAxisMax = Math.max(Math.ceil((maxSingleDayMm + 3) / 5) * 5, 10);
-
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="bg-slate-900/95 text-white p-3 rounded-xl shadow-xl text-xs space-y-1 border border-slate-700 backdrop-blur-xs min-w-[170px]">
-          <div className="font-bold text-slate-100 flex items-center justify-between border-b border-slate-700 pb-1.5">
-            <span>{data.label}</span>
-            <span className="font-mono text-sky-400 font-extrabold text-sm">
-              {data.rainfallMm.toFixed(1)} mm
-            </span>
-          </div>
-          <p className="text-slate-300 pt-1">
-            <span className="font-semibold text-slate-200">Category:</span> {data.category}
-          </p>
-          <p className="text-[11px] text-slate-400 leading-tight">
-            {data.description}
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
+  }, [dailyForecast, formatDayFn]);
 
   return (
     <div
@@ -269,4 +276,6 @@ export default function SevenDayRainfallRecharts({
       )}
     </div>
   );
-}
+});
+
+export default SevenDayRainfallRecharts;

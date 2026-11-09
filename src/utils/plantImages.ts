@@ -338,6 +338,8 @@ export const PLANT_BOTANICAL_IMAGE_MAP: Record<string, PlantImageInfo> = {
   }
 };
 
+const PLANT_IMAGE_LOOKUP_CACHE = new Map<string, PlantImageInfo>();
+
 /**
  * Resolves a verified botanical photo info object by plant ID, name, or photo reference.
  */
@@ -346,94 +348,104 @@ export function getPlantImageInfo(
   photoRef?: number
 ): PlantImageInfo {
   if (photoRef && photoRef >= 1 && photoRef <= 32) {
-    const key = `hadston-${String(photoRef).padStart(2, "0")}`;
+    const key = `hadston-${String(photoRef).padStart(2, '0')}`;
     if (PLANT_BOTANICAL_IMAGE_MAP[key]) {
       return PLANT_BOTANICAL_IMAGE_MAP[key];
     }
   }
 
+  const cacheKey = `${photoRef ?? ''}|${plantIdOrName || ''}`;
+  const cached = PLANT_IMAGE_LOOKUP_CACHE.get(cacheKey);
+  if (cached) return cached;
+
+  let resolved: PlantImageInfo | undefined;
+
   if (plantIdOrName) {
     if (PLANT_BOTANICAL_IMAGE_MAP[plantIdOrName]) {
-      return PLANT_BOTANICAL_IMAGE_MAP[plantIdOrName];
-    }
+      resolved = PLANT_BOTANICAL_IMAGE_MAP[plantIdOrName];
+    } else {
+      const lower = plantIdOrName.toLowerCase();
 
-    const lower = plantIdOrName.toLowerCase();
-
-    // Check for photo ref pattern in name (e.g. "#16 Peony" or "#4 Dwarf Alberta Spruce")
-    const matchHash = lower.match(/#(\d+)/);
-    if (matchHash && matchHash[1]) {
-      const refNum = parseInt(matchHash[1], 10);
-      if (refNum >= 1 && refNum <= 32) {
-        const key = `hadston-${String(refNum).padStart(2, "0")}`;
-        if (PLANT_BOTANICAL_IMAGE_MAP[key]) {
-          return PLANT_BOTANICAL_IMAGE_MAP[key];
+      // Check for photo ref pattern in name (e.g. "#16 Peony" or "#4 Dwarf Alberta Spruce")
+      const matchHash = lower.match(/#(\d+)/);
+      if (matchHash && matchHash[1]) {
+        const refNum = parseInt(matchHash[1], 10);
+        if (refNum >= 1 && refNum <= 32) {
+          const key = `hadston-${String(refNum).padStart(2, '0')}`;
+          if (PLANT_BOTANICAL_IMAGE_MAP[key]) {
+            resolved = PLANT_BOTANICAL_IMAGE_MAP[key];
+          }
         }
       }
-    }
 
-    // Accurate botanical name matches
-    if (lower.includes("farinacea") || lower.includes("mealycup")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-01"];
-    if (lower.includes("goldcrest") || lower.includes("macrocarpa") || lower.includes("lemon cypress")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-02"];
-    if (lower.includes("fuchsia")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-03"];
-    if (lower.includes("conica") || lower.includes("alberta spruce") || lower.includes("picea")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-04"];
-    if (lower.includes("shrub rose") || lower.includes("specimen #5")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-05"];
-    if (lower.includes("scaly male") || lower.includes("dryopteris affinis")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-06"];
-    if (lower.includes("variegated") && lower.includes("hydrangea")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-07"];
-    if (lower.includes("soft shield") || lower.includes("polystichum")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-08"];
-    if (lower.includes("thyme") || lower.includes("thymus")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-09"];
-    if (lower.includes("skimmia")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-10"];
-    if (lower.includes("bamboo") || lower.includes("fargesia")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-11"];
-    if (lower.includes("crabapple") || lower.includes("malus sylvestris")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-12"];
-    if (lower.includes("aster") || lower.includes("michaelmas") || lower.includes("symphyotrichum")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-13"];
-    if (lower.includes("hybrid tea") || lower.includes("specimen #14")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-14"];
-    if (lower.includes("cherry") || lower.includes("prunus serrulata") || lower.includes("kanzan")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-15"];
-    if (lower.includes("peony") || lower.includes("paeonia")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-16"];
-    if (lower.includes("palm") || lower.includes("cordyline") || lower.includes("torbay")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-17"];
-    if (lower.includes("willow") || lower.includes("salix") || lower.includes("hakuro")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-18"];
-    if (lower.includes("hosta halcyon")) return PLANT_BOTANICAL_IMAGE_MAP["cat-08"];
-    if (lower.includes("hosta")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-19"];
-    if (lower.includes("astilbe") || lower.includes("goat")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-20"];
-    if (lower.includes("elder") || lower.includes("sambucus")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-21"];
-    if (lower.includes("border rose") || lower.includes("specimen #22")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-22"];
-    if (lower.includes("verbena") || lower.includes("bonariensis")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-23"];
-    if (lower.includes("annabelle")) return PLANT_BOTANICAL_IMAGE_MAP["cat-07"];
-    if (lower.includes("hydrangea") && lower.includes("28")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-28"];
-    if (lower.includes("hydrangea")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-24"];
-    if (lower.includes("weigela")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-25"];
-    if (lower.includes("camellia")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-26"];
-    if (lower.includes("astrantia") || lower.includes("masterwort")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-27"];
-    if (lower.includes("clematis")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-29"];
-    if (lower.includes("lilac") && !lower.includes("california")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-30"];
-    if (lower.includes("buddleja") || lower.includes("butterfly bush")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-31"];
-    if (lower.includes("ceanothus") || lower.includes("california lilac")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-32"];
-    if (lower.includes("gertrude jekyll") || lower.includes("roald dahl") || lower.includes("iceberg")) return PLANT_BOTANICAL_IMAGE_MAP["cat-01"];
-    if (lower.includes("rhubarb") || lower.includes("beetroot") || lower.includes("boltardy")) return PLANT_BOTANICAL_IMAGE_MAP["cat-02"];
-    if (lower.includes("garlic") || lower.includes("leek") || lower.includes("musselburgh") || lower.includes("allium")) return PLANT_BOTANICAL_IMAGE_MAP["cat-03"];
-    if (lower.includes("broad bean") || lower.includes("aquadulce") || lower.includes("runner bean") || lower.includes("scarlet emperor") || lower.includes("courgette") || lower.includes("potato") || lower.includes("carrot")) return PLANT_BOTANICAL_IMAGE_MAP["cat-04"];
-    if (lower.includes("kale") || lower.includes("cavolo") || lower.includes("broccoli") || lower.includes("rudolph")) return PLANT_BOTANICAL_IMAGE_MAP["cat-05"];
-    if (lower.includes("agapanthus") || lower.includes("african lily") || lower.includes("passiflora") || lower.includes("passionflower")) return PLANT_BOTANICAL_IMAGE_MAP["cat-06"];
-    if (lower.includes("annabelle") || lower.includes("limelight") || lower.includes("petiolaris")) return PLANT_BOTANICAL_IMAGE_MAP["cat-07"];
-    if (lower.includes("hosta") || lower.includes("bergenia") || lower.includes("fatsia")) return PLANT_BOTANICAL_IMAGE_MAP["cat-08"];
-    if (lower.includes("lavender") || lower.includes("lavandula") || lower.includes("nepeta") || lower.includes("catmint") || lower.includes("rosemary") || lower.includes("rosmarinus")) return PLANT_BOTANICAL_IMAGE_MAP["cat-09"];
-    if (lower.includes("amistad") || lower.includes("lupin") || lower.includes("digitalis") || lower.includes("foxglove") || lower.includes("wisteria")) return PLANT_BOTANICAL_IMAGE_MAP["cat-10"];
-    if (lower.includes("apple") || lower.includes("discovery") || lower.includes("plum") || lower.includes("pear") || lower.includes("tomato") || lower.includes("strawberry") || lower.includes("raspberry") || lower.includes("blueberry") || lower.includes("blackcurrant")) return PLANT_BOTANICAL_IMAGE_MAP["cat-11"];
-    if (lower.includes("geranium") || lower.includes("pelargonium") || lower.includes("rozanne") || lower.includes("echinacea") || lower.includes("dahlia") || lower.includes("geum") || lower.includes("crocosmia")) return PLANT_BOTANICAL_IMAGE_MAP["cat-12"];
-    if (lower.includes("hellebore") || lower.includes("lenten") || lower.includes("anemone") || lower.includes("snowdrop") || lower.includes("galanthus") || lower.includes("magnolia") || lower.includes("jasminoides") || lower.includes("amelanchier")) return PLANT_BOTANICAL_IMAGE_MAP["cat-13"];
-    if (lower.includes("sweet pea") || lower.includes("lathyrus") || lower.includes("tulip") || lower.includes("heuchera") || lower.includes("dicentra") || lower.includes("bleeding heart")) return PLANT_BOTANICAL_IMAGE_MAP["cat-14"];
-    if (lower.includes("acer") || lower.includes("maple") || lower.includes("pieris") || lower.includes("photinia") || lower.includes("cornus") || lower.includes("dogwood")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-15"];
-    if (lower.includes("forsythia") || lower.includes("rudbeckia") || lower.includes("daffodil") || lower.includes("narcissus") || lower.includes("choisya") || lower.includes("hamamelis") || lower.includes("witch hazel") || lower.includes("lonicera") || lower.includes("honeysuckle")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-02"];
-    if (lower.includes("fern") || lower.includes("asplenium") || lower.includes("athyrium") || lower.includes("dicksonia")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-06"];
-    if (lower.includes("grass") || lower.includes("stipa") || lower.includes("nassella") || lower.includes("miscanthus") || lower.includes("carex") || lower.includes("sedge") || lower.includes("alchemilla") || lower.includes("euphorbia") || lower.includes("sedum") || lower.includes("hylotelephium")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-11"];
-    if (lower.includes("buxus") || lower.includes("box") || lower.includes("ilex") || lower.includes("holly") || lower.includes("laurus") || lower.includes("bay") || lower.includes("mint") || lower.includes("mentha") || lower.includes("viburnum") || lower.includes("rhododendron")) return PLANT_BOTANICAL_IMAGE_MAP["hadston-10"];
+      if (!resolved) {
+        // Accurate botanical name matches
+        if (lower.includes('farinacea') || lower.includes('mealycup')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-01'];
+        else if (lower.includes('goldcrest') || lower.includes('macrocarpa') || lower.includes('lemon cypress')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-02'];
+        else if (lower.includes('fuchsia')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-03'];
+        else if (lower.includes('conica') || lower.includes('alberta spruce') || lower.includes('picea')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-04'];
+        else if (lower.includes('shrub rose') || lower.includes('specimen #5')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-05'];
+        else if (lower.includes('scaly male') || lower.includes('dryopteris affinis')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-06'];
+        else if (lower.includes('variegated') && lower.includes('hydrangea')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-07'];
+        else if (lower.includes('soft shield') || lower.includes('polystichum')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-08'];
+        else if (lower.includes('thyme') || lower.includes('thymus')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-09'];
+        else if (lower.includes('skimmia')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-10'];
+        else if (lower.includes('bamboo') || lower.includes('fargesia')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-11'];
+        else if (lower.includes('crabapple') || lower.includes('malus sylvestris')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-12'];
+        else if (lower.includes('aster') || lower.includes('michaelmas') || lower.includes('symphyotrichum')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-13'];
+        else if (lower.includes('hybrid tea') || lower.includes('specimen #14')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-14'];
+        else if (lower.includes('cherry') || lower.includes('prunus serrulata') || lower.includes('kanzan')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-15'];
+        else if (lower.includes('peony') || lower.includes('paeonia')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-16'];
+        else if (lower.includes('palm') || lower.includes('cordyline') || lower.includes('torbay')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-17'];
+        else if (lower.includes('willow') || lower.includes('salix') || lower.includes('hakuro')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-18'];
+        else if (lower.includes('hosta halcyon')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-08'];
+        else if (lower.includes('hosta')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-19'];
+        else if (lower.includes('astilbe') || lower.includes('goat')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-20'];
+        else if (lower.includes('elder') || lower.includes('sambucus')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-21'];
+        else if (lower.includes('border rose') || lower.includes('specimen #22')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-22'];
+        else if (lower.includes('verbena') || lower.includes('bonariensis')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-23'];
+        else if (lower.includes('annabelle')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-07'];
+        else if (lower.includes('hydrangea') && lower.includes('28')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-28'];
+        else if (lower.includes('hydrangea')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-24'];
+        else if (lower.includes('weigela')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-25'];
+        else if (lower.includes('camellia')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-26'];
+        else if (lower.includes('astrantia') || lower.includes('masterwort')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-27'];
+        else if (lower.includes('clematis')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-29'];
+        else if (lower.includes('lilac') && !lower.includes('california')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-30'];
+        else if (lower.includes('buddleja') || lower.includes('butterfly bush')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-31'];
+        else if (lower.includes('ceanothus') || lower.includes('california lilac')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-32'];
+        else if (lower.includes('gertrude jekyll') || lower.includes('roald dahl') || lower.includes('iceberg')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-01'];
+        else if (lower.includes('rhubarb') || lower.includes('beetroot') || lower.includes('boltardy')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-02'];
+        else if (lower.includes('garlic') || lower.includes('leek') || lower.includes('musselburgh') || lower.includes('allium')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-03'];
+        else if (lower.includes('broad bean') || lower.includes('aquadulce') || lower.includes('runner bean') || lower.includes('scarlet emperor') || lower.includes('courgette') || lower.includes('potato') || lower.includes('carrot')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-04'];
+        else if (lower.includes('kale') || lower.includes('cavolo') || lower.includes('broccoli') || lower.includes('rudolph')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-05'];
+        else if (lower.includes('agapanthus') || lower.includes('african lily') || lower.includes('passiflora') || lower.includes('passionflower')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-06'];
+        else if (lower.includes('limelight') || lower.includes('petiolaris')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-07'];
+        else if (lower.includes('bergenia') || lower.includes('fatsia')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-08'];
+        else if (lower.includes('lavender') || lower.includes('lavandula') || lower.includes('nepeta') || lower.includes('catmint') || lower.includes('rosemary') || lower.includes('rosmarinus')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-09'];
+        else if (lower.includes('amistad') || lower.includes('lupin') || lower.includes('digitalis') || lower.includes('foxglove') || lower.includes('wisteria')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-10'];
+        else if (lower.includes('apple') || lower.includes('discovery') || lower.includes('plum') || lower.includes('pear') || lower.includes('tomato') || lower.includes('strawberry') || lower.includes('raspberry') || lower.includes('blueberry') || lower.includes('blackcurrant')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-11'];
+        else if (lower.includes('geranium') || lower.includes('pelargonium') || lower.includes('rozanne') || lower.includes('echinacea') || lower.includes('dahlia') || lower.includes('geum') || lower.includes('crocosmia')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-12'];
+        else if (lower.includes('hellebore') || lower.includes('lenten') || lower.includes('anemone') || lower.includes('snowdrop') || lower.includes('galanthus') || lower.includes('magnolia') || lower.includes('jasminoides') || lower.includes('amelanchier')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-13'];
+        else if (lower.includes('sweet pea') || lower.includes('lathyrus') || lower.includes('tulip') || lower.includes('heuchera') || lower.includes('dicentra') || lower.includes('bleeding heart')) resolved = PLANT_BOTANICAL_IMAGE_MAP['cat-14'];
+        else if (lower.includes('acer') || lower.includes('maple') || lower.includes('pieris') || lower.includes('photinia') || lower.includes('cornus') || lower.includes('dogwood')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-15'];
+        else if (lower.includes('forsythia') || lower.includes('rudbeckia') || lower.includes('daffodil') || lower.includes('narcissus') || lower.includes('choisya') || lower.includes('hamamelis') || lower.includes('witch hazel') || lower.includes('lonicera') || lower.includes('honeysuckle')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-02'];
+        else if (lower.includes('fern') || lower.includes('asplenium') || lower.includes('athyrium') || lower.includes('dicksonia')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-06'];
+        else if (lower.includes('grass') || lower.includes('stipa') || lower.includes('nassella') || lower.includes('miscanthus') || lower.includes('carex') || lower.includes('sedge') || lower.includes('alchemilla') || lower.includes('euphorbia') || lower.includes('sedum') || lower.includes('hylotelephium')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-11'];
+        else if (lower.includes('buxus') || lower.includes('box') || lower.includes('ilex') || lower.includes('holly') || lower.includes('laurus') || lower.includes('bay') || lower.includes('mint') || lower.includes('mentha') || lower.includes('viburnum') || lower.includes('rhododendron')) resolved = PLANT_BOTANICAL_IMAGE_MAP['hadston-10'];
+      }
+    }
   }
 
-  // Fallback to botanical specimen with specified name
-  return {
+  const finalInfo: PlantImageInfo = resolved || {
     name: plantIdOrName || 'Botanical Specimen',
     photoUrl: '/assets/plants/cat-01.jpg',
     attribution: 'Wikimedia Commons (Botanical Specimen)',
     description: 'Temperate garden specimen cultivated for UK microclimates',
     accentColor: '#059669'
   };
+
+  PLANT_IMAGE_LOOKUP_CACHE.set(cacheKey, finalInfo);
+  return finalInfo;
 }
 

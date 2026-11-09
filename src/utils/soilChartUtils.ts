@@ -40,42 +40,47 @@ export function prepare30DaySoilSeries(
 ): SoilChartPoint[] {
   if (!Array.isArray(logs) || logs.length === 0) return [];
 
-  const validPoints: SoilChartPoint[] = logs
-    .map((log) => {
-      const parsedDate = new Date(log.recordedAt);
-      if (Number.isNaN(parsedDate.getTime())) return null;
-      return {
-        id: log.id,
-        date: parsedDate,
-        recordedAt: log.recordedAt,
-        locationZone: log.locationZone,
-        soilSaturationPct: Number(log.soilSaturationPct) || 0,
-        rainfall24hMm: Number(log.rainfall24hMm) || 0,
-        rainfall48hMm: Number(log.rainfall48hMm) || 0,
-        soilTemp6cmC: Number(log.soilTemp6cmC) || 0,
-        drainageState: log.drainageState,
-        waterloggingHazard: Boolean(log.waterloggingHazard),
-        frostPocketActive: Boolean(log.frostPocketActive),
-        notes: log.notes || ''
-      };
-    })
-    .filter((item): item is SoilChartPoint => item !== null);
+  const validPoints: SoilChartPoint[] = [];
+  let maxLogTimestamp = -Infinity;
+
+  for (const log of logs) {
+    const parsedDate = new Date(log.recordedAt);
+    const ts = parsedDate.getTime();
+    if (Number.isNaN(ts)) continue;
+    if (ts > maxLogTimestamp) maxLogTimestamp = ts;
+
+    validPoints.push({
+      id: log.id,
+      date: parsedDate,
+      recordedAt: log.recordedAt,
+      locationZone: log.locationZone,
+      soilSaturationPct: Number(log.soilSaturationPct) || 0,
+      rainfall24hMm: Number(log.rainfall24hMm) || 0,
+      rainfall48hMm: Number(log.rainfall48hMm) || 0,
+      soilTemp6cmC: Number(log.soilTemp6cmC) || 0,
+      drainageState: log.drainageState,
+      waterloggingHazard: Boolean(log.waterloggingHazard),
+      frostPocketActive: Boolean(log.frostPocketActive),
+      notes: log.notes || ''
+    });
+  }
 
   if (validPoints.length === 0) return [];
 
-  // Determine anchor timestamp (either provided referenceDate or latest log timestamp)
-  const newestTime = referenceDate
-    ? referenceDate.getTime()
-    : Math.max(...validPoints.map((p) => p.date.getTime()));
+  const newestTime = referenceDate ? referenceDate.getTime() : maxLogTimestamp;
   const cutoffTime = newestTime - windowDays * 24 * 60 * 60 * 1000;
+  const upperBoundTime = newestTime + 86400000;
 
   return validPoints
-    .filter((p) => p.date.getTime() >= cutoffTime && p.date.getTime() <= newestTime + 86400000)
+    .filter((p) => {
+      const t = p.date.getTime();
+      return t >= cutoffTime && t <= upperBoundTime;
+    })
     .sort((a, b) => a.date.getTime() - b.date.getTime());
 }
 
 /**
- * Computes summary statistics across the 30-day chronological series.
+ * Computes summary statistics across the 30-day chronological series in a single O(N) pass.
  */
 export function compute30DayTrendMetrics(series: SoilChartPoint[]): SoilTrendSummary {
   if (!Array.isArray(series) || series.length === 0) {
@@ -90,26 +95,31 @@ export function compute30DayTrendMetrics(series: SoilChartPoint[]): SoilTrendSum
     };
   }
 
-  const values = series.map((p) => p.soilSaturationPct);
-  const minSaturationPct = Number(Math.min(...values).toFixed(1));
-  const maxSaturationPct = Number(Math.max(...values).toFixed(1));
-  const avgSaturationPct = Number(
-    (values.reduce((sum, v) => sum + v, 0) / values.length).toFixed(1)
-  );
-  const firstVal = values[0];
-  const latestSaturationPct = Number(values[values.length - 1].toFixed(1));
-  const netChange30dPct = Number((latestSaturationPct - firstVal).toFixed(1));
-  const daysAboveWaterloggingThreshold = series.filter(
-    (p) => p.soilSaturationPct >= 85.0 || p.waterloggingHazard
-  ).length;
+  let minVal = Infinity;
+  let maxVal = -Infinity;
+  let sumVal = 0;
+  let daysAboveThreshold = 0;
+
+  for (const point of series) {
+    const val = point.soilSaturationPct;
+    if (val < minVal) minVal = val;
+    if (val > maxVal) maxVal = val;
+    sumVal += val;
+    if (val >= 85.0 || point.waterloggingHazard) {
+      daysAboveThreshold += 1;
+    }
+  }
+
+  const firstVal = series[0].soilSaturationPct;
+  const latestSaturationPct = Number(series[series.length - 1].soilSaturationPct.toFixed(1));
 
   return {
     pointCount: series.length,
-    minSaturationPct,
-    maxSaturationPct,
-    avgSaturationPct,
+    minSaturationPct: Number(minVal.toFixed(1)),
+    maxSaturationPct: Number(maxVal.toFixed(1)),
+    avgSaturationPct: Number((sumVal / series.length).toFixed(1)),
     latestSaturationPct,
-    netChange30dPct,
-    daysAboveWaterloggingThreshold
+    netChange30dPct: Number((latestSaturationPct - firstVal).toFixed(1)),
+    daysAboveWaterloggingThreshold: daysAboveThreshold
   };
 }

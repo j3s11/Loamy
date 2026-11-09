@@ -79,6 +79,13 @@ const HadstonMasterGuidePanel = lazy(() => import('./components/HadstonMasterGui
 const HADSTON_BY_REF_MAP = new Map<number, RhsCatalogPlant>();
 const HADSTON_BY_LOWER_NAME_MAP = new Map<string, RhsCatalogPlant>();
 const CATALOG_BY_ID_MAP = new Map<string, RhsCatalogPlant>();
+const CATEGORY_SEARCH_LABEL_MAP = new Map<PlantGroupCategoryId, string>();
+const TENDER_OR_HALF_HARDY_SET = new Set(['H1a', 'H1b', 'H1c', 'H2', 'H3', 'H4']);
+
+for (const def of PLANT_CATEGORY_DEFINITIONS) {
+  CATEGORY_SEARCH_LABEL_MAP.set(def.id, `${def.label} ${def.shortLabel}`.toLowerCase());
+}
+
 for (const catalogPlant of RHS_PLANT_CATALOG) {
   if (typeof catalogPlant.photoRef === 'number') {
     HADSTON_BY_REF_MAP.set(catalogPlant.photoRef, catalogPlant);
@@ -199,16 +206,23 @@ const UI_CONFIG = {
 // 2. HELPER FUNCTIONS (UK UNITS & CSV EXPORT)
 // ============================================================================
 
+const UK_DAY_FORMATTER = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'short',
+  day: '2-digit',
+  month: 'short',
+  timeZone: 'Europe/London'
+});
+const UK_DAY_FORMAT_CACHE = new Map<string, string>();
+
 function formatUkDay(isoDateString?: string | null): string {
   if (!isoDateString) return 'N/A';
+  const cached = UK_DAY_FORMAT_CACHE.get(isoDateString);
+  if (cached) return cached;
   try {
     const date = new Date(isoDateString);
-    return new Intl.DateTimeFormat('en-GB', {
-      weekday: 'short',
-      day: '2-digit',
-      month: 'short',
-      timeZone: 'Europe/London'
-    }).format(date);
+    const formatted = UK_DAY_FORMATTER.format(date);
+    UK_DAY_FORMAT_CACHE.set(isoDateString, formatted);
+    return formatted;
   } catch {
     return isoDateString;
   }
@@ -520,8 +534,7 @@ export default function App() {
     if (!q) return plantInventory;
     return plantInventory.filter((p: PlantRecord) => {
       const catId = resolvePlantGroupCategory(p);
-      const catDef = PLANT_CATEGORY_DEFINITIONS.find((d) => d.id === catId);
-      const catLabel = catDef ? `${catDef.label} ${catDef.shortLabel}`.toLowerCase() : '';
+      const catLabel = CATEGORY_SEARCH_LABEL_MAP.get(catId) || '';
       return (
         p.name.toLowerCase().includes(q) ||
         p.location.toLowerCase().includes(q) ||
@@ -936,11 +949,20 @@ export default function App() {
     return bySubstring || null;
   }, []);
 
+  // Precompute master catalog match once per plant in inventory
+  const plantMasterMap = useMemo(() => {
+    const map = new Map<string, RhsCatalogPlant | null>();
+    for (const p of plantInventory) {
+      map.set(p.id, findMatchingMasterPlant(p));
+    }
+    return map;
+  }, [plantInventory, findMatchingMasterPlant]);
+
   // Precompute monthly care status for each plant in inventory for the current UK month
   const plantMonthlyCareMap = useMemo(() => {
     const map = new Map<string, PlantMonthlyCareStatus>();
     for (const p of plantInventory) {
-      const master = findMatchingMasterPlant(p);
+      const master = plantMasterMap.get(p.id);
       map.set(
         p.id,
         getPlantMonthlyCareStatus(
@@ -956,25 +978,27 @@ export default function App() {
       );
     }
     return map;
-  }, [plantInventory, findMatchingMasterPlant, currentUkMonthIdx]);
+  }, [plantInventory, plantMasterMap, currentUkMonthIdx]);
 
   // Precompute health score for each plant in inventory based on growth stage and recent weather alerts
   const plantHealthMap = useMemo(() => {
     const map = new Map<string, PlantHealthAssessment>();
     const activeWeatherAlerts = advice?.weatherAlerts || [];
     const activeHazardSummary = weatherData?.hazardSummary || {};
-    const protectedEntries = Object.entries(protectedAlertPlants);
+    const activeProtectedKeysLower: string[] = [];
+    for (const [key, isChecked] of Object.entries(protectedAlertPlants)) {
+      if (isChecked) activeProtectedKeysLower.push(key.toLowerCase());
+    }
 
     for (const p of plantInventory) {
-      const master = findMatchingMasterPlant(p);
+      const master = plantMasterMap.get(p.id);
       const careLogKey = master?.catalogId || p.id;
       const careLog = plantCareLogs[careLogKey];
       const strippedName = p.name.replace(/^#\d+\s+/, '').toLowerCase();
 
-      const isProtectedInAlertChecklist = protectedEntries.some(
-        ([key, isChecked]) =>
-          Boolean(isChecked) && key.toLowerCase().includes(strippedName)
-      );
+      const isProtectedInAlertChecklist =
+        activeProtectedKeysLower.length > 0 &&
+        activeProtectedKeysLower.some((keyLower) => keyLower.includes(strippedName));
 
       map.set(
         p.id,
@@ -1002,11 +1026,11 @@ export default function App() {
     return map;
   }, [
     plantInventory,
+    plantMasterMap,
     advice?.weatherAlerts,
     weatherData?.hazardSummary,
     protectedAlertPlants,
-    plantCareLogs,
-    findMatchingMasterPlant
+    plantCareLogs
   ]);
 
   const dueThisMonthTotalCount = useMemo(() => {
@@ -3113,10 +3137,8 @@ export default function App() {
                         {isGroupOpen && (
                           <div className="p-3 sm:p-4 bg-white border-t border-stone-200/80 grid grid-cols-1 md:grid-cols-2 gap-3">
                             {group.plants.map((plant: PlantRecord) => {
-                              const isTender = ['H1a', 'H1b', 'H1c', 'H2', 'H3', 'H4'].includes(
-                                plant.rhsRating
-                              );
-                              const masterMatch = findMatchingMasterPlant(plant);
+                              const isTender = TENDER_OR_HALF_HARDY_SET.has(plant.rhsRating);
+                              const masterMatch = plantMasterMap.get(plant.id) ?? null;
                               const monthlyCare = plantMonthlyCareMap.get(plant.id);
                               const health = plantHealthMap.get(plant.id);
                               const careLogKey = masterMatch?.catalogId || plant.id;

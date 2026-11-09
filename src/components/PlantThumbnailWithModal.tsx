@@ -17,7 +17,7 @@ const DIMENSION_CLASSES = {
   lg: 'w-14 h-14 rounded-xl'
 } as const;
 
-export default function PlantThumbnailWithModal({
+const PlantThumbnailWithModal = React.memo(function PlantThumbnailWithModal({
   plantId,
   plantName,
   photoRef,
@@ -94,7 +94,9 @@ export default function PlantThumbnailWithModal({
       )}
     </>
   );
-}
+});
+
+export default PlantThumbnailWithModal;
 
 interface PlantImageZoomModalProps {
   imageInfo: PlantImageInfo;

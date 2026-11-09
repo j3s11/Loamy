@@ -1180,6 +1180,13 @@ export const PLANT_CATEGORY_DEFINITIONS: PlantCategoryDefinition[] = [
 const CATALOG_BY_REF = new Map<number, RhsCatalogPlant>();
 const CATALOG_BY_ID = new Map<string, RhsCatalogPlant>();
 const CATALOG_BY_NAME = new Map<string, RhsCatalogPlant>();
+const CATEGORY_DEF_BY_ID = new Map<PlantGroupCategoryId, PlantCategoryDefinition>();
+const CATEGORY_SEARCH_LABEL_BY_ID = new Map<PlantGroupCategoryId, string>();
+
+for (const def of PLANT_CATEGORY_DEFINITIONS) {
+  CATEGORY_DEF_BY_ID.set(def.id, def);
+  CATEGORY_SEARCH_LABEL_BY_ID.set(def.id, `${def.label} ${def.shortLabel}`.toLowerCase());
+}
 
 for (const item of RHS_PLANT_CATALOG) {
   if (typeof item.photoRef === 'number') {
@@ -1188,7 +1195,23 @@ for (const item of RHS_PLANT_CATALOG) {
   CATALOG_BY_ID.set(item.catalogId.toLowerCase(), item);
   CATALOG_BY_NAME.set(item.name.toLowerCase(), item);
   CATALOG_BY_NAME.set(item.commonName.toLowerCase(), item);
+  if (item.botanicalName) {
+    CATALOG_BY_NAME.set(item.botanicalName.toLowerCase(), item);
+  }
 }
+
+const FOLIAGE_REGEX =
+  /\b(fern|dryopteris|polystichum|asplenium|athyrium|dicksonia|hosta|plantain lily|bamboo|fargesia|cypress|cupressus|cordyline|cabbage palm|torbay palm|grass|sedge|carex|miscanthus|stipa|nassella|festuca|fatsia|bergenia|euphorbia|phormium)\b/i;
+
+const VEGETABLES_REGEX =
+  /\b(thyme|thymus|rosemary|mint|mentha|basil|parsley|chive|oregano|bay tree|laurus|broccoli|brassica|kale|cavolo|bean|vicia|phaseolus|garlic|rhubarb|rheum|tomato|solanum|potato|carrot|daucus|beetroot|beta|lettuce|courgette|cucurbita|onion|leek|porrum|chilli|pepper|strawberry|fragaria|raspberry|rubus|currant|ribes|gooseberry|blueberry|vaccinium|citrus|meyer lemon|lemon tree|vegetable|edible)\b/i;
+
+const SHRUBS_REGEX =
+  /\b(rose|rosa|hydrangea|spruce|picea|skimmia|crabapple|malus|apple|cherry|plum|prunus|pear|pyrus|willow|salix|elder|elderberry|sambucus|weigela|camellia|lilac|syringa|buddleja|butterfly bush|ceanothus|acer|maple|azalea|rhododendron|pieris|viburnum|forsythia|hamamelis|witch hazel|cornus|dogwood|choisya|photinia|magnolia|holly|ilex|yew|taxus|box|buxus|amelanchier|juneberry|wisteria|trachelospermum|star jasmine|lonicera|honeysuckle|shrub|tree)\b/i;
+
+const RESOLVED_CATEGORY_CACHE = new Map<string, PlantGroupCategoryId>();
+const TENDER_RHS_RATINGS_SET = new Set(['H1a', 'H1b', 'H1c', 'H2', 'H3']);
+const COLD_SEASON_MONTHS_SET = new Set([9, 10, 11, 0, 1]);
 
 /**
  * Resolves the display group category ('SHRUBS' | 'FLOWERS' | 'VEGETABLES' | 'FOLIAGE')
@@ -1214,6 +1237,10 @@ export function resolvePlantGroupCategory(plant: {
     return rawCat as PlantGroupCategoryId;
   }
 
+  const cacheKey = `${plant.catalogId || plant.id || ''}|${plant.photoRef ?? ''}|${plant.name || plant.commonName || ''}|${rawCat}`;
+  const cached = RESOLVED_CATEGORY_CACHE.get(cacheKey);
+  if (cached) return cached;
+
   const nameStr = String(plant.name || plant.commonName || '').trim();
   const lowerName = nameStr.toLowerCase();
 
@@ -1222,6 +1249,9 @@ export function resolvePlantGroupCategory(plant: {
   if (typeof plant.photoRef === 'number') {
     matchedCatalog = CATALOG_BY_REF.get(plant.photoRef);
   }
+  if (!matchedCatalog && plant.catalogId) {
+    matchedCatalog = CATALOG_BY_ID.get(plant.catalogId.toLowerCase());
+  }
   if (!matchedCatalog) {
     const refMatch = nameStr.match(/^#(\d+)\b/);
     if (refMatch) {
@@ -1229,11 +1259,12 @@ export function resolvePlantGroupCategory(plant: {
     }
   }
   if (!matchedCatalog && plant.id) {
-    const idRefMatch = String(plant.id).match(/hadston-(?:plt-)?0*(\d+)/i);
+    const idStr = String(plant.id);
+    const idRefMatch = idStr.match(/hadston-(?:plt-)?0*(\d+)/i);
     if (idRefMatch) {
       matchedCatalog = CATALOG_BY_REF.get(Number(idRefMatch[1]));
     } else {
-      matchedCatalog = CATALOG_BY_ID.get(String(plant.id).toLowerCase());
+      matchedCatalog = CATALOG_BY_ID.get(idStr.toLowerCase());
     }
   }
   if (!matchedCatalog && lowerName) {
@@ -1254,38 +1285,53 @@ export function resolvePlantGroupCategory(plant: {
 
   const catalogCategory = matchedCatalog?.category || rawCat;
 
-  // 1. Ferns, Hostas, Bamboo & Architectural Foliage
-  if (
-    /\b(fern|dryopteris|polystichum|asplenium|athyrium|dicksonia|hosta|plantain lily|bamboo|fargesia|cypress|cupressus|cordyline|cabbage palm|torbay palm|grass|sedge|carex|miscanthus|stipa|nassella|festuca|fatsia|bergenia|euphorbia|phormium)\b/i.test(
-      effectiveText
-    )
-  ) {
-    return 'FOLIAGE';
+  let result: PlantGroupCategoryId = 'FLOWERS';
+  if (FOLIAGE_REGEX.test(effectiveText)) {
+    result = 'FOLIAGE';
+  } else if (catalogCategory === 'EDIBLE_ALLOTMENT' || VEGETABLES_REGEX.test(effectiveText)) {
+    result = 'VEGETABLES';
+  } else if (catalogCategory === 'SHRUB_TREE' || SHRUBS_REGEX.test(effectiveText)) {
+    result = 'SHRUBS';
   }
 
-  // 2. Vegetables, Culinary Herbs & Edibles
-  if (
-    catalogCategory === 'EDIBLE_ALLOTMENT' ||
-    /\b(thyme|thymus|rosemary|mint|mentha|basil|parsley|chive|oregano|bay tree|laurus|broccoli|brassica|kale|cavolo|bean|vicia|phaseolus|garlic|rhubarb|rheum|tomato|solanum|potato|carrot|daucus|beetroot|beta|lettuce|courgette|cucurbita|onion|leek|porrum|chilli|pepper|strawberry|fragaria|raspberry|rubus|currant|ribes|gooseberry|blueberry|vaccinium|citrus|meyer lemon|lemon tree|vegetable|edible)\b/i.test(
-      effectiveText
-    )
-  ) {
-    return 'VEGETABLES';
-  }
-
-  // 3. Shrubs & Trees
-  if (
-    catalogCategory === 'SHRUB_TREE' ||
-    /\b(rose|rosa|hydrangea|spruce|picea|skimmia|crabapple|malus|apple|cherry|plum|prunus|pear|pyrus|willow|salix|elder|elderberry|sambucus|weigela|camellia|lilac|syringa|buddleja|butterfly bush|ceanothus|acer|maple|azalea|rhododendron|pieris|viburnum|forsythia|hamamelis|witch hazel|cornus|dogwood|choisya|photinia|magnolia|holly|ilex|yew|taxus|box|buxus|amelanchier|juneberry|wisteria|trachelospermum|star jasmine|lonicera|honeysuckle|shrub|tree)\b/i.test(
-      effectiveText
-    )
-  ) {
-    return 'SHRUBS';
-  }
-
-  // 4. Default to Flowers & Perennials (includes Herbaceous Perennials, Climbers, Flowering Patio Plants)
-  return 'FLOWERS';
+  RESOLVED_CATEGORY_CACHE.set(cacheKey, result);
+  return result;
 }
+
+// Pre-index all RHS catalog plants once at module initialization for O(1) category filtering and fast text search
+interface IndexedRhsCatalogEntry {
+  item: RhsCatalogPlant;
+  resolvedGroup: PlantGroupCategoryId;
+  photoRefExactToken: string;
+  searchableBlob: string;
+}
+
+const INDEXED_RHS_CATALOG: IndexedRhsCatalogEntry[] = RHS_PLANT_CATALOG.map((item) => {
+  const resolvedGroup = resolvePlantGroupCategory(item);
+  const groupSearchable = CATEGORY_SEARCH_LABEL_BY_ID.get(resolvedGroup) || '';
+  const photoRefExactToken = item.photoRef !== undefined ? `#${item.photoRef}` : '';
+  const searchableBlob = [
+    item.name,
+    item.commonName,
+    item.botanicalName || '',
+    item.rhsRating,
+    item.recommendedLocation,
+    item.clayNotes || '',
+    item.soilAndSun || '',
+    item.characteristicsAndNative || '',
+    groupSearchable,
+    ...(item.vulnerabilities || [])
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  return {
+    item,
+    resolvedGroup,
+    photoRefExactToken,
+    searchableBlob
+  };
+});
 
 /**
  * Groups an array of plant inventory records by category in canonical display order.
@@ -1300,29 +1346,33 @@ export function groupPlantInventoryByCategory<
   }
 >(plants: T[], includeEmpty: boolean = false): GroupedPlantInventorySection<T>[] {
   const buckets = new Map<PlantGroupCategoryId, T[]>();
+  const tenderCounts = new Map<PlantGroupCategoryId, number>();
   for (const def of PLANT_CATEGORY_DEFINITIONS) {
     buckets.set(def.id, []);
+    tenderCounts.set(def.id, 0);
   }
 
   for (const plant of plants || []) {
     const catId = resolvePlantGroupCategory(plant);
-    const list = buckets.get(catId) || buckets.get('FLOWERS')!;
-    list.push(plant);
+    const targetCat = buckets.has(catId) ? catId : 'FLOWERS';
+    buckets.get(targetCat)!.push(plant);
+    if (TENDER_RHS_RATINGS_SET.has(String(plant.rhsRating || ''))) {
+      tenderCounts.set(targetCat, (tenderCounts.get(targetCat) || 0) + 1);
+    }
   }
 
-  const tenderRatings = new Set(['H1a', 'H1b', 'H1c', 'H2', 'H3']);
-
-  return PLANT_CATEGORY_DEFINITIONS.map((def) => {
-    const groupPlants = buckets.get(def.id) || [];
-    const tenderCount = groupPlants.filter((p) =>
-      tenderRatings.has(String(p.rhsRating || ''))
-    ).length;
-    return {
-      ...def,
-      plants: groupPlants,
-      tenderCount
-    };
-  }).filter((section) => includeEmpty || section.plants.length > 0);
+  const sections: GroupedPlantInventorySection<T>[] = [];
+  for (const def of PLANT_CATEGORY_DEFINITIONS) {
+    const groupPlants = buckets.get(def.id)!;
+    if (includeEmpty || groupPlants.length > 0) {
+      sections.push({
+        ...def,
+        plants: groupPlants,
+        tenderCount: tenderCounts.get(def.id) || 0
+      });
+    }
+  }
+  return sections;
 }
 
 /**
@@ -1344,10 +1394,10 @@ export function getHadston32InventoryRecords() {
  * Converts ALL plants in the complete RHS Plant Catalogue into active PlantInventory records.
  */
 export function getAllRhsCatalogInventoryRecords() {
-  return RHS_PLANT_CATALOG.map((item) => ({
+  return INDEXED_RHS_CATALOG.map(({ item, resolvedGroup }) => ({
     id: item.catalogId,
     name: item.photoRef ? `#${item.photoRef} ${item.name}` : item.name,
-    category: resolvePlantGroupCategory(item),
+    category: resolvedGroup,
     rhsRating: item.rhsRating,
     location: item.recommendedLocation,
     growthStage: item.defaultOctGrowthStage,
@@ -1357,58 +1407,59 @@ export function getAllRhsCatalogInventoryRecords() {
 
 /**
  * Searches the RHS Plant Catalog by query string and optional category filter.
- * Supports categoryFilter === 'HADSTON_32' to show only the user's 32 garden plants,
- * or any display group ('SHRUBS', 'FLOWERS', 'VEGETABLES', 'FOLIAGE') or raw category.
+ * Uses pre-indexed lowercase blobs and pre-resolved categories for zero-allocation filtering.
  */
 export function searchRhsPlantCatalog(
   query: string = '',
   categoryFilter: string = 'ALL'
 ): RhsCatalogPlant[] {
   const cleanQuery = query.trim().toLowerCase();
+  const results: RhsCatalogPlant[] = [];
 
-  return RHS_PLANT_CATALOG.filter((item) => {
-    const resolvedGroup = resolvePlantGroupCategory(item);
+  for (const entry of INDEXED_RHS_CATALOG) {
+    const { item, resolvedGroup, photoRefExactToken, searchableBlob } = entry;
     const matchesCategory =
       categoryFilter === 'ALL' ||
       (categoryFilter === 'HADSTON_32' && Boolean(item.isHadstonCollection)) ||
       item.category === categoryFilter ||
       resolvedGroup === categoryFilter;
-    if (!matchesCategory) return false;
-    if (!cleanQuery) return true;
+    if (!matchesCategory) continue;
 
-    const groupDef = PLANT_CATEGORY_DEFINITIONS.find((d) => d.id === resolvedGroup);
-    const groupSearchable = groupDef ? `${groupDef.label} ${groupDef.shortLabel}`.toLowerCase() : '';
+    if (
+      !cleanQuery ||
+      photoRefExactToken === cleanQuery ||
+      searchableBlob.includes(cleanQuery)
+    ) {
+      results.push(item);
+    }
+  }
 
-    return (
-      item.name.toLowerCase().includes(cleanQuery) ||
-      item.commonName.toLowerCase().includes(cleanQuery) ||
-      (item.botanicalName && item.botanicalName.toLowerCase().includes(cleanQuery)) ||
-      (item.photoRef !== undefined && `#${item.photoRef}` === cleanQuery) ||
-      item.rhsRating.toLowerCase().includes(cleanQuery) ||
-      item.recommendedLocation.toLowerCase().includes(cleanQuery) ||
-      (item.clayNotes && item.clayNotes.toLowerCase().includes(cleanQuery)) ||
-      (item.soilAndSun && item.soilAndSun.toLowerCase().includes(cleanQuery)) ||
-      (item.characteristicsAndNative && item.characteristicsAndNative.toLowerCase().includes(cleanQuery)) ||
-      groupSearchable.includes(cleanQuery) ||
-      item.vulnerabilities.some((v) => v.toLowerCase().includes(cleanQuery))
-    );
-  });
+  return results;
 }
 
 const UK_MONTH_METADATA = [
-  { index: 0, full: 'january', short: 'jan', label: 'January' },
-  { index: 1, full: 'february', short: 'feb', label: 'February' },
-  { index: 2, full: 'march', short: 'mar', label: 'March' },
-  { index: 3, full: 'april', short: 'apr', label: 'April' },
-  { index: 4, full: 'may', short: 'may', label: 'May' },
-  { index: 5, full: 'june', short: 'jun', label: 'June' },
-  { index: 6, full: 'july', short: 'jul', label: 'July' },
-  { index: 7, full: 'august', short: 'aug', label: 'August' },
-  { index: 8, full: 'september', short: 'sep', label: 'September' },
-  { index: 9, full: 'october', short: 'oct', label: 'October' },
-  { index: 10, full: 'november', short: 'nov', label: 'November' },
-  { index: 11, full: 'december', short: 'dec', label: 'December' }
+  { index: 0, full: 'january', short: 'jan', label: 'January', directRegex: /\b(january|jant?)\b/i },
+  { index: 1, full: 'february', short: 'feb', label: 'February', directRegex: /\b(february|febt?)\b/i },
+  { index: 2, full: 'march', short: 'mar', label: 'March', directRegex: /\b(march|mart?)\b/i },
+  { index: 3, full: 'april', short: 'apr', label: 'April', directRegex: /\b(april|aprt?)\b/i },
+  { index: 4, full: 'may', short: 'may', label: 'May', directRegex: /\b(may|mayt?)\b/i },
+  { index: 5, full: 'june', short: 'jun', label: 'June', directRegex: /\b(june|junt?)\b/i },
+  { index: 6, full: 'july', short: 'jul', label: 'July', directRegex: /\b(july|jult?)\b/i },
+  { index: 7, full: 'august', short: 'aug', label: 'August', directRegex: /\b(august|augt?)\b/i },
+  { index: 8, full: 'september', short: 'sep', label: 'September', directRegex: /\b(september|sept?)\b/i },
+  { index: 9, full: 'october', short: 'oct', label: 'October', directRegex: /\b(october|octt?)\b/i },
+  { index: 10, full: 'november', short: 'nov', label: 'November', directRegex: /\b(november|novt?)\b/i },
+  { index: 11, full: 'december', short: 'dec', label: 'December', directRegex: /\b(december|dect?)\b/i }
 ];
+
+const UK_MONTH_INDEX_BY_SHORT = new Map<string, number>(
+  UK_MONTH_METADATA.map((m) => [m.short, m.index])
+);
+
+const UK_MONTH_RANGE_REGEX =
+  /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s*(?:to|–|-|through)\s*(?:early\s+|mid[- ]+|late\s+)?(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/gi;
+
+const MONTH_MENTION_CACHE = new Map<string, boolean>();
 
 /**
  * Checks whether a horticultural schedule string (e.g. "April to July", "Late October to Early November")
@@ -1417,35 +1468,36 @@ const UK_MONTH_METADATA = [
 export function doesTextMentionUkMonth(scheduleText?: string | null, monthIndex: number = 0): boolean {
   if (!scheduleText) return false;
   const targetIdx = ((monthIndex % 12) + 12) % 12;
-  const lower = String(scheduleText).toLowerCase();
+  const cacheKey = `${targetIdx}::${scheduleText}`;
+  const cached = MONTH_MENTION_CACHE.get(cacheKey);
+  if (cached !== undefined) return cached;
 
-  // Direct mention of the month name or 3-letter abbreviation
+  const lower = String(scheduleText).toLowerCase();
   const targetMeta = UK_MONTH_METADATA[targetIdx];
-  const directRegex = new RegExp(`\\b(${targetMeta.full}|${targetMeta.short}t?)\\b`, 'i');
-  if (directRegex.test(lower)) {
+
+  if (targetMeta.directRegex.test(lower)) {
+    MONTH_MENTION_CACHE.set(cacheKey, true);
     return true;
   }
 
-  // Check month ranges like "April to July", "May–September", "March - August"
-  const rangePattern =
-    /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s*(?:to|–|-|through)\s*(?:early\s+|mid[- ]+|late\s+)?(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/gi;
-
+  UK_MONTH_RANGE_REGEX.lastIndex = 0;
   let match: RegExpExecArray | null;
-  while ((match = rangePattern.exec(lower)) !== null) {
-    const startToken = match[1].slice(0, 3);
-    const endToken = match[2].slice(0, 3);
-    const startMeta = UK_MONTH_METADATA.find((m) => m.short === startToken);
-    const endMeta = UK_MONTH_METADATA.find((m) => m.short === endToken);
-    if (startMeta && endMeta) {
-      if (startMeta.index <= endMeta.index) {
-        if (targetIdx >= startMeta.index && targetIdx <= endMeta.index) return true;
-      } else {
-        // Wrap-around winter range (e.g. Nov to Feb)
-        if (targetIdx >= startMeta.index || targetIdx <= endMeta.index) return true;
+  while ((match = UK_MONTH_RANGE_REGEX.exec(lower)) !== null) {
+    const startIdx = UK_MONTH_INDEX_BY_SHORT.get(match[1].slice(0, 3));
+    const endIdx = UK_MONTH_INDEX_BY_SHORT.get(match[2].slice(0, 3));
+    if (startIdx !== undefined && endIdx !== undefined) {
+      const inRange =
+        startIdx <= endIdx
+          ? targetIdx >= startIdx && targetIdx <= endIdx
+          : targetIdx >= startIdx || targetIdx <= endIdx;
+      if (inRange) {
+        MONTH_MENTION_CACHE.set(cacheKey, true);
+        return true;
       }
     }
   }
 
+  MONTH_MENTION_CACHE.set(cacheKey, false);
   return false;
 }
 
@@ -1479,21 +1531,23 @@ export function getPlantMonthlyCareStatus(
   const monthName = UK_MONTH_METADATA[safeMonthIdx].label;
 
   let catalogMatch: RhsCatalogPlant | undefined;
-  if (typeof plant?.photoRef === 'number') {
-    catalogMatch = CATALOG_BY_REF.get(plant.photoRef);
-  }
-  const nameStr = String(plant?.name || plant?.commonName || '').trim();
-  if (!catalogMatch && nameStr) {
-    const refMatch = nameStr.match(/^#(\d+)\b/);
-    if (refMatch) {
-      catalogMatch = CATALOG_BY_REF.get(Number(refMatch[1]));
-    } else {
-      const stripped = nameStr.replace(/^#\d+\s+/, '').toLowerCase();
-      catalogMatch = CATALOG_BY_NAME.get(nameStr.toLowerCase()) || CATALOG_BY_NAME.get(stripped);
+  if (!plant?.feedWindowUk && !plant?.pruneMonthsUk) {
+    if (typeof plant?.photoRef === 'number') {
+      catalogMatch = CATALOG_BY_REF.get(plant.photoRef);
     }
-  }
-  if (!catalogMatch && plant?.id) {
-    catalogMatch = CATALOG_BY_ID.get(String(plant.id).toLowerCase());
+    const nameStr = String(plant?.name || plant?.commonName || '').trim();
+    if (!catalogMatch && nameStr) {
+      const refMatch = nameStr.match(/^#(\d+)\b/);
+      if (refMatch) {
+        catalogMatch = CATALOG_BY_REF.get(Number(refMatch[1]));
+      } else {
+        const stripped = nameStr.replace(/^#\d+\s+/, '').toLowerCase();
+        catalogMatch = CATALOG_BY_NAME.get(nameStr.toLowerCase()) || CATALOG_BY_NAME.get(stripped);
+      }
+    }
+    if (!catalogMatch && plant?.id) {
+      catalogMatch = CATALOG_BY_ID.get(String(plant.id).toLowerCase());
+    }
   }
 
   const feedWindow = plant?.feedWindowUk || catalogMatch?.feedWindowUk || '';
@@ -1502,9 +1556,8 @@ export function getPlantMonthlyCareStatus(
 
   const feedDue = doesTextMentionUkMonth(feedWindow, safeMonthIdx);
   const pruneDue = doesTextMentionUkMonth(pruneWindow, safeMonthIdx);
-  const isColdSeason = [9, 10, 11, 0, 1].includes(safeMonthIdx); // Oct - Feb
   const winterProtectDue =
-    isColdSeason && ['H1a', 'H1b', 'H1c', 'H2', 'H3'].includes(rhsRating);
+    COLD_SEASON_MONTHS_SET.has(safeMonthIdx) && TENDER_RHS_RATINGS_SET.has(rhsRating);
 
   const isDueThisMonth = feedDue || pruneDue || winterProtectDue;
 
@@ -1588,9 +1641,10 @@ export function calculatePlantHealthScore(
 ): PlantHealthAssessment {
   let score = 100;
   const factors: string[] = [];
+  const rhsRating = String(plant?.rhsRating || 'H4').trim();
   const factorItems: PlantHealthFactorItem[] = [
     {
-      label: `Base Plant Health (${String(plant?.rhsRating || 'H4').trim()} Hardiness)`,
+      label: `Base Plant Health (${rhsRating} Hardiness)`,
       impact: '100%',
       tone: 'NEUTRAL'
     }
@@ -1598,10 +1652,10 @@ export function calculatePlantHealthScore(
 
   const rawStage = String(plant?.growthStage || 'Active Vegetative Growth').trim();
   const lowerStage = rawStage.toLowerCase();
-  const rhsRating = String(plant?.rhsRating || 'H4').trim();
   const lowerName = String(plant?.name || '')
     .replace(/^#\d+\s+/, '')
     .toLowerCase();
+  const lowerNamePrimary = lowerName.split('(')[0].trim();
   const vulnsText = Array.isArray(plant?.vulnerabilities)
     ? plant.vulnerabilities.join(' ').toLowerCase()
     : '';
@@ -1665,44 +1719,46 @@ export function calculatePlantHealthScore(
   let matchedAlertsCount = 0;
   const matchedHazardTypes = new Set<string>();
 
-  for (const alert of alerts) {
-    const affectedList = Array.isArray(alert?.affectedPlants) ? alert.affectedPlants : [];
-    const isPlantNamed = affectedList.some((affectedName) => {
-      const cleanAffected = String(affectedName || '')
-        .replace(/^#\d+\s+/, '')
-        .toLowerCase();
-      if (!cleanAffected || !lowerName) return false;
-      return (
-        lowerName.includes(cleanAffected) ||
-        cleanAffected.includes(lowerName) ||
-        lowerName.split('(')[0].trim() === cleanAffected.split('(')[0].trim()
-      );
-    });
-
-    if (isPlantNamed) {
-      matchedAlertsCount += 1;
-      const hazardKey = String(alert.hazardType || 'WEATHER').toUpperCase();
-      matchedHazardTypes.add(hazardKey);
-
-      const basePenalty =
-        alert.severity === 'CRITICAL' ? 24 : alert.severity === 'WARNING' ? 16 : 8;
-      const stageAdjustedPenalty = Math.round(basePenalty * stageMultiplier);
-      score -= stageAdjustedPenalty;
-      const readableHazard = hazardKey.replace(/_/g, ' ').toLowerCase();
-      factors.push(
-        `${alert.severity || 'ACTIVE'} ${readableHazard} alert (-${stageAdjustedPenalty})`
-      );
-      factorItems.push({
-        label: `Active ${alert.severity || 'Weather'} ${readableHazard} alert`,
-        impact: `-${stageAdjustedPenalty}%`,
-        tone: alert.severity === 'CRITICAL' ? 'CRITICAL' : 'WARNING'
+  if (lowerName && alerts.length > 0) {
+    for (const alert of alerts) {
+      const affectedList = Array.isArray(alert?.affectedPlants) ? alert.affectedPlants : [];
+      const isPlantNamed = affectedList.some((affectedName) => {
+        const cleanAffected = String(affectedName || '')
+          .replace(/^#\d+\s+/, '')
+          .toLowerCase();
+        if (!cleanAffected) return false;
+        return (
+          lowerName.includes(cleanAffected) ||
+          cleanAffected.includes(lowerName) ||
+          lowerNamePrimary === cleanAffected.split('(')[0].trim()
+        );
       });
+
+      if (isPlantNamed) {
+        matchedAlertsCount += 1;
+        const hazardKey = String(alert.hazardType || 'WEATHER').toUpperCase();
+        matchedHazardTypes.add(hazardKey);
+
+        const basePenalty =
+          alert.severity === 'CRITICAL' ? 24 : alert.severity === 'WARNING' ? 16 : 8;
+        const stageAdjustedPenalty = Math.round(basePenalty * stageMultiplier);
+        score -= stageAdjustedPenalty;
+        const readableHazard = hazardKey.replace(/_/g, ' ').toLowerCase();
+        factors.push(
+          `${alert.severity || 'ACTIVE'} ${readableHazard} alert (-${stageAdjustedPenalty})`
+        );
+        factorItems.push({
+          label: `Active ${alert.severity || 'Weather'} ${readableHazard} alert`,
+          impact: `-${stageAdjustedPenalty}%`,
+          tone: alert.severity === 'CRITICAL' ? 'CRITICAL' : 'WARNING'
+        });
+      }
     }
   }
 
   // 3. Check general weather hazards against plant RHS hardiness, growth stage & vulnerabilities
   const hazards = context.hazardSummary || {};
-  const isTender = ['H1a', 'H1b', 'H1c', 'H2', 'H3'].includes(rhsRating);
+  const isTender = TENDER_RHS_RATINGS_SET.has(rhsRating);
   const isHalfHardyH4 = rhsRating === 'H4';
 
   if (

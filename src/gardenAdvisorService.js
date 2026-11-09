@@ -1543,6 +1543,20 @@ function logClientEvent(level, action, meta = {}) {
   return entry;
 }
 
+const UK_DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'Europe/London'
+});
+
+const UK_TIME_FORMATTER = new Intl.DateTimeFormat('en-GB', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+  timeZone: 'Europe/London'
+});
+
 /**
  * Formats an ISO timestamp or Date into UK date & 24-hour time (e.g. "02 Nov 2026, 15:14").
  */
@@ -1556,21 +1570,7 @@ export function formatUkDateTime(isoDateOrTimestamp) {
         : new Date();
     const validDate = Number.isNaN(dateObj.getTime()) ? new Date() : dateObj;
 
-    const datePart = new Intl.DateTimeFormat('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      timeZone: 'Europe/London'
-    }).format(validDate);
-
-    const timePart = new Intl.DateTimeFormat('en-GB', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-      timeZone: 'Europe/London'
-    }).format(validDate);
-
-    return `${datePart}, ${timePart}`;
+    return `${UK_DATE_FORMATTER.format(validDate)}, ${UK_TIME_FORMATTER.format(validDate)}`;
   } catch {
     return 'Just now';
   }
