@@ -4,7 +4,7 @@
  * Dependencies: npm install @google/genai
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 const SchemaType = {
   OBJECT: 'OBJECT',
@@ -1593,10 +1593,31 @@ export function buildRuleBasedHorticulturalAdvice(
   const placeName = profile.locationName || 'Your Garden Plot';
   const shortTown = placeName.split(',')[0].trim() || 'Your Garden';
 
-  const tenderPlants = plantInventory
+  const cleanPlantName = (name) => String(name || '').replace(/^#\d+\s+/, '').trim();
+  const safeInventory = Array.isArray(plantInventory) ? plantInventory : [];
+
+  const tenderPlants = safeInventory
     .filter((p) => ['H1a', 'H1b', 'H1c', 'H2', 'H3'].includes(p.rhsRating))
-    .map((p) => p.name);
-  const allPlantNames = plantInventory.map((p) => p.name);
+    .map((p) => cleanPlantName(p.name));
+  const allPlantNames = safeInventory.map((p) => cleanPlantName(p.name));
+
+  const windVulnerablePlants = safeInventory
+    .filter((p) => {
+      const lowerName = String(p.name || '').toLowerCase();
+      const lowerLoc = String(p.location || '').toLowerCase();
+      const lowerVuln = Array.isArray(p.vulnerabilities) ? p.vulnerabilities.join(' ').toLowerCase() : '';
+      return (
+        lowerName.includes('broccoli') ||
+        lowerName.includes('acer') ||
+        lowerName.includes('rose') ||
+        lowerName.includes('rosa') ||
+        lowerName.includes('buddleja') ||
+        lowerName.includes('cordyline') ||
+        lowerLoc.includes('exposed') ||
+        lowerVuln.includes('wind')
+      );
+    })
+    .map((p) => cleanPlantName(p.name));
 
   const firstColdDay = daily.find((d) => d.minTempC !== null && d.minTempC <= 4.0) || daily[0];
   const firstWindyDay =
@@ -1609,15 +1630,21 @@ export function buildRuleBasedHorticulturalAdvice(
   const weatherAlerts = [];
 
   if (hazard.frostRiskDetected || (hazard.lowestForecastTempC !== undefined && hazard.lowestForecastTempC <= 3.5)) {
+    const affectedFrostPlants = tenderPlants.length > 0 ? tenderPlants : allPlantNames.slice(0, 3);
+    const frostTargetLabel =
+      affectedFrostPlants.length > 0
+        ? affectedFrostPlants.slice(0, 3).join(', ')
+        : 'tender patio containers and half-hardy border crowns';
+
     const frostAction = isSouthFacing
-      ? `South-Facing Plot (${shortTown}): Move terracotta patio pots (Citrus × meyeri) into a frost-free porch or cold glasshouse; apply a double layer of 30gsm horticultural fleece over Dahlia foliage. Because south-facing beds receive direct morning sun after frost, shade Acer palmatum from rapid morning thaw scorch.`
-      : `${aspectCode}-Facing Plot (${shortTown}): Shaded ${aspectCode.toLowerCase()}-facing clay stays frozen longer after sub-2°C nights. Move Citrus × meyeri under frost-free glass immediately, lift or double-fleece H3 Dahlia crowns, and shield emerging buds from rapid thaw damage.`;
+      ? `South-Facing Plot (${shortTown}): Shelter or fleece ${frostTargetLabel} before dusk and move tender pots into a frost-free porch or cold glasshouse. Because south-facing beds receive direct morning sun after frost, shade frosted foliage from rapid morning thaw scorch.`
+      : `${aspectCode}-Facing Plot (${shortTown}): Shaded ${aspectCode.toLowerCase()}-facing clay stays frozen longer after sub-2°C nights. Protect ${frostTargetLabel} with 30gsm horticultural fleece or dry bark mulch and shield emerging buds from rapid thaw damage.`;
 
     weatherAlerts.push({
       severity: hazard.lowestForecastTempC <= 0.5 ? 'CRITICAL' : 'WARNING',
       hazardType: 'FROST',
       forecastWindow: firstColdDay?.date ? `${firstColdDay.date} (02:00 - 07:30 GMT)` : 'Next 48 Hours Overnight',
-      affectedPlants: tenderPlants.length > 0 ? tenderPlants : allPlantNames.slice(0, 2),
+      affectedPlants: affectedFrostPlants,
       actionRequired: frostAction
     });
   }
@@ -1631,66 +1658,95 @@ export function buildRuleBasedHorticulturalAdvice(
     peakGustMph >= 22.0 ||
     (hazard.maxForecastGustKmh !== undefined && hazard.maxForecastGustKmh >= 35)
   ) {
+    const windTargetLabel =
+      windVulnerablePlants.length > 0
+        ? windVulnerablePlants.slice(0, 3).join(', ')
+        : 'tall shrubs, standards, and staked stems';
+
     weatherAlerts.push({
       severity: 'WARNING',
       hazardType: 'HIGH_WIND',
       forecastWindow: firstWindyDay?.date ? `${firstWindyDay.date} (Peak Gusts ${peakGustMph} mph)` : 'Incoming Frontal Passage',
-      affectedPlants: plantInventory
-        .filter((p) => p.name.toLowerCase().includes('broccoli') || p.name.toLowerCase().includes('acer') || p.location.toLowerCase().includes('exposed'))
-        .map((p) => p.name),
-      actionRequired:
-        `Check stakes and soft rubber ties on overwintering brassicas in ${shortTown}; heel in soil collars firmly around stems to prevent wind-rock cavities collecting freezing water in heavy clay.`
+      affectedPlants: windVulnerablePlants,
+      actionRequired: `Check stakes and soft rubber ties on ${windTargetLabel} in ${shortTown}; heel in soil collars firmly around stems to prevent wind-rock cavities collecting freezing water in heavy clay.`
     });
   }
 
   if (hazard.waterloggingRiskDetected || weatherAlerts.length === 0) {
+    const affectedWaterloggingPlants = tenderPlants.length > 0 ? tenderPlants : allPlantNames.slice(0, 3);
     weatherAlerts.push({
       severity: hazard.waterloggingRiskDetected ? 'WARNING' : 'INFO',
       hazardType: 'WATERLOGGING',
       forecastWindow: `7-Day ${shortTown} Basin Outlook`,
-      affectedPlants: tenderPlants.length > 0 ? tenderPlants : allPlantNames.slice(0, 2),
+      affectedPlants: affectedWaterloggingPlants,
       actionRequired: isSouthFacing
         ? 'Remove saucers from beneath patio containers and raise terracotta pots onto pot feet; take advantage of south-facing sunshine to aerate the top 3cm of raised beds without treading on wet clay borders.'
         : `Remove saucers from beneath patio containers and raise pots onto feet; ${aspectCode.toLowerCase()}-facing clay borders evaporate slowly in autumn/winter—strictly use timber staging boards to avoid compaction.`
     });
   }
 
-  const seasonalTasks = [
-    {
-      taskTitle: isSouthFacing
-        ? 'Lift or Deep-Mulch Tender Dahlia Tubers in South-Facing Clay'
-        : `Lift Tender Dahlia Tubers From Cold ${aspectCode}-Facing Clay`,
-      category: 'PROTECTION',
-      targetPlants: plantInventory.filter((p) => p.rhsRating === 'H3' || p.name.includes('Dahlia')).map((p) => p.name),
-      instructions: isSouthFacing
-        ? `In ${shortTown} (RHS ${profile.rhsHardinessZone}), a sheltered south-facing border against a warm wall is 2°C warmer, but heavy clay still holds winter water. Once blackened by frost, either lift tubers to store in dry grit at 5°C, or cover crowns with a 15cm dry bark & bracken mound under a rain-shedding cloche.`
-        : `In ${shortTown} (RHS ${profile.rhsHardinessZone}), ${aspectCode.toLowerCase()}-facing heavy clay receives little winter sun and stays waterlogged, rotting H3 tubers. Once blackened by frost, cut stems to 15cm, lift tubers to dry upside-down, and store frost-free in barely damp grit.`
-    },
-    {
-      taskTitle: 'Earth Up & Stake Overwintering Brassicas Against Wind-Rock',
-      category: 'SOIL_CARE',
-      targetPlants: plantInventory.filter((p) => p.name.includes('Broccoli') || p.rhsRating === 'H5').map((p) => p.name),
-      instructions:
-        `Draw 8–10cm of soil up around the lower stem of Purple Sprouting Broccoli and firm gently with your boot ahead of ${peakGustMph} mph gusts. Fit fine insect/pigeon netting over bamboo hoops tautly so wet snow cannot flatten the crop.`
-    },
-    {
-      taskTitle: 'Transition Patio Citrus to Bright Frost-Free Shelter',
-      category: 'PROTECTION',
-      targetPlants: plantInventory.filter((p) => p.rhsRating === 'H2' || p.name.includes('Citrus')).map((p) => p.name),
-      instructions: isSouthFacing
-        ? 'Keep Meyer Lemon pots against a warm south-facing house wall wrapped in fleece during mild spells, then move into an unheated conservatory or bright porch (min 2–5°C) before air frost strikes.'
-        : 'Because your plot is not south-facing, outdoor patio pots cool rapidly at dusk—move Meyer Lemon pots indoors to a bright, frost-free conservatory or cool porch (min 2–5°C) now and water sparingly.'
-    },
-    {
-      taskTitle: 'Clear Fallen Leaves & Mulch Acid-Loving Maples',
-      category: 'PRUNING',
-      targetPlants: plantInventory.filter((p) => p.name.includes('Acer')).map((p) => p.name),
-      instructions:
-        aspectCode === 'EAST' || isSouthFacing
-          ? 'Position Acer palmatum where it is shielded from early morning sun after frost to prevent leaf/bud scorch. Wait until full leaf drop before structural pruning and apply a 5cm leafmould mulch.'
-          : 'Wait until full leaf drop before carrying out any structural formative pruning on Acer palmatum to avoid bleeding sap. Apply 5cm leafmould or pine bark mulch around the drip-line, keeping the graft union clear.'
-    }
-  ];
+  let seasonalTasks = [];
+
+  if (safeInventory.length === 0) {
+    seasonalTasks = [
+      {
+        taskTitle: isSouthFacing
+          ? 'Mulch & Insulate South-Facing Heavy Clay Borders Before Hard Frost'
+          : `Protect Cold ${aspectCode}-Facing Clay Borders From Winter Compaction`,
+        category: 'PROTECTION',
+        targetPlants: [],
+        instructions: isSouthFacing
+          ? `In ${shortTown} (RHS ${profile.rhsHardinessZone}), south-facing beds warm faster by day, but heavy clay still holds winter water. Spread a 5–8cm blanket of composted bark over border soil and elevate patio containers onto pot feet.`
+          : `In ${shortTown} (RHS ${profile.rhsHardinessZone}), ${aspectCode.toLowerCase()}-facing heavy clay receives little winter sun and stays saturated. Avoid walking on wet borders and apply a 5–8cm organic mulch to insulate soil structure.`
+      },
+      {
+        taskTitle: 'Inspect Stakes, Ties & Windbreaks Ahead of Gale-Force Gusts',
+        category: 'SOIL_CARE',
+        targetPlants: [],
+        instructions: `Firm soil collars around tall stems ahead of ${peakGustMph} mph gusts so wind-rock cavities do not pool freezing rainwater around root crowns.`
+      },
+      {
+        taskTitle: 'Clear Fallen Leaves From Crowns & Check Container Drainage',
+        category: 'PRUNING',
+        targetPlants: [],
+        instructions: 'Remove wet decaying leaves from perennial crowns to prevent botrytis and slug shelter, and ensure all patio pot drainage holes are unblocked.'
+      }
+    ];
+  } else {
+    const h3OrTender = safeInventory.filter((p) => ['H1a', 'H1b', 'H1c', 'H2', 'H3'].includes(p.rhsRating)).map((p) => cleanPlantName(p.name));
+    const hardyShrubsOrCrops = safeInventory.filter((p) => ['H4', 'H5', 'H6', 'H7'].includes(p.rhsRating)).map((p) => cleanPlantName(p.name));
+
+    seasonalTasks = [
+      {
+        taskTitle:
+          h3OrTender.length > 0
+            ? `Insulate & Shelter Tender Plants (${h3OrTender.slice(0, 2).join(', ')})`
+            : isSouthFacing
+            ? 'Mulch & Protect Border Crowns in South-Facing Clay'
+            : `Mulch & Protect Crowns in Cold ${aspectCode}-Facing Clay`,
+        category: 'PROTECTION',
+        targetPlants: h3OrTender.length > 0 ? h3OrTender : allPlantNames.slice(0, 2),
+        instructions: isSouthFacing
+          ? `In ${shortTown} (RHS ${profile.rhsHardinessZone}), a sheltered south-facing border against a warm wall is 2°C warmer, but heavy clay still holds winter water. Apply a 10cm dry bark mulch around root zones and fleece tender growth before sub-zero nights.`
+          : `In ${shortTown} (RHS ${profile.rhsHardinessZone}), ${aspectCode.toLowerCase()}-facing heavy clay receives little winter sun and stays waterlogged. Move container specimens under frost-free shelter and apply a deep dry bark mound over border crowns.`
+      },
+      {
+        taskTitle: 'Firm Soil Collars & Check Stakes Against Wind-Rock',
+        category: 'SOIL_CARE',
+        targetPlants: windVulnerablePlants.length > 0 ? windVulnerablePlants : hardyShrubsOrCrops.slice(0, 3),
+        instructions: `Check stakes and soft ties and firm soil gently around stems ahead of ${peakGustMph} mph gusts so wind-rock cavities cannot collect freezing water in heavy clay.`
+      },
+      {
+        taskTitle: 'Elevate Patio Pots & Clear Fallen Foliage From Crowns',
+        category: 'PRUNING',
+        targetPlants: allPlantNames.slice(0, 3),
+        instructions:
+          aspectCode === 'EAST' || isSouthFacing
+            ? 'Raise all containers onto pot feet to prevent waterlogging and shield frost-sensitive buds from rapid early morning thaw scorch.'
+            : 'Raise containers onto pot feet to prevent root rot in cold wet compost, and clear decaying leaves from around plant crowns.'
+      }
+    ];
+  }
 
   const rainMm = hazard.cumulativePrecip48hMm ?? 19.0;
   const minT = hazard.lowestForecastTempC !== undefined && hazard.lowestForecastTempC < 90 ? hazard.lowestForecastTempC : -0.5;
@@ -1949,6 +2005,23 @@ export function useGardenAdvisor(
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(/** @type {string | null} */ (null));
+
+  // Automatically re-evaluate horticultural weather alerts & seasonal tasks whenever plantInventory or gardenProfile changes
+  useEffect(() => {
+    const activeWeather = weatherData || {
+      hazardSummary: {
+        frostRiskDetected: true,
+        lowestForecastTempC: -0.5,
+        windRockRiskDetected: true,
+        maxForecastGustMph: 29.1,
+        maxForecastGustKmh: 46.8,
+        waterloggingRiskDetected: false,
+        cumulativePrecip48hMm: 19.0
+      },
+      dailyForecast: [{ date: new Date().toISOString().split('T')[0], minTempC: 1.4, peakWindGustMph: 29.1, peakWindGustKmh: 46.8 }]
+    };
+    setAdvice(buildRuleBasedHorticulturalAdvice(activeWeather, plantInventory, gardenProfile));
+  }, [plantInventory, gardenProfile, weatherData]);
 
   const runGardenAnalysis = useCallback(
     async (forceWeatherRefresh = false, overrideProfile = /** @type {any} */ (null)) => {

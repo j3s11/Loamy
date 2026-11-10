@@ -142,7 +142,7 @@ export interface PlantCareLogEntry {
 
 const UI_CONFIG = {
   STORAGE_KEYS: {
-    INVENTORY: 'gws_garden_inventory_v4',
+    INVENTORY: 'gws_garden_inventory_v5',
     COMPLETED_TASKS: 'gws_completed_tasks_v3',
     PLANT_CARE_LOGS: 'gws_plant_care_logs_v1',
     PROTECTED_ALERT_PLANTS: 'gws_protected_alert_plants_v1',
@@ -320,14 +320,36 @@ function exportGardenReportToCsv(
 // ============================================================================
 
 export default function App() {
-  // Start with an empty garden plant inventory unless the user has added or imported plants
+  // Start with an empty garden plant inventory unless the user has added or imported custom plants
   const initialSavedInventory = useMemo<PlantRecord[]>(() => {
     try {
       localStorage.removeItem('gws_garden_inventory_v3');
-      const saved = localStorage.getItem(UI_CONFIG.STORAGE_KEYS.INVENTORY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+      const savedV5 = localStorage.getItem(UI_CONFIG.STORAGE_KEYS.INVENTORY);
+      if (savedV5) {
+        const parsed = JSON.parse(savedV5);
+        if (Array.isArray(parsed)) {
+          return parsed.map((p) => ({
+            ...p,
+            name: String(p.name || '').replace(/^#\d+\s+/, '').trim()
+          }));
+        }
+      }
+      // Migrate from v4 only if it wasn't the old 32-plant default collection
+      const savedV4 = localStorage.getItem('gws_garden_inventory_v4');
+      localStorage.removeItem('gws_garden_inventory_v4');
+      if (savedV4) {
+        const parsedV4 = JSON.parse(savedV4);
+        if (Array.isArray(parsedV4)) {
+          const isOld32Default =
+            parsedV4.length === 32 &&
+            parsedV4.every((p) => String(p?.id || '').startsWith('hadston-') || /^#\d+\s+/.test(String(p?.name || '')));
+          if (!isOld32Default) {
+            return parsedV4.map((p) => ({
+              ...p,
+              name: String(p.name || '').replace(/^#\d+\s+/, '').trim()
+            }));
+          }
+        }
       }
     } catch (err) {
       console.warn('[GardenDashboard] Failed to read inventory from localStorage:', err);
@@ -944,9 +966,7 @@ export default function App() {
       const resolvedCategory = resolvePlantGroupCategory(catalogPlant);
       const newPlant: PlantRecord = {
         id: catalogPlant.catalogId,
-        name: catalogPlant.photoRef
-          ? `#${catalogPlant.photoRef} ${catalogPlant.name}`
-          : catalogPlant.name,
+        name: catalogPlant.name.replace(/^#\d+\s+/, '').trim(),
         category: resolvedCategory,
         rhsRating: catalogPlant.rhsRating,
         location: catalogPlant.recommendedLocation,
@@ -969,9 +989,7 @@ export default function App() {
 
     const newRecords: PlantRecord[] = toAdd.map((catalogPlant) => ({
       id: catalogPlant.catalogId,
-      name: catalogPlant.photoRef
-        ? `#${catalogPlant.photoRef} ${catalogPlant.name}`
-        : catalogPlant.name,
+      name: catalogPlant.name.replace(/^#\d+\s+/, '').trim(),
       category: resolvePlantGroupCategory(catalogPlant),
       rhsRating: catalogPlant.rhsRating,
       location: catalogPlant.recommendedLocation,
@@ -2131,7 +2149,11 @@ export default function App() {
                   </span>
                 ) : (
                   weatherAlerts.length > 0 && (
-                    <span className="text-[11px] text-slate-500">Tap an alert to tick off protected plants</span>
+                    <span className="text-[11px] text-slate-500">
+                      {plantInventory.length > 0
+                        ? 'Tap an alert to tick off protected plants'
+                        : 'Tap an alert to view recommended actions'}
+                    </span>
                   )
                 )}
               </div>
@@ -2161,6 +2183,7 @@ export default function App() {
                       >
                         <button
                           type="button"
+                          data-testid={`weather-alert-toggle-${idx}`}
                           onClick={() =>
                             setExpandedAlertIndices((prev) => ({
                               ...prev,
@@ -2210,56 +2233,61 @@ export default function App() {
 
                         {isExpanded && (
                           <div className="px-3.5 pb-3.5 pt-2.5 border-t border-stone-200/60 space-y-2.5 bg-white/75">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <span className="text-[11px] font-semibold text-slate-600">
-                                Quick Protection Checklist — tap each plant as you fleece, mulch, or shelter it:
-                              </span>
-                              {plantCount > 0 && (
-                                <button
-                                  type="button"
-                                  data-testid={`alert-mark-all-protected-${idx}`}
-                                  onClick={() => {
-                                    setProtectedAlertPlants((prev) => {
-                                      const next = { ...prev };
-                                      for (const pName of affectedList) {
-                                        next[`${alert.hazardType}::${pName}`] = !allProtected;
-                                      }
-                                      return next;
-                                    });
-                                  }}
-                                  className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
-                                >
-                                  {allProtected ? 'Reset checklist' : 'Mark all protected'}
-                                </button>
-                              )}
-                            </div>
-
-                            <div className="flex flex-wrap gap-1.5">
-                              {affectedList.map((plantName: string, pIdx: number) => {
-                                const alertKey = `${alert.hazardType}::${plantName}`;
-                                const isProtected = Boolean(protectedAlertPlants[alertKey]);
-                                return (
+                            {plantCount > 0 && (
+                              <>
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="text-[11px] font-semibold text-slate-600">
+                                    Quick Protection Checklist — tap each plant as you fleece, mulch, or shelter it:
+                                  </span>
                                   <button
-                                    key={pIdx}
                                     type="button"
-                                    data-testid={`alert-plant-check-${idx}-${pIdx}`}
-                                    onClick={() => toggleProtectedAlertPlant(alertKey)}
-                                    className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border transition cursor-pointer ${
-                                      isProtected
-                                        ? 'bg-emerald-50 text-emerald-900 border-emerald-300 line-through decoration-emerald-600/70'
-                                        : 'bg-white text-slate-800 border-stone-300 hover:border-emerald-600'
-                                    }`}
+                                    data-testid={`alert-mark-all-protected-${idx}`}
+                                    onClick={() => {
+                                      setProtectedAlertPlants((prev) => {
+                                        const next = { ...prev };
+                                        for (const pName of affectedList) {
+                                          next[`${alert.hazardType}::${pName}`] = !allProtected;
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                    className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
                                   >
-                                    {isProtected ? (
-                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                                    ) : (
-                                      <Circle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                    )}
-                                    <span>{plantName}</span>
+                                    {allProtected ? 'Reset checklist' : 'Mark all protected'}
                                   </button>
-                                );
-                              })}
-                            </div>
+                                </div>
+
+                                <div className="flex flex-wrap gap-1.5">
+                                  {affectedList.map((rawPlantName: string, pIdx: number) => {
+                                    const plantName = String(rawPlantName || '').replace(/^#\d+\s+/, '').trim();
+                                    const alertKey = `${alert.hazardType}::${plantName}`;
+                                    const isProtected = Boolean(
+                                      protectedAlertPlants[alertKey] || protectedAlertPlants[`${alert.hazardType}::${rawPlantName}`]
+                                    );
+                                    return (
+                                      <button
+                                        key={pIdx}
+                                        type="button"
+                                        data-testid={`alert-plant-check-${idx}-${pIdx}`}
+                                        onClick={() => toggleProtectedAlertPlant(alertKey)}
+                                        className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border transition cursor-pointer ${
+                                          isProtected
+                                            ? 'bg-emerald-50 text-emerald-900 border-emerald-300 line-through decoration-emerald-600/70'
+                                            : 'bg-white text-slate-800 border-stone-300 hover:border-emerald-600'
+                                        }`}
+                                      >
+                                        {isProtected ? (
+                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                                        ) : (
+                                          <Circle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                        )}
+                                        <span>{plantName}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </>
+                            )}
 
                             <p className="text-xs sm:text-sm text-slate-800 leading-relaxed">
                               <strong className="font-semibold text-slate-900">Recommended Action: </strong>

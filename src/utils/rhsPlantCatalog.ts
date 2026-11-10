@@ -1381,7 +1381,7 @@ export function groupPlantInventoryByCategory<
 export function getHadston32InventoryRecords() {
   return HADSTON_GARDEN_COLLECTION_32.map((item) => ({
     id: item.catalogId,
-    name: `#${item.photoRef} ${item.name}`,
+    name: item.name,
     category: resolvePlantGroupCategory(item),
     rhsRating: item.rhsRating,
     location: item.recommendedLocation,
@@ -1396,7 +1396,7 @@ export function getHadston32InventoryRecords() {
 export function getAllRhsCatalogInventoryRecords() {
   return INDEXED_RHS_CATALOG.map(({ item, resolvedGroup }) => ({
     id: item.catalogId,
-    name: item.photoRef ? `#${item.photoRef} ${item.name}` : item.name,
+    name: item.name,
     category: resolvedGroup,
     rhsRating: item.rhsRating,
     location: item.recommendedLocation,

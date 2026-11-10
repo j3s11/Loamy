@@ -858,3 +858,63 @@ test('getDynamicFortnightlyCareSchedule omits unselected plants when inventory i
   assert.ok(!fuchsiaOnlySchedule.week1To2.pruningAndDeadheading.includes('Hosta (#19)'));
 });
 
+test('buildRuleBasedHorticulturalAdvice omits unselected plants when inventory is empty and strips # photoRef prefixes', () => {
+  const sampleWeather = {
+    hazardSummary: {
+      frostRiskDetected: true,
+      lowestForecastTempC: -0.5,
+      windRockRiskDetected: true,
+      maxForecastGustMph: 29.1,
+      maxForecastGustKmh: 46.8,
+      waterloggingRiskDetected: false,
+      cumulativePrecip48hMm: 19.0
+    },
+    dailyForecast: [{ date: '2026-11-09', minTempC: -0.5, peakWindGustMph: 29.1, peakWindGustKmh: 46.8 }]
+  };
+
+  const emptyAdvice = buildRuleBasedHorticulturalAdvice(sampleWeather, [], {
+    ...ADVISOR_CONFIG.DEFAULT_GARDEN_PROFILE,
+    locationName: 'Hadston, Morpeth, Northumberland',
+    rhsHardinessZone: 'H4',
+    isSouthFacing: true,
+    gardenAspect: 'SOUTH'
+  });
+
+  for (const alert of emptyAdvice.weatherAlerts) {
+    assert.equal(alert.affectedPlants.length, 0);
+    assert.ok(!alert.actionRequired.includes('Citrus'));
+    assert.ok(!alert.actionRequired.includes('Dahlia'));
+    assert.ok(!alert.actionRequired.includes('Acer'));
+    assert.ok(!alert.actionRequired.includes('#3'));
+  }
+
+  const singlePlantAdvice = buildRuleBasedHorticulturalAdvice(
+    sampleWeather,
+    [
+      {
+        id: 'hadston-03',
+        name: '#3 Fuchsia (Fuchsia hybrid)',
+        rhsRating: 'H3',
+        location: 'Sheltered Courtyard Pot',
+        growthStage: 'Late Flowering / Pre-Dormancy',
+        vulnerabilities: ['Frost below -2C']
+      }
+    ],
+    {
+      ...ADVISOR_CONFIG.DEFAULT_GARDEN_PROFILE,
+      locationName: 'Hadston, Morpeth, Northumberland',
+      rhsHardinessZone: 'H4',
+      isSouthFacing: true,
+      gardenAspect: 'SOUTH'
+    }
+  );
+
+  const frostAlert = singlePlantAdvice.weatherAlerts.find((a: any) => a.hazardType === 'FROST');
+  assert.ok(frostAlert);
+  assert.deepEqual(frostAlert.affectedPlants, ['Fuchsia (Fuchsia hybrid)']);
+  assert.ok(frostAlert.actionRequired.includes('Fuchsia (Fuchsia hybrid)'));
+  assert.ok(!frostAlert.actionRequired.includes('Citrus'));
+  assert.ok(!frostAlert.actionRequired.includes('#3'));
+});
+
+
