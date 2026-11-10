@@ -55,9 +55,7 @@ import PlantThumbnailWithModal from './components/PlantThumbnailWithModal';
 import {
   searchRhsPlantCatalog,
   CatalogPlantItem,
-  getHadston32InventoryRecords,
   getAllRhsCatalogInventoryRecords,
-  HADSTON_GARDEN_COLLECTION_32,
   RHS_PLANT_CATALOG,
   RhsCatalogPlant,
   PLANT_CATEGORY_DEFINITIONS,
@@ -67,8 +65,12 @@ import {
   getPlantMonthlyCareStatus,
   PlantMonthlyCareStatus,
   calculatePlantHealthScore,
-  PlantHealthAssessment
+  PlantHealthAssessment,
+  fetchLiveRhsCatalogPlants,
+  LIVE_RHS_PLANT_CACHE,
+  registerLiveRhsPlant
 } from './utils/rhsPlantCatalog';
+import { registerLivePlantImage } from './utils/plantImages';
 import { getCurrentUkMonthIndex } from './utils/monthlyClayChecklist';
 import {
   serializeGardenPlantsBackup,
@@ -111,11 +113,27 @@ for (const catalogPlant of RHS_PLANT_CATALOG) {
 export interface PlantRecord {
   id: string;
   name: string;
+  commonName?: string;
+  botanicalName?: string;
   category?: PlantGroupCategoryId | string;
   rhsRating: string;
   location: string;
   growthStage: string;
   vulnerabilities: string[];
+  photoUrl?: string;
+  rhsUrl?: string;
+  isAgm?: boolean;
+  isPollinatorFriendly?: boolean;
+  soilAndSun?: string;
+  feedWindowUk?: string;
+  feedTypeNpk?: string;
+  feedFrequencyDosage?: string;
+  pruneMonthsUk?: string;
+  pruneType?: string;
+  pruneTechnique?: string;
+  pruneAvoid?: string;
+  overwinteringProtocol?: string;
+  idDisambiguationNote?: string;
 }
 
 export interface GardenProfile {
@@ -521,13 +539,33 @@ export default function App() {
     rhsRating: 'H4',
     location: UI_CONFIG.LOCATION_PRESETS[0],
     growthStage: UI_CONFIG.GROWTH_STAGE_PRESETS[2],
-    vulnerabilitiesText: ''
+    vulnerabilitiesText: '',
+    photoUrl: '',
+    rhsUrl: '',
+    botanicalName: '',
+    commonName: '',
+    soilAndSun: '',
+    feedWindowUk: '',
+    feedTypeNpk: '',
+    feedFrequencyDosage: '',
+    pruneMonthsUk: '',
+    pruneType: '',
+    pruneTechnique: '',
+    pruneAvoid: '',
+    overwinteringProtocol: '',
+    idDisambiguationNote: ''
   });
+  const [formLiveSuggestions, setFormLiveSuggestions] = useState<RhsCatalogPlant[]>([]);
+  const [isFormLookupLoading, setIsFormLookupLoading] = useState(false);
 
-  // RHS Plant Catalog Search-to-Add state
+  // Live RHS Plant Finder Search-to-Add state
   const [catalogSearchQuery, setCatalogSearchQuery] = useState('');
   const [catalogCategory, setCatalogCategory] = useState('ALL');
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
+  const [liveRhsPlants, setLiveRhsPlants] = useState<RhsCatalogPlant[]>([]);
+  const [liveRhsTotalHits, setLiveRhsTotalHits] = useState<number>(0);
+  const [isLiveRhsLoading, setIsLiveRhsLoading] = useState<boolean>(false);
+  const [liveRhsSource, setLiveRhsSource] = useState<'RHS_LIVE_API' | 'LOCAL_FALLBACK'>('RHS_LIVE_API');
 
   // Garden Plants Backup Export / Import state
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
@@ -539,9 +577,95 @@ export default function App() {
   const [backupCopiedNotice, setBackupCopiedNotice] = useState(false);
   const backupFileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Register any saved live RHS plant photos from plantInventory on mount or change
+  useEffect(() => {
+    for (const p of plantInventory) {
+      if (p.photoUrl) {
+        registerLivePlantImage(p);
+      }
+    }
+  }, [plantInventory]);
+
+  // Query live RHS website whenever user searches or browses the RHS Plant Catalogue
+  useEffect(() => {
+    const controller = new AbortController();
+    setIsLiveRhsLoading(true);
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await fetchLiveRhsCatalogPlants(
+          catalogSearchQuery,
+          catalogCategory,
+          16,
+          controller.signal
+        );
+        for (const plant of res.plants) {
+          registerLivePlantImage(plant);
+        }
+        setLiveRhsPlants(res.plants);
+        setLiveRhsTotalHits(res.totalHits);
+        setLiveRhsSource(res.source);
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') {
+          const fallback = searchRhsPlantCatalog(catalogSearchQuery, catalogCategory).slice(0, 16);
+          setLiveRhsPlants(fallback);
+          setLiveRhsTotalHits(fallback.length);
+          setLiveRhsSource('LOCAL_FALLBACK');
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLiveRhsLoading(false);
+        }
+      }
+    }, catalogSearchQuery.trim() ? 220 : 20);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [catalogSearchQuery, catalogCategory]);
+
+  // Live RHS lookup inside the Add / Edit Custom Plant modal when typing a plant name
+  useEffect(() => {
+    const q = plantForm.name.trim();
+    if (!isFormOpen || q.length < 2) {
+      setFormLiveSuggestions([]);
+      setIsFormLookupLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setIsFormLookupLoading(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await fetchLiveRhsCatalogPlants(q, 'ALL', 5, controller.signal);
+        for (const plant of res.plants) {
+          registerLivePlantImage(plant);
+        }
+        setFormLiveSuggestions(res.plants);
+      } catch {
+        if (!controller.signal.aborted) {
+          setFormLiveSuggestions([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsFormLookupLoading(false);
+        }
+      }
+    }, 260);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [plantForm.name, isFormOpen]);
+
   const matchingCatalogPlants = useMemo(
-    () => searchRhsPlantCatalog(catalogSearchQuery, catalogCategory),
-    [catalogSearchQuery, catalogCategory]
+    () =>
+      liveRhsPlants.length > 0
+        ? liveRhsPlants
+        : searchRhsPlantCatalog(catalogSearchQuery, catalogCategory).slice(0, 16),
+    [liveRhsPlants, catalogSearchQuery, catalogCategory]
   );
 
   const activeInventoryNameSet = useMemo(() => {
@@ -775,8 +899,23 @@ export default function App() {
         ? UI_CONFIG.LOCATION_PRESETS[0]
         : UI_CONFIG.LOCATION_PRESETS[1],
       growthStage: UI_CONFIG.GROWTH_STAGE_PRESETS[2],
-      vulnerabilitiesText: ''
+      vulnerabilitiesText: '',
+      photoUrl: '',
+      rhsUrl: '',
+      botanicalName: '',
+      commonName: '',
+      soilAndSun: '',
+      feedWindowUk: '',
+      feedTypeNpk: '',
+      feedFrequencyDosage: '',
+      pruneMonthsUk: '',
+      pruneType: '',
+      pruneTechnique: '',
+      pruneAvoid: '',
+      overwinteringProtocol: '',
+      idDisambiguationNote: ''
     });
+    setFormLiveSuggestions([]);
     setIsFormOpen(true);
   };
 
@@ -788,9 +927,52 @@ export default function App() {
       rhsRating: plant.rhsRating || 'H4',
       location: plant.location || UI_CONFIG.LOCATION_PRESETS[0],
       growthStage: plant.growthStage || UI_CONFIG.GROWTH_STAGE_PRESETS[2],
-      vulnerabilitiesText: Array.isArray(plant.vulnerabilities) ? plant.vulnerabilities.join(', ') : ''
+      vulnerabilitiesText: Array.isArray(plant.vulnerabilities) ? plant.vulnerabilities.join(', ') : '',
+      photoUrl: plant.photoUrl || '',
+      rhsUrl: plant.rhsUrl || '',
+      botanicalName: plant.botanicalName || '',
+      commonName: plant.commonName || '',
+      soilAndSun: plant.soilAndSun || '',
+      feedWindowUk: plant.feedWindowUk || '',
+      feedTypeNpk: plant.feedTypeNpk || '',
+      feedFrequencyDosage: plant.feedFrequencyDosage || '',
+      pruneMonthsUk: plant.pruneMonthsUk || '',
+      pruneType: plant.pruneType || '',
+      pruneTechnique: plant.pruneTechnique || '',
+      pruneAvoid: plant.pruneAvoid || '',
+      overwinteringProtocol: plant.overwinteringProtocol || '',
+      idDisambiguationNote: plant.idDisambiguationNote || ''
     });
+    setFormLiveSuggestions([]);
     setIsFormOpen(true);
+  };
+
+  const handleApplyLiveRhsSuggestionToForm = (rhsPlant: RhsCatalogPlant) => {
+    registerLivePlantImage(rhsPlant);
+    registerLiveRhsPlant(rhsPlant);
+    setPlantForm({
+      name: rhsPlant.commonName || rhsPlant.name,
+      category: resolvePlantGroupCategory(rhsPlant),
+      rhsRating: rhsPlant.rhsRating || 'H4',
+      location: rhsPlant.recommendedLocation || UI_CONFIG.LOCATION_PRESETS[0],
+      growthStage: rhsPlant.defaultOctGrowthStage || UI_CONFIG.GROWTH_STAGE_PRESETS[2],
+      vulnerabilitiesText: (rhsPlant.vulnerabilities || []).join(', '),
+      photoUrl: rhsPlant.photoUrl || '',
+      rhsUrl: rhsPlant.rhsUrl || '',
+      botanicalName: rhsPlant.botanicalName || '',
+      commonName: rhsPlant.commonName || rhsPlant.name,
+      soilAndSun: rhsPlant.soilAndSun || '',
+      feedWindowUk: rhsPlant.feedWindowUk || '',
+      feedTypeNpk: rhsPlant.feedTypeNpk || '',
+      feedFrequencyDosage: rhsPlant.feedFrequencyDosage || '',
+      pruneMonthsUk: rhsPlant.pruneMonthsUk || '',
+      pruneType: rhsPlant.pruneType || '',
+      pruneTechnique: rhsPlant.pruneTechnique || '',
+      pruneAvoid: rhsPlant.pruneAvoid || '',
+      overwinteringProtocol: rhsPlant.overwinteringProtocol || '',
+      idDisambiguationNote: rhsPlant.idDisambiguationNote || ''
+    });
+    setFormLiveSuggestions([]);
   };
 
   const handleSavePlant = (e: React.FormEvent) => {
@@ -804,6 +986,22 @@ export default function App() {
       .filter(Boolean);
 
     const chosenCategory = plantForm.category || resolvePlantGroupCategory({ name: trimmedName });
+    const extraRhsFields = {
+      commonName: plantForm.commonName || trimmedName,
+      botanicalName: plantForm.botanicalName || undefined,
+      photoUrl: plantForm.photoUrl || undefined,
+      rhsUrl: plantForm.rhsUrl || undefined,
+      soilAndSun: plantForm.soilAndSun || undefined,
+      feedWindowUk: plantForm.feedWindowUk || undefined,
+      feedTypeNpk: plantForm.feedTypeNpk || undefined,
+      feedFrequencyDosage: plantForm.feedFrequencyDosage || undefined,
+      pruneMonthsUk: plantForm.pruneMonthsUk || undefined,
+      pruneType: plantForm.pruneType || undefined,
+      pruneTechnique: plantForm.pruneTechnique || undefined,
+      pruneAvoid: plantForm.pruneAvoid || undefined,
+      overwinteringProtocol: plantForm.overwinteringProtocol || undefined,
+      idDisambiguationNote: plantForm.idDisambiguationNote || undefined
+    };
 
     if (editingPlantId) {
       setPlantInventory((prev: PlantRecord[]) =>
@@ -816,7 +1014,8 @@ export default function App() {
                 rhsRating: plantForm.rhsRating,
                 location: plantForm.location,
                 growthStage: plantForm.growthStage,
-                vulnerabilities
+                vulnerabilities,
+                ...extraRhsFields
               }
             : item
         )
@@ -829,8 +1028,12 @@ export default function App() {
         rhsRating: plantForm.rhsRating,
         location: plantForm.location,
         growthStage: plantForm.growthStage,
-        vulnerabilities
+        vulnerabilities,
+        ...extraRhsFields
       };
+      if (newPlant.photoUrl) {
+        registerLivePlantImage(newPlant);
+      }
       setPlantInventory((prev: PlantRecord[]) => [newPlant, ...prev]);
     }
 
@@ -960,18 +1163,44 @@ export default function App() {
   const handleQuickAddCatalogPlant = useCallback(
     (catalogPlant: CatalogPlantItem) => {
       const lowerName = catalogPlant.name.toLowerCase();
+      const lowerCommon = (catalogPlant.commonName || '').toLowerCase();
       const lowerId = catalogPlant.catalogId.toLowerCase();
-      if (activeInventoryNameSet.has(lowerName) || activeInventoryNameSet.has(lowerId)) return;
+      if (
+        activeInventoryNameSet.has(lowerName) ||
+        (lowerCommon && activeInventoryNameSet.has(lowerCommon)) ||
+        activeInventoryNameSet.has(lowerId)
+      ) {
+        return;
+      }
+
+      registerLivePlantImage(catalogPlant);
+      registerLiveRhsPlant(catalogPlant);
 
       const resolvedCategory = resolvePlantGroupCategory(catalogPlant);
       const newPlant: PlantRecord = {
         id: catalogPlant.catalogId,
-        name: catalogPlant.name.replace(/^#\d+\s+/, '').trim(),
+        name: (catalogPlant.commonName || catalogPlant.name).replace(/^#\d+\s+/, '').trim(),
+        commonName: catalogPlant.commonName,
+        botanicalName: catalogPlant.botanicalName,
         category: resolvedCategory,
         rhsRating: catalogPlant.rhsRating,
         location: catalogPlant.recommendedLocation,
         growthStage: catalogPlant.defaultOctGrowthStage,
-        vulnerabilities: [...catalogPlant.vulnerabilities]
+        vulnerabilities: [...catalogPlant.vulnerabilities],
+        photoUrl: catalogPlant.photoUrl,
+        rhsUrl: catalogPlant.rhsUrl,
+        isAgm: catalogPlant.isAgm,
+        isPollinatorFriendly: catalogPlant.isPollinatorFriendly,
+        soilAndSun: catalogPlant.soilAndSun,
+        feedWindowUk: catalogPlant.feedWindowUk,
+        feedTypeNpk: catalogPlant.feedTypeNpk,
+        feedFrequencyDosage: catalogPlant.feedFrequencyDosage,
+        pruneMonthsUk: catalogPlant.pruneMonthsUk,
+        pruneType: catalogPlant.pruneType,
+        pruneTechnique: catalogPlant.pruneTechnique,
+        pruneAvoid: catalogPlant.pruneAvoid,
+        overwinteringProtocol: catalogPlant.overwinteringProtocol,
+        idDisambiguationNote: catalogPlant.idDisambiguationNote
       };
       setPlantInventory((prev: PlantRecord[]) => [newPlant, ...prev]);
       setExpandedPlantCategories((prev) => ({ ...prev, [resolvedCategory]: true }));
@@ -983,19 +1212,40 @@ export default function App() {
     const toAdd = matchingCatalogPlants.filter(
       (item) =>
         !activeInventoryNameSet.has(item.name.toLowerCase()) &&
+        !(item.commonName && activeInventoryNameSet.has(item.commonName.toLowerCase())) &&
         !activeInventoryNameSet.has(item.catalogId.toLowerCase())
     );
     if (toAdd.length === 0) return;
 
-    const newRecords: PlantRecord[] = toAdd.map((catalogPlant) => ({
-      id: catalogPlant.catalogId,
-      name: catalogPlant.name.replace(/^#\d+\s+/, '').trim(),
-      category: resolvePlantGroupCategory(catalogPlant),
-      rhsRating: catalogPlant.rhsRating,
-      location: catalogPlant.recommendedLocation,
-      growthStage: catalogPlant.defaultOctGrowthStage,
-      vulnerabilities: [...catalogPlant.vulnerabilities]
-    }));
+    const newRecords: PlantRecord[] = toAdd.map((catalogPlant) => {
+      registerLivePlantImage(catalogPlant);
+      registerLiveRhsPlant(catalogPlant);
+      return {
+        id: catalogPlant.catalogId,
+        name: (catalogPlant.commonName || catalogPlant.name).replace(/^#\d+\s+/, '').trim(),
+        commonName: catalogPlant.commonName,
+        botanicalName: catalogPlant.botanicalName,
+        category: resolvePlantGroupCategory(catalogPlant),
+        rhsRating: catalogPlant.rhsRating,
+        location: catalogPlant.recommendedLocation,
+        growthStage: catalogPlant.defaultOctGrowthStage,
+        vulnerabilities: [...catalogPlant.vulnerabilities],
+        photoUrl: catalogPlant.photoUrl,
+        rhsUrl: catalogPlant.rhsUrl,
+        isAgm: catalogPlant.isAgm,
+        isPollinatorFriendly: catalogPlant.isPollinatorFriendly,
+        soilAndSun: catalogPlant.soilAndSun,
+        feedWindowUk: catalogPlant.feedWindowUk,
+        feedTypeNpk: catalogPlant.feedTypeNpk,
+        feedFrequencyDosage: catalogPlant.feedFrequencyDosage,
+        pruneMonthsUk: catalogPlant.pruneMonthsUk,
+        pruneType: catalogPlant.pruneType,
+        pruneTechnique: catalogPlant.pruneTechnique,
+        pruneAvoid: catalogPlant.pruneAvoid,
+        overwinteringProtocol: catalogPlant.overwinteringProtocol,
+        idDisambiguationNote: catalogPlant.idDisambiguationNote
+      };
+    });
 
     setPlantInventory((prev: PlantRecord[]) => [...newRecords, ...prev]);
     setExpandedPlantCategories((prev) => {
@@ -1014,8 +1264,48 @@ export default function App() {
     }));
   };
 
-  // Match an inventory plant to its rich RHS Catalogue / Hadston Master Guide record in O(1) via pre-indexed Maps
+  // Match an inventory plant to its rich Live RHS or Reference record in O(1) via pre-indexed Maps
   const findMatchingMasterPlant = useCallback((plant: PlantRecord): RhsCatalogPlant | null => {
+    const lowerId = plant.id.toLowerCase();
+    const lowerName = plant.name.toLowerCase();
+    const strippedLowerName = lowerName.replace(/^#\d+\s+/, '');
+
+    // 1. Check live RHS runtime cache first
+    const fromLiveCache =
+      LIVE_RHS_PLANT_CACHE.get(lowerId) ||
+      LIVE_RHS_PLANT_CACHE.get(lowerName) ||
+      LIVE_RHS_PLANT_CACHE.get(strippedLowerName);
+    if (fromLiveCache) return fromLiveCache;
+
+    // 2. If the plant record itself carries persisted live RHS metadata, synthesize its RhsCatalogPlant
+    if (plant.soilAndSun || plant.photoUrl || plant.rhsUrl || plant.pruneTechnique) {
+      return {
+        catalogId: plant.id,
+        name: plant.name,
+        commonName: plant.commonName || plant.name,
+        botanicalName: plant.botanicalName,
+        category: plant.category || 'SHRUBS',
+        rhsRating: plant.rhsRating || 'H4',
+        recommendedLocation: plant.location,
+        defaultOctGrowthStage: plant.growthStage,
+        vulnerabilities: plant.vulnerabilities || [],
+        photoUrl: plant.photoUrl,
+        rhsUrl: plant.rhsUrl,
+        isAgm: plant.isAgm,
+        isPollinatorFriendly: plant.isPollinatorFriendly,
+        soilAndSun: plant.soilAndSun,
+        feedWindowUk: plant.feedWindowUk,
+        feedTypeNpk: plant.feedTypeNpk,
+        feedFrequencyDosage: plant.feedFrequencyDosage,
+        pruneMonthsUk: plant.pruneMonthsUk,
+        pruneType: plant.pruneType,
+        pruneTechnique: plant.pruneTechnique,
+        pruneAvoid: plant.pruneAvoid,
+        overwinteringProtocol: plant.overwinteringProtocol,
+        idDisambiguationNote: plant.idDisambiguationNote
+      };
+    }
+
     const refFromName = plant.name.match(/^#(\d+)\b/);
     if (refFromName) {
       const byRef = HADSTON_BY_REF_MAP.get(Number(refFromName[1]));
@@ -1028,11 +1318,9 @@ export default function App() {
       if (byIdRef) return byIdRef;
     }
 
-    const byId = CATALOG_BY_ID_MAP.get(plant.id.toLowerCase());
+    const byId = CATALOG_BY_ID_MAP.get(lowerId);
     if (byId) return byId;
 
-    const lowerName = plant.name.toLowerCase();
-    const strippedLowerName = lowerName.replace(/^#\d+\s+/, '');
     const directHit =
       HADSTON_BY_LOWER_NAME_MAP.get(lowerName) ||
       HADSTON_BY_LOWER_NAME_MAP.get(strippedLowerName);
@@ -1837,8 +2125,24 @@ export default function App() {
                   {(hazardSummary.frostRiskDetected ||
                     hazardSummary.windRockRiskDetected ||
                     hazardSummary.waterloggingRiskDetected) && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200 whitespace-nowrap shrink-0">
-                      <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                    <span
+                      className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border whitespace-nowrap shrink-0 ${
+                        hazardSummary.frostRiskDetected
+                          ? 'bg-sky-50 text-sky-900 border-sky-200'
+                          : hazardSummary.windRockRiskDetected
+                          ? 'bg-amber-50 text-amber-900 border-amber-200'
+                          : 'bg-blue-50 text-blue-900 border-blue-200'
+                      }`}
+                    >
+                      <AlertTriangle
+                        className={`w-3 h-3 shrink-0 ${
+                          hazardSummary.frostRiskDetected
+                            ? 'text-sky-600'
+                            : hazardSummary.windRockRiskDetected
+                            ? 'text-amber-600'
+                            : 'text-blue-600'
+                        }`}
+                      />
                       <span>
                         {hazardSummary.frostRiskDetected
                           ? 'Frost Alert'
@@ -2574,17 +2878,42 @@ export default function App() {
                 </div>
               )}
 
-              {/* Always-Accessible RHS Plant Catalogue Search Bar to Add More Plants */}
+              {/* Live RHS Plant Finder Website Search Bar to Add More Plants */}
               <div className="p-3.5 sm:p-4 rounded-2xl bg-stone-50/90 border border-stone-200/90 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Sprout className="w-4 h-4 text-emerald-700 shrink-0" />
                     <span className="text-xs sm:text-sm font-bold text-slate-900">
-                      Search RHS Plant Catalogue ({RHS_PLANT_CATALOG.length} UK Plants)
+                      Search Live RHS Plant Finder (rhs.org.uk)
+                    </span>
+                    <span
+                      data-testid="live-rhs-status-badge"
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border ${
+                        liveRhsSource === 'RHS_LIVE_API'
+                          ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                          : 'bg-stone-100 text-slate-700 border-stone-200'
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          isLiveRhsLoading
+                            ? 'bg-amber-500 animate-pulse'
+                            : liveRhsSource === 'RHS_LIVE_API'
+                            ? 'bg-emerald-600'
+                            : 'bg-slate-400'
+                        }`}
+                      />
+                      <span>
+                        {isLiveRhsLoading
+                          ? 'Searching rhs.org.uk...'
+                          : liveRhsSource === 'RHS_LIVE_API'
+                          ? `Live rhs.org.uk · ${liveRhsTotalHits.toLocaleString()} matches`
+                          : 'Offline reference mode'}
+                      </span>
                     </span>
                   </div>
                   <span className="text-[11px] text-slate-500">
-                    Search by common name, botanical name, category, or RHS rating to add plants to your garden
+                    Search 250,000+ live RHS plants by common or botanical name to add to your garden
                   </span>
                 </div>
 
@@ -2592,13 +2921,13 @@ export default function App() {
                   <div className="relative flex-1">
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <label htmlFor="plant-catalog-search" className="sr-only">
-                      Search RHS plant catalogue to add
+                      Search live RHS website to add plants
                     </label>
                     <input
                       id="plant-catalog-search"
                       data-testid="rhs-catalog-search-input"
                       type="text"
-                      placeholder={`Search all ${RHS_PLANT_CATALOG.length} RHS catalogue plants to add (e.g. Rose, Tomato, Acer, Dahlia, Blueberry, Fern)...`}
+                      placeholder="Search live rhs.org.uk database (e.g. Lavandula, Fuchsia, Hydrangea, Acer, Olive, Agapanthus)..."
                       value={catalogSearchQuery}
                       onFocus={() => setIsCatalogOpen(true)}
                       onChange={(e) => {
@@ -2629,9 +2958,7 @@ export default function App() {
                       onClick={() => setIsCatalogOpen((prev) => !prev)}
                       className="min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-stone-100 text-slate-800 border border-stone-300 transition whitespace-nowrap cursor-pointer"
                     >
-                      {isCatalogOpen
-                        ? 'Hide Catalogue'
-                        : `Browse All (${RHS_PLANT_CATALOG.length})`}
+                      {isCatalogOpen ? 'Hide Live Search' : 'Browse Live RHS'}
                     </button>
 
                     <button
@@ -2639,14 +2966,14 @@ export default function App() {
                       data-testid="add-all-rhs-catalogue-btn"
                       onClick={handleAddAllMatchingCatalogPlants}
                       className="min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-800 hover:bg-emerald-700 text-white transition whitespace-nowrap cursor-pointer"
-                      title="Add all matching RHS catalogue plants that are not yet in your plot"
+                      title="Add all currently shown RHS search results to your plot"
                     >
-                      + Add All RHS Plants
+                      + Add Shown Results
                     </button>
                   </div>
                 </div>
 
-                {/* Secondary Plot Management Controls (Custom Plant, Starter 32, Full 92, Reset, CSV) */}
+                {/* Secondary Plot Management Controls */}
                 {showPlantManagerDrawer && (
                   <div className="pt-2.5 border-t border-stone-200/80 flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
@@ -2670,7 +2997,7 @@ export default function App() {
                         className="min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-emerald-50 text-emerald-900 border border-stone-300 transition cursor-pointer"
                       >
                         <Sprout className="w-3.5 h-3.5 text-emerald-700" />
-                        <span>Load All RHS ({RHS_PLANT_CATALOG.length})</span>
+                        <span>Load Shown RHS Results ({matchingCatalogPlants.length})</span>
                       </button>
 
                       {plantInventory.length > 0 && (
@@ -2723,7 +3050,7 @@ export default function App() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
                         {[
-                          { id: 'ALL', label: `All (${RHS_PLANT_CATALOG.length})` },
+                          { id: 'ALL', label: 'All RHS Plants' },
                           { id: 'SHRUBS', label: 'Shrubs & Trees' },
                           { id: 'FLOWERS', label: 'Flowers & Perennials' },
                           { id: 'VEGETABLES', label: 'Vegetables, Fruit & Herbs' },
@@ -2745,7 +3072,9 @@ export default function App() {
                         ))}
                       </div>
                       <span className="text-xs font-semibold text-slate-600">
-                        {matchingCatalogPlants.length} {matchingCatalogPlants.length === 1 ? 'plant' : 'plants'} found
+                        {isLiveRhsLoading
+                          ? 'Fetching live RHS results...'
+                          : `Showing ${matchingCatalogPlants.length} of ${liveRhsTotalHits.toLocaleString()} live RHS plants`}
                       </span>
                     </div>
 
@@ -2753,6 +3082,8 @@ export default function App() {
                       {matchingCatalogPlants.map((item) => {
                         const isAlreadyInPlot =
                           activeInventoryNameSet.has(item.name.toLowerCase()) ||
+                          (item.commonName &&
+                            activeInventoryNameSet.has(item.commonName.toLowerCase())) ||
                           activeInventoryNameSet.has(item.catalogId.toLowerCase());
                         return (
                           <div
@@ -2764,11 +3095,29 @@ export default function App() {
                                 plantId={item.catalogId}
                                 plantName={item.commonName || item.name}
                                 photoRef={item.photoRef}
+                                photoUrl={item.photoUrl}
                                 size="sm"
                               />
-                              <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
-                                {item.commonName || item.name}
-                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                                    {item.commonName || item.name}
+                                  </span>
+                                  <span className="px-1.5 py-0.5 rounded bg-stone-100 border border-stone-200 text-[10px] font-bold text-slate-700 shrink-0">
+                                    {item.rhsRating}
+                                  </span>
+                                  {item.isAgm && (
+                                    <span className="px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-[10px] font-bold text-amber-900 shrink-0">
+                                      AGM
+                                    </span>
+                                  )}
+                                </div>
+                                {item.botanicalName && (
+                                  <p className="text-[11px] italic text-slate-500 truncate">
+                                    {item.botanicalName}
+                                  </p>
+                                )}
+                              </div>
                             </div>
 
                             <button
@@ -2792,7 +3141,7 @@ export default function App() {
                 )}
               </div>
 
-              {/* Add / Edit Custom Plant Form */}
+              {/* Add / Edit Custom Plant Form (with Live RHS Auto-Fill Lookup) */}
               {isFormOpen && (
                 <form
                   onSubmit={handleSavePlant}
@@ -2800,7 +3149,7 @@ export default function App() {
                 >
                   <div className="flex items-center justify-between border-b border-stone-200 pb-2">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-900">
-                      {editingPlantId ? 'Edit Plant' : 'Add Custom Plant'}
+                      {editingPlantId ? 'Edit Plant' : 'Add Plant (with Live RHS Lookup)'}
                     </h3>
                     <button
                       type="button"
@@ -2812,18 +3161,46 @@ export default function App() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div>
+                    <div className="relative">
                       <label htmlFor="plant-name-input" className="block text-xs font-semibold text-slate-700 mb-1">
-                        Plant Name *
+                        Plant Name * {isFormLookupLoading && <span className="text-[11px] font-normal text-emerald-700">(Searching rhs.org.uk...)</span>}
                       </label>
                       <input
                         id="plant-name-input"
                         type="text"
                         required
+                        placeholder="Type a plant name to search rhs.org.uk..."
                         value={plantForm.name}
                         onChange={(e) => setPlantForm({ ...plantForm, name: e.target.value })}
                         className="w-full min-h-[38px] px-3 py-1.5 text-sm rounded-xl bg-white border border-stone-300 text-slate-900"
                       />
+                      {formLiveSuggestions.length > 0 && (
+                        <div className="mt-1.5 p-2 rounded-xl bg-white border border-emerald-200 shadow-sm space-y-1">
+                          <span className="block text-[10px] font-bold uppercase tracking-wider text-emerald-800 px-1">
+                            Tap a live rhs.org.uk match to auto-fill:
+                          </span>
+                          {formLiveSuggestions.map((sug) => (
+                            <button
+                              key={sug.catalogId}
+                              type="button"
+                              onClick={() => handleApplyLiveRhsSuggestionToForm(sug)}
+                              className="w-full px-2 py-1.5 rounded-lg hover:bg-emerald-50 text-left flex items-center justify-between gap-2 transition cursor-pointer"
+                            >
+                              <span className="text-xs font-semibold text-slate-900 truncate">
+                                {sug.commonName || sug.name}{' '}
+                                {sug.botanicalName && (
+                                  <span className="italic font-normal text-slate-500">
+                                    ({sug.botanicalName})
+                                  </span>
+                                )}
+                              </span>
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900 shrink-0">
+                                {sug.rhsRating}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -3036,6 +3413,7 @@ export default function App() {
                                       plantId={plant.id}
                                       plantName={basicName}
                                       photoRef={masterMatch?.photoRef}
+                                      photoUrl={plant.photoUrl || masterMatch?.photoUrl}
                                       size="md"
                                     />
                                     <h4 className="text-sm font-bold text-slate-900 truncate">

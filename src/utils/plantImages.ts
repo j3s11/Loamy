@@ -339,14 +339,66 @@ export const PLANT_BOTANICAL_IMAGE_MAP: Record<string, PlantImageInfo> = {
 };
 
 const PLANT_IMAGE_LOOKUP_CACHE = new Map<string, PlantImageInfo>();
+const LIVE_RHS_IMAGE_MAP = new Map<string, PlantImageInfo>();
+
+/**
+ * Registers a live RHS plant photo URL from apps.rhs.org.uk so thumbnails and zoom modals use the official RHS photograph.
+ */
+export function registerLivePlantImage(plant: {
+  catalogId?: string;
+  id?: string;
+  name?: string;
+  commonName?: string;
+  botanicalName?: string;
+  photoUrl?: string;
+  idDisambiguationNote?: string;
+}) {
+  if (!plant || !plant.photoUrl) return;
+  const info: PlantImageInfo = {
+    name: plant.commonName || plant.name || 'RHS Plant Specimen',
+    photoUrl: plant.photoUrl,
+    attribution: 'Royal Horticultural Society (apps.rhs.org.uk)',
+    description:
+      plant.idDisambiguationNote ||
+      `${plant.commonName || plant.name || ''}${plant.botanicalName ? ` (${plant.botanicalName})` : ''} — Official RHS Plant Finder specimen`,
+    accentColor: '#047857'
+  };
+
+  for (const rawKey of [plant.catalogId, plant.id, plant.name, plant.commonName, plant.botanicalName]) {
+    if (rawKey && typeof rawKey === 'string') {
+      LIVE_RHS_IMAGE_MAP.set(rawKey.trim().toLowerCase(), info);
+    }
+  }
+  PLANT_IMAGE_LOOKUP_CACHE.clear();
+}
 
 /**
  * Resolves a verified botanical photo info object by plant ID, name, or photo reference.
  */
 export function getPlantImageInfo(
   plantIdOrName?: string,
-  photoRef?: number
+  photoRef?: number,
+  directPhotoUrl?: string
 ): PlantImageInfo {
+  if (directPhotoUrl && directPhotoUrl.trim()) {
+    return {
+      name: plantIdOrName || 'RHS Plant Specimen',
+      photoUrl: directPhotoUrl.trim(),
+      attribution: 'Royal Horticultural Society (apps.rhs.org.uk)',
+      description: `${plantIdOrName || 'Botanical specimen'} — Official RHS Plant Finder photograph`,
+      accentColor: '#047857'
+    };
+  }
+
+  if (plantIdOrName) {
+    const cleanLower = plantIdOrName.trim().toLowerCase();
+    const directLive = LIVE_RHS_IMAGE_MAP.get(cleanLower);
+    if (directLive) return directLive;
+    for (const [k, v] of LIVE_RHS_IMAGE_MAP.entries()) {
+      if (cleanLower.includes(k)) return v;
+    }
+  }
+
   if (photoRef && photoRef >= 1 && photoRef <= 32) {
     const key = `hadston-${String(photoRef).padStart(2, '0')}`;
     if (PLANT_BOTANICAL_IMAGE_MAP[key]) {

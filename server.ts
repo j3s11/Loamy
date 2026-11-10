@@ -8,6 +8,11 @@ import {
   insertSoilRainfallLog,
   deleteSoilRainfallLog
 } from './src/db/soilLogsDb.ts';
+import {
+  searchLiveRhsWebsite,
+  fetchRawRhsPlantDetail,
+  normalizeLiveRhsPlant
+} from './src/services/rhsLiveService.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -25,6 +30,44 @@ async function startServer() {
     })
   );
   app.use(metOfficeProxy);
+
+  // ==========================================================================
+  // 1B. LIVE RHS PLANT FINDER WEBSITE SEARCH & DETAIL PROXY ROUTES
+  // ==========================================================================
+  app.get('/api/rhs/plants/search', async (req, res) => {
+    try {
+      const q = typeof req.query.q === 'string' ? req.query.q : '';
+      const category = typeof req.query.category === 'string' ? req.query.category : 'ALL';
+      const limit = req.query.limit !== undefined ? Number(req.query.limit) : 14;
+      const offset = req.query.offset !== undefined ? Number(req.query.offset) : 0;
+
+      const result = await searchLiveRhsWebsite(q, category, limit, offset);
+      return res.json(result);
+    } catch (err: any) {
+      return res.status(500).json({
+        error: err?.message || 'Failed to query live RHS plant database.'
+      });
+    }
+  });
+
+  app.get('/api/rhs/plants/details/:id', async (req, res) => {
+    try {
+      const rhsId = Number(req.params.id);
+      if (!rhsId || Number.isNaN(rhsId)) {
+        return res.status(400).json({ error: 'Valid numeric RHS plant ID is required.' });
+      }
+      const detail = await fetchRawRhsPlantDetail(rhsId);
+      if (!detail) {
+        return res.status(404).json({ error: 'RHS plant profile not found.' });
+      }
+      const plant = normalizeLiveRhsPlant(detail, detail);
+      return res.json({ source: 'RHS_LIVE_API', plant });
+    } catch (err: any) {
+      return res.status(500).json({
+        error: err?.message || 'Failed to fetch live RHS plant details.'
+      });
+    }
+  });
 
   // ==========================================================================
   // 2. HISTORICAL RAINFALL & SOIL SATURATION DATABASE ROUTES

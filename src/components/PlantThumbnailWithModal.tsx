@@ -6,6 +6,7 @@ interface PlantThumbnailWithModalProps {
   plantId?: string;
   plantName: string;
   photoRef?: number;
+  photoUrl?: string;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   onOpenModal?: (info: PlantImageInfo) => void;
@@ -21,6 +22,7 @@ const PlantThumbnailWithModal = React.memo(function PlantThumbnailWithModal({
   plantId,
   plantName,
   photoRef,
+  photoUrl,
   size = 'md',
   className = '',
   onOpenModal
@@ -29,8 +31,8 @@ const PlantThumbnailWithModal = React.memo(function PlantThumbnailWithModal({
   const [imageError, setImageError] = useState(false);
 
   const imageInfo = useMemo(
-    () => getPlantImageInfo(`${plantId || ''} ${plantName || ''}`.trim(), photoRef),
-    [plantId, plantName, photoRef]
+    () => getPlantImageInfo(`${plantId || ''} ${plantName || ''}`.trim(), photoRef, photoUrl),
+    [plantId, plantName, photoRef, photoUrl]
   );
 
   const dimensionClasses = DIMENSION_CLASSES[size];
@@ -65,7 +67,6 @@ const PlantThumbnailWithModal = React.memo(function PlantThumbnailWithModal({
             src={imageInfo.photoUrl}
             alt={plantName}
             referrerPolicy="no-referrer"
-            crossOrigin="anonymous"
             decoding="async"
             loading="lazy"
             onError={() => setImageError(true)}
@@ -168,7 +169,6 @@ export function PlantImageZoomModal({
             src={imageInfo.photoUrl}
             alt={plantName}
             referrerPolicy="no-referrer"
-            crossOrigin="anonymous"
             decoding="async"
             className="w-full h-full object-cover"
           />

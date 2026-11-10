@@ -917,4 +917,68 @@ test('buildRuleBasedHorticulturalAdvice omits unselected plants when inventory i
   assert.ok(!frostAlert.actionRequired.includes('#3'));
 });
 
+test('normalizeLiveRhsPlant converts official live RHS Plant Finder responses into RhsCatalogPlant records', async () => {
+  const {
+    stripRhsHtml,
+    resolveRhsHardinessCode,
+    mapRhsPlantTypesToCategory,
+    normalizeLiveRhsPlant,
+  } = await import('../services/rhsLiveService');
+
+  assert.equal(stripRhsHtml('<em>Lavandula</em> <em>angustifolia</em> &amp; &#39;Hidcote&#39;'), "Lavandula angustifolia & 'Hidcote'");
+  assert.equal(resolveRhsHardinessCode([7]), 'H5');
+  assert.equal(resolveRhsHardinessCode([9]), 'H7');
+  assert.equal(resolveRhsHardinessCode([5]), 'H3');
+
+  assert.equal(mapRhsPlantTypesToCategory([6]), 'SHRUBS');
+  assert.equal(mapRhsPlantTypesToCategory([12]), 'VEGETABLES');
+  assert.equal(mapRhsPlantTypesToCategory([5]), 'FOLIAGE');
+  assert.equal(mapRhsPlantTypesToCategory([1]), 'FLOWERS');
+
+  const normalized = normalizeLiveRhsPlant(
+    {
+      id: 9916,
+      commonName: 'English lavender',
+      botanicalName: '<em>Lavandula</em> <em>angustifolia</em>',
+      entityDescription: '<strong><em>L. angustifolia</em></strong> is a compact aromatic shrub with narrow grey-green leaves and violet flowers.',
+      image: 'WSY0034978_4302.jpg',
+      isAgm: true,
+      isPlantsForPollinators: true,
+    },
+    {
+      hardinessLevel: 7,
+      plantType: [6],
+      sunlight: [1],
+      soilType: [1, 3, 4],
+      moisture: [1],
+      ph: [1, 2, 3],
+      aspect: [1, 4],
+      height: '1m',
+      spread: '1m',
+      cultivation: 'Grow in poor to moderately fertile, well-drained soil in full sun.',
+      pruning: 'Pruning group 10; trim back after flowering in late summer.',
+      pestResistance: 'Generally pest-free, though rosemary beetle may occur.',
+      diseaseResistance: 'Root rot in winter-wet clay.',
+      images: [{ image: 'WSY0034978_4302.jpg', copyRight: 'RHS' }],
+    }
+  );
+
+  assert.equal(normalized.catalogId, 'rhs-9916');
+  assert.equal(normalized.rhsPlantId, 9916);
+  assert.equal(normalized.commonName, 'English lavender');
+  assert.equal(normalized.botanicalName, 'Lavandula angustifolia');
+  assert.equal(normalized.rhsRating, 'H5');
+  assert.equal(normalized.category, 'SHRUBS');
+  assert.equal(normalized.groupCategory, 'SHRUBS');
+  assert.equal(normalized.photoUrl, 'https://apps.rhs.org.uk/plantselectorimages/detail/WSY0034978_4302.jpg');
+  assert.ok(normalized.rhsUrl?.includes('https://www.rhs.org.uk/plants/9916/'));
+  assert.equal(normalized.isAgm, true);
+  assert.equal(normalized.isPollinatorFriendly, true);
+  assert.ok(normalized.soilAndSun?.includes('Full sun'));
+  assert.ok(normalized.pruneTechnique?.includes('Pruning group 10'));
+  assert.ok(normalized.vulnerabilities.length >= 1);
+});
+
+
+
 

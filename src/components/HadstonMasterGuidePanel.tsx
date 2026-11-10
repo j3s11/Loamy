@@ -24,8 +24,10 @@ import {
   getPlantMonthlyCareStatus,
   PlantMonthlyCareStatus,
   calculatePlantHealthScore,
-  PlantHealthAssessment
+  PlantHealthAssessment,
+  fetchLiveRhsCatalogPlants
 } from '../utils/rhsPlantCatalog';
+import { registerLivePlantImage } from '../utils/plantImages';
 import {
   HADSTON_LOCAL_RISK_MITIGATION,
   generateHadstonMasterGuideMarkdown
@@ -35,11 +37,27 @@ import PlantThumbnailWithModal from './PlantThumbnailWithModal';
 export interface MasterGuidePlantInventoryItem {
   id: string;
   name: string;
+  commonName?: string;
+  botanicalName?: string;
   category?: string;
   rhsRating: string;
   location: string;
   growthStage: string;
   vulnerabilities: string[];
+  photoUrl?: string;
+  rhsUrl?: string;
+  isAgm?: boolean;
+  isPollinatorFriendly?: boolean;
+  soilAndSun?: string;
+  feedWindowUk?: string;
+  feedTypeNpk?: string;
+  feedFrequencyDosage?: string;
+  pruneMonthsUk?: string;
+  pruneType?: string;
+  pruneTechnique?: string;
+  pruneAvoid?: string;
+  overwinteringProtocol?: string;
+  idDisambiguationNote?: string;
 }
 
 export interface MasterGuidePlantCareLogEntry {
@@ -77,6 +95,8 @@ interface UnifiedGuidePlantEntry {
   category: string;
   rhsRating: string;
   photoRef?: number;
+  photoUrl?: string;
+  rhsUrl?: string;
   inGarden: boolean;
   gardenPlant?: MasterGuidePlantInventoryItem;
   catalogPlant?: RhsCatalogPlant;
@@ -126,18 +146,59 @@ export default function HadstonMasterGuidePanel({
   const [expandedPlantKeys, setExpandedPlantKeys] = useState<Record<string, boolean>>({});
   const [expandedHealthKeys, setExpandedHealthKeys] = useState<Record<string, boolean>>({});
   const [showRegionalRules, setShowRegionalRules] = useState<boolean>(false);
+  const [liveRhsGuidePlants, setLiveRhsGuidePlants] = useState<RhsCatalogPlant[]>([]);
+  const [liveRhsGuideTotalHits, setLiveRhsGuideTotalHits] = useState<number>(0);
+  const [isLiveGuideLoading, setIsLiveGuideLoading] = useState<boolean>(false);
 
-  // Merge user's garden inventory and the full RHS catalogue into a single deduplicated list
+  // Pull live RHS plants from rhs.org.uk when searching or browsing the Master Guide
+  useEffect(() => {
+    const controller = new AbortController();
+    setIsLiveGuideLoading(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await fetchLiveRhsCatalogPlants(
+          plantFilterQuery,
+          categoryFilter,
+          18,
+          controller.signal
+        );
+        for (const p of res.plants) {
+          registerLivePlantImage(p);
+        }
+        setLiveRhsGuidePlants(res.plants);
+        setLiveRhsGuideTotalHits(res.totalHits);
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') {
+          setLiveRhsGuidePlants([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLiveGuideLoading(false);
+        }
+      }
+    }, plantFilterQuery.trim() ? 240 : 20);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [plantFilterQuery, categoryFilter]);
+
+  // Merge user's garden inventory and live RHS plants into a single deduplicated list
   const unifiedPlants = useMemo<UnifiedGuidePlantEntry[]>(() => {
     const gardenByCatalogId = new Map<string, MasterGuidePlantInventoryItem>();
     const gardenByLowerName = new Map<string, MasterGuidePlantInventoryItem>();
     const matchedGardenIds = new Set<string>();
+    const seenCatalogIds = new Set<string>();
 
     for (const gp of plantInventory) {
       gardenByCatalogId.set(gp.id.toLowerCase(), gp);
       const cleaned = cleanDisplayPlantName(gp.name).toLowerCase();
       gardenByLowerName.set(cleaned, gp);
       gardenByLowerName.set(gp.name.toLowerCase(), gp);
+      if (gp.commonName) {
+        gardenByLowerName.set(gp.commonName.toLowerCase(), gp);
+      }
       const refMatch = gp.name.match(/^#(\d+)\b/);
       if (refMatch) {
         gardenByCatalogId.set(`hadston-${String(refMatch[1]).padStart(2, '0')}`, gp);
@@ -145,9 +206,14 @@ export default function HadstonMasterGuidePanel({
     }
 
     const entries: UnifiedGuidePlantEntry[] = [];
+    const activeCatalogSource =
+      liveRhsGuidePlants.length > 0 ? liveRhsGuidePlants : RHS_PLANT_CATALOG;
 
-    // 1. Process all RHS Catalogue plants, merging live state if present in user's garden
-    for (const cp of RHS_PLANT_CATALOG) {
+    // 1. Process live RHS plants (or offline reference fallback), merging live state if present in user's garden
+    for (const cp of activeCatalogSource) {
+      if (seenCatalogIds.has(cp.catalogId.toLowerCase())) continue;
+      seenCatalogIds.add(cp.catalogId.toLowerCase());
+
       const matchedGarden =
         gardenByCatalogId.get(cp.catalogId.toLowerCase()) ||
         gardenByLowerName.get(cp.name.toLowerCase()) ||
@@ -200,6 +266,8 @@ export default function HadstonMasterGuidePanel({
         category: matchedGarden?.category || resolvePlantGroupCategory(cp),
         rhsRating: effectiveRhs,
         photoRef: cp.photoRef,
+        photoUrl: matchedGarden?.photoUrl || cp.photoUrl,
+        rhsUrl: matchedGarden?.rhsUrl || cp.rhsUrl,
         inGarden: Boolean(matchedGarden),
         gardenPlant: matchedGarden,
         catalogPlant: cp,
@@ -222,7 +290,7 @@ export default function HadstonMasterGuidePanel({
       });
     }
 
-    // 2. Include any custom user-added plants from plantInventory that aren't in RHS_PLANT_CATALOG
+    // 2. Include all plants in the user's garden (including live RHS plants added earlier)
     for (const gp of plantInventory) {
       if (matchedGardenIds.has(gp.id)) continue;
       const careLog = plantCareLogs[gp.id];
@@ -248,44 +316,55 @@ export default function HadstonMasterGuidePanel({
           {
             id: gp.id,
             name: gp.name,
-            rhsRating: gp.rhsRating
+            rhsRating: gp.rhsRating,
+            feedWindowUk: gp.feedWindowUk,
+            pruneMonthsUk: gp.pruneMonthsUk
           },
           currentUkMonthIdx
         );
 
       entries.push({
         key: gp.id,
-        displayName: cleanDisplayPlantName(gp.name),
+        displayName: gp.commonName || cleanDisplayPlantName(gp.name),
+        botanicalName: gp.botanicalName,
         category: gp.category || resolvePlantGroupCategory(gp),
         rhsRating: gp.rhsRating || 'H4',
+        photoUrl: gp.photoUrl,
+        rhsUrl: gp.rhsUrl,
         inGarden: true,
         gardenPlant: gp,
         location: gp.location || 'Main Garden Border',
         growthStage: gp.growthStage || 'Established',
         vulnerabilities: gp.vulnerabilities || [],
-        soilAndSun: 'Moist, well-drained fertile garden loam amended with organic compost.',
-        feedWindowUk: 'March to July',
-        feedTypeNpk: 'Balanced slow-release organic fertiliser or liquid seaweed feed',
-        feedFrequencyDosage: 'Apply in spring as active growth begins; avoid high-nitrogen feeds after July.',
-        pruneMonthsUk: 'Late winter or after flowering',
-        pruneType: 'Routine Maintenance',
-        pruneTechnique: 'Remove dead, damaged, or crossing stems and lightly shape.',
-        pruneAvoid: 'Avoid heavy pruning during hard frost.',
+        soilAndSun: gp.soilAndSun || 'Moist, well-drained fertile garden loam amended with organic compost.',
+        feedWindowUk: gp.feedWindowUk || 'March to July',
+        feedTypeNpk: gp.feedTypeNpk || 'Balanced slow-release organic fertiliser or liquid seaweed feed',
+        feedFrequencyDosage:
+          gp.feedFrequencyDosage ||
+          'Apply in spring as active growth begins; avoid high-nitrogen feeds after July.',
+        pruneMonthsUk: gp.pruneMonthsUk || 'Late winter or after flowering',
+        pruneType: gp.pruneType || 'Routine Maintenance',
+        pruneTechnique:
+          gp.pruneTechnique || 'Remove dead, damaged, or crossing stems and lightly shape.',
+        pruneAvoid: gp.pruneAvoid || 'Avoid heavy pruning during hard frost.',
         overwinteringProtocol:
+          gp.overwinteringProtocol ||
           'Mulch root zone with 5cm composted bark before winter frost and ensure free drainage.',
+        idDisambiguationNote: gp.idDisambiguationNote,
         careLogKey: gp.id,
         health,
         monthlyCare
       });
     }
 
-    // Sort so plants in the user's garden appear first, followed by catalogue plants
+    // Sort so plants in the user's garden appear first, followed by live RHS catalogue plants
     return entries.sort((a, b) => {
       if (a.inGarden !== b.inGarden) return a.inGarden ? -1 : 1;
       return a.displayName.localeCompare(b.displayName);
     });
   }, [
     plantInventory,
+    liveRhsGuidePlants,
     plantHealthMap,
     plantMonthlyCareMap,
     plantCareLogs,
@@ -561,6 +640,7 @@ export default function HadstonMasterGuidePanel({
                         plantId={entry.key}
                         plantName={entry.displayName}
                         photoRef={entry.photoRef}
+                        photoUrl={entry.photoUrl}
                         size="md"
                       />
                       <div className="min-w-0 flex-1">
@@ -572,6 +652,16 @@ export default function HadstonMasterGuidePanel({
                             <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-900">
                               In My Garden ✓
                             </span>
+                          )}
+                          {entry.rhsUrl && (
+                            <a
+                              href={entry.rhsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-1.5 py-0.5 rounded-md bg-stone-100 hover:bg-emerald-50 border border-stone-200 text-[10px] font-semibold text-emerald-800 transition"
+                            >
+                              rhs.org.uk ↗
+                            </a>
                           )}
                         </div>
                         {entry.botanicalName && (

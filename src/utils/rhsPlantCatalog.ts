@@ -8,18 +8,20 @@ import { EXTENDED_RHS_CATALOG_PLANTS } from './rhsExtendedCatalogData';
 
 export interface RhsCatalogPlant {
   catalogId: string;
+  rhsPlantId?: number;
   photoRef?: number;
   isHadstonCollection?: boolean;
   name: string;
   commonName: string;
   botanicalName?: string;
-  category: 'ORNAMENTAL' | 'EDIBLE_ALLOTMENT' | 'SHRUB_TREE' | 'TENDER_PATIO';
-  rhsRating: 'H1a' | 'H1b' | 'H1c' | 'H2' | 'H3' | 'H4' | 'H5' | 'H6' | 'H7';
+  category: 'ORNAMENTAL' | 'EDIBLE_ALLOTMENT' | 'SHRUB_TREE' | 'TENDER_PATIO' | PlantGroupCategoryId | string;
+  groupCategory?: PlantGroupCategoryId | string;
+  rhsRating: 'H1a' | 'H1b' | 'H1c' | 'H2' | 'H3' | 'H4' | 'H5' | 'H6' | 'H7' | string;
   recommendedLocation: string;
   defaultOctGrowthStage: string;
   vulnerabilities: string[];
-  clayNotes: string;
-  // Extended Master Horticulturist fields for the 32 Hadston Garden plants
+  clayNotes?: string;
+  // Extended Master Horticulturist & Live RHS fields
   soilAndSun?: string;
   characteristicsAndNative?: string;
   feedTypeNpk?: string;
@@ -31,6 +33,12 @@ export interface RhsCatalogPlant {
   pruneAvoid?: string;
   overwinteringProtocol?: string;
   idDisambiguationNote?: string;
+  photoUrl?: string;
+  rhsUrl?: string;
+  isAgm?: boolean;
+  isPollinatorFriendly?: boolean;
+  height?: string;
+  spread?: string;
 }
 
 export type CatalogPlantItem = RhsCatalogPlant;
@@ -1927,6 +1935,68 @@ export function calculatePlantHealthScore(
     factorItems
   };
 }
+
+// ============================================================================
+// LIVE RHS WEBSITE SEARCH CLIENT & RUNTIME CACHE
+// ============================================================================
+
+export const LIVE_RHS_PLANT_CACHE = new Map<string, RhsCatalogPlant>();
+
+export function registerLiveRhsPlant(plant: RhsCatalogPlant) {
+  if (!plant) return;
+  if (plant.catalogId) {
+    LIVE_RHS_PLANT_CACHE.set(plant.catalogId.toLowerCase(), plant);
+  }
+  if (plant.name) {
+    LIVE_RHS_PLANT_CACHE.set(plant.name.toLowerCase(), plant);
+  }
+  if (plant.commonName) {
+    LIVE_RHS_PLANT_CACHE.set(plant.commonName.toLowerCase(), plant);
+  }
+  if (plant.botanicalName) {
+    LIVE_RHS_PLANT_CACHE.set(plant.botanicalName.toLowerCase(), plant);
+  }
+}
+
+export async function fetchLiveRhsCatalogPlants(
+  query: string = '',
+  categoryFilter: string = 'ALL',
+  limit: number = 16,
+  signal?: AbortSignal
+): Promise<{
+  source: 'RHS_LIVE_API' | 'LOCAL_FALLBACK';
+  totalHits: number;
+  plants: RhsCatalogPlant[];
+}> {
+  const params = new URLSearchParams({
+    q: query.trim(),
+    category: categoryFilter,
+    limit: String(limit)
+  });
+
+  const res = await fetch(`/api/rhs/plants/search?${params.toString()}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    signal
+  });
+
+  if (!res.ok) {
+    throw new Error(`RHS search endpoint returned HTTP ${res.status}`);
+  }
+
+  const data = await res.json();
+  const plants: RhsCatalogPlant[] = Array.isArray(data?.plants) ? data.plants : [];
+  for (const p of plants) {
+    registerLiveRhsPlant(p);
+  }
+
+  return {
+    source: data?.source === 'RHS_LIVE_API' ? 'RHS_LIVE_API' : 'LOCAL_FALLBACK',
+    totalHits: Number(data?.totalHits ?? plants.length),
+    plants
+  };
+}
+
 
 
 
