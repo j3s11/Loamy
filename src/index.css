@@ -16,6 +16,7 @@
   button,
   a,
   input,
+  textarea,
   select,
   [role="button"] {
     touch-action: manipulation;
@@ -25,6 +26,15 @@
   .tabular-nums {
     font-family: 'JetBrains Mono', monospace;
     font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Prevent iOS Safari / mobile browsers from auto-zooming the page when focusing search or form inputs (requires >= 16px font-size) */
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
   }
 }
 

@@ -1759,7 +1759,7 @@ export default function App() {
                         if (locationValidationNotice) setLocationValidationNotice('');
                       }}
                       placeholder="Start typing town, village, or postcode (e.g. York, Morpeth, NE65)..."
-                      className="w-full min-h-[44px] pl-10 pr-9 py-2 text-sm rounded-xl bg-stone-50 border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
+                      className="w-full min-h-[44px] pl-10 pr-9 py-2 text-base sm:text-sm rounded-xl bg-stone-50 border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
                     />
                     {locationInputText && (
                       <button
@@ -1972,7 +1972,7 @@ export default function App() {
                         data-testid="garden-location-select"
                         value={selectedLocationPreset ? selectedLocationPreset.id : ''}
                         onChange={(e) => handleSelectLocationPreset(e.target.value)}
-                        className="px-2.5 py-1 text-xs font-medium rounded-lg bg-stone-50 border border-stone-300 text-slate-800 focus:outline-none focus:border-emerald-700"
+                        className="px-2.5 py-1 text-base sm:text-xs font-medium rounded-lg bg-stone-50 border border-stone-300 text-slate-800 focus:outline-none focus:border-emerald-700"
                       >
                         <option value="" disabled>
                           Choose a UK preset...
@@ -2015,7 +2015,7 @@ export default function App() {
                           setActiveSuggestionIndex(-1);
                         }}
                         placeholder="Start typing town, village, or postcode (e.g. York, Morpeth, NE65)..."
-                        className="w-full min-h-[40px] pl-9 pr-8 py-1.5 text-sm rounded-xl bg-stone-50 border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
+                        className="w-full min-h-[40px] pl-9 pr-8 py-1.5 text-base sm:text-sm rounded-xl bg-stone-50 border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
                       />
                       {locationInputText && (
                         <button
@@ -2789,7 +2789,7 @@ export default function App() {
                       value={inventoryFilterText}
                       onChange={(e) => setInventoryFilterText(e.target.value)}
                       placeholder={`Filter ${plantInventory.length} plants in plot...`}
-                      className="min-h-[38px] px-3 py-1.5 text-xs sm:text-sm rounded-xl bg-stone-50 border border-stone-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700 w-full sm:w-52"
+                      className="min-h-[38px] px-3 py-1.5 text-base sm:text-sm rounded-xl bg-stone-50 border border-stone-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700 w-full sm:w-52"
                     />
                     {inventoryFilterText && (
                       <button
@@ -2938,7 +2938,7 @@ export default function App() {
                         setCatalogSearchQuery(e.target.value);
                         setIsCatalogOpen(true);
                       }}
-                      className="w-full min-h-[40px] pl-9 pr-8 py-1.5 text-xs sm:text-sm rounded-xl bg-white border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-700"
+                      className="w-full min-h-[40px] pl-9 pr-8 py-1.5 text-base sm:text-sm rounded-xl bg-white border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-700"
                     />
                     {(catalogSearchQuery || isCatalogOpen) && (
                       <button
@@ -3017,7 +3017,7 @@ export default function App() {
                           data-testid="plantnet-organ-select"
                           value={photoIdentifyOrgan}
                           onChange={(e) => setPhotoIdentifyOrgan(e.target.value as any)}
-                          className="min-h-[34px] px-2.5 py-1 text-xs rounded-lg bg-stone-50 border border-stone-300 text-slate-800"
+                          className="min-h-[34px] px-2.5 py-1 text-base sm:text-xs rounded-lg bg-stone-50 border border-stone-300 text-slate-800"
                         >
                           <option value="auto">Auto-detect</option>
                           <option value="flower">Flower</option>
@@ -3348,7 +3348,7 @@ export default function App() {
                         placeholder="Type a plant name to search Pl@ntNet + RHS..."
                         value={plantForm.name}
                         onChange={(e) => setPlantForm({ ...plantForm, name: e.target.value })}
-                        className="w-full min-h-[38px] px-3 py-1.5 text-sm rounded-xl bg-white border border-stone-300 text-slate-900"
+                        className="w-full min-h-[38px] px-3 py-1.5 text-base sm:text-sm rounded-xl bg-white border border-stone-300 text-slate-900"
                       />
                       {formLiveSuggestions.length > 0 && (
                         <div className="mt-1.5 p-2 rounded-xl bg-white border border-emerald-200 shadow-sm space-y-1">
@@ -3393,7 +3393,7 @@ export default function App() {
                             category: e.target.value as PlantGroupCategoryId
                           })
                         }
-                        className="w-full min-h-[38px] px-2.5 py-1.5 text-xs rounded-xl bg-white border border-stone-300 text-slate-900"
+                        className="w-full min-h-[38px] px-2.5 py-1.5 text-base sm:text-xs rounded-xl bg-white border border-stone-300 text-slate-900"
                       >
                         {PLANT_CATEGORY_DEFINITIONS.map((cat) => (
                           <option key={cat.id} value={cat.id}>
@@ -3413,7 +3413,7 @@ export default function App() {
                         id="plant-rhs-select"
                         value={plantForm.rhsRating}
                         onChange={(e) => setPlantForm({ ...plantForm, rhsRating: e.target.value })}
-                        className="w-full min-h-[38px] px-2.5 py-1.5 text-xs rounded-xl bg-white border border-stone-300 text-slate-900"
+                        className="w-full min-h-[38px] px-2.5 py-1.5 text-base sm:text-xs rounded-xl bg-white border border-stone-300 text-slate-900"
                       >
                         {UI_CONFIG.RHS_RATINGS.map((r) => (
                           <option key={r.code} value={r.code}>
@@ -3431,7 +3431,7 @@ export default function App() {
                         id="plant-location-select"
                         value={plantForm.location}
                         onChange={(e) => setPlantForm({ ...plantForm, location: e.target.value })}
-                        className="w-full min-h-[38px] px-2.5 py-1.5 text-xs rounded-xl bg-white border border-stone-300 text-slate-900"
+                        className="w-full min-h-[38px] px-2.5 py-1.5 text-base sm:text-xs rounded-xl bg-white border border-stone-300 text-slate-900"
                       >
                         {UI_CONFIG.LOCATION_PRESETS.map((loc) => (
                           <option key={loc} value={loc}>
@@ -3451,7 +3451,7 @@ export default function App() {
                       data-testid="plant-growth-stage-select"
                       value={plantForm.growthStage}
                       onChange={(e) => setPlantForm({ ...plantForm, growthStage: e.target.value })}
-                      className="w-full min-h-[38px] px-2.5 py-1.5 text-xs rounded-xl bg-white border border-stone-300 text-slate-900"
+                      className="w-full min-h-[38px] px-2.5 py-1.5 text-base sm:text-xs rounded-xl bg-white border border-stone-300 text-slate-900"
                     >
                       {UI_CONFIG.GROWTH_STAGE_PRESETS.map((stage) => (
                         <option key={stage} value={stage}>
@@ -3788,7 +3788,7 @@ export default function App() {
                     if (backupErrorNotice) setBackupErrorNotice('');
                   }}
                   placeholder='Paste your Loamy backup JSON here or click "Choose .json File" above...'
-                  className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-stone-50 border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
+                  className="w-full px-3 py-2 text-base sm:text-xs font-mono rounded-xl bg-stone-50 border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
                 />
               </div>
 

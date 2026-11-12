@@ -436,7 +436,7 @@ export default function SoilSaturationLogPanel({
                 id="soil-zone-select"
                 value={formState.locationZone}
                 onChange={(e) => setFormState({ ...formState, locationZone: e.target.value })}
-                className="w-full min-h-[40px] px-3 py-1.5 text-sm rounded-xl bg-white border border-stone-300 text-slate-900"
+                className="w-full min-h-[40px] px-3 py-1.5 text-base sm:text-sm rounded-xl bg-white border border-stone-300 text-slate-900"
               >
                 {localizedPresets.map((loc) => (
                   <option key={loc} value={loc}>
@@ -459,7 +459,7 @@ export default function SoilSaturationLogPanel({
                 required
                 value={formState.rainfall24hMm}
                 onChange={(e) => setFormState({ ...formState, rainfall24hMm: e.target.value })}
-                className="w-full min-h-[44px] sm:min-h-[40px] px-3 py-1.5 text-sm rounded-xl bg-white border border-stone-300 text-slate-900 tabular-nums"
+                className="w-full min-h-[44px] sm:min-h-[40px] px-3 py-1.5 text-base sm:text-sm rounded-xl bg-white border border-stone-300 text-slate-900 tabular-nums"
               />
             </div>
 
@@ -476,7 +476,7 @@ export default function SoilSaturationLogPanel({
                 required
                 value={formState.rainfall48hMm}
                 onChange={(e) => setFormState({ ...formState, rainfall48hMm: e.target.value })}
-                className="w-full min-h-[44px] sm:min-h-[40px] px-3 py-1.5 text-sm rounded-xl bg-white border border-stone-300 text-slate-900 tabular-nums"
+                className="w-full min-h-[44px] sm:min-h-[40px] px-3 py-1.5 text-base sm:text-sm rounded-xl bg-white border border-stone-300 text-slate-900 tabular-nums"
               />
             </div>
           </div>

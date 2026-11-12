@@ -615,7 +615,7 @@ export default function MonthlyClayChecklistPanel({
                 placeholder="e.g., Mulch Hydrangeas with pine bark"
                 value={customForm.title}
                 onChange={(e) => setCustomForm({ ...customForm, title: e.target.value })}
-                className="w-full min-h-[40px] px-3 py-1.5 text-sm rounded-xl bg-white border border-stone-300 text-slate-900"
+                className="w-full min-h-[40px] px-3 py-1.5 text-base sm:text-sm rounded-xl bg-white border border-stone-300 text-slate-900"
               />
             </div>
 
@@ -630,7 +630,7 @@ export default function MonthlyClayChecklistPanel({
                 id="custom-monthly-cat"
                 value={customForm.category}
                 onChange={(e) => setCustomForm({ ...customForm, category: e.target.value })}
-                className="w-full min-h-[40px] px-2.5 py-1.5 text-sm rounded-xl bg-white border border-stone-300 text-slate-900"
+                className="w-full min-h-[40px] px-2.5 py-1.5 text-base sm:text-sm rounded-xl bg-white border border-stone-300 text-slate-900"
               >
                 {Object.entries(CATEGORY_LABELS)
                   .filter(([k]) => k !== 'ALL' && k !== 'PRIORITY_SEASONAL')

@@ -393,7 +393,7 @@ export default function HadstonMasterGuidePanel({
                 value={plantFilterQuery}
                 onChange={(e) => setPlantFilterQuery(e.target.value)}
                 placeholder="Search my garden plants by name, botanical name, soil pH, feeding, or pruning month..."
-                className="w-full min-h-[38px] pl-9 pr-8 py-1.5 text-xs sm:text-sm rounded-xl bg-stone-50 border border-stone-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
+                className="w-full min-h-[38px] pl-9 pr-8 py-1.5 text-base sm:text-sm rounded-xl bg-stone-50 border border-stone-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
               />
               {plantFilterQuery && (
                 <button
@@ -874,7 +874,7 @@ export default function HadstonMasterGuidePanel({
                               onChange={(e) =>
                                 onUpdatePlantPersonalNote(entry.careLogKey, e.target.value)
                               }
-                              className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-700"
+                              className="w-full px-2.5 py-1.5 text-base sm:text-xs rounded-lg bg-white border border-stone-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-700"
                             />
                           )}
                         </div>
