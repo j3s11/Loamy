@@ -419,12 +419,12 @@ export default function App() {
     'OVERVIEW' | 'MASTER_GUIDE' | 'CHECKLIST' | 'SOIL_TREND' | 'PLANTS'
   >('OVERVIEW');
 
-  // Minimalist progressive-disclosure states (collapsed by default until clicked)
-  const [showWeatherDetails, setShowWeatherDetails] = useState<boolean>(false);
+  // Weather tab details & sections expanded by default
+  const [showWeatherDetails, setShowWeatherDetails] = useState<boolean>(true);
   const [expandedForecastDayIdx, setExpandedForecastDayIdx] = useState<number | null>(null);
   const [expandedAlertIndices, setExpandedAlertIndices] = useState<Record<number, boolean>>({});
-  const [showRainfallChart, setShowRainfallChart] = useState<boolean>(false);
-  const [showSoilTrendDrawer, setShowSoilTrendDrawer] = useState<boolean>(false);
+  const [showRainfallChart, setShowRainfallChart] = useState<boolean>(true);
+  const [showSoilTrendDrawer, setShowSoilTrendDrawer] = useState<boolean>(true);
   const [showPlantManagerDrawer, setShowPlantManagerDrawer] = useState<boolean>(false);
 
   // Location text input synced with current gardenProfile.locationName (empty on first visit)
@@ -1493,6 +1493,11 @@ export default function App() {
       ? Number(hazardSummary.lowestForecastTempC)
       : -0.5;
 
+  const soilTemp6cmC: number =
+    currentHour?.soilTemp6cmC !== undefined && currentHour?.soilTemp6cmC !== null
+      ? Number(currentHour.soilTemp6cmC)
+      : 7.5;
+
   // 2. Wind Speed (mph) & Peak Gust (mph)
   const currentWindSpeedMph: number =
     resolveWindMph(currentHour?.windSpeedMph, currentHour?.windSpeedKmh) ??
@@ -2061,9 +2066,6 @@ export default function App() {
                       <Compass className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
                       <span>What direction does your garden face?</span>
                     </span>
-                    <p className="text-xs text-slate-500 mt-0.5 truncate">
-                      {currentAspectShortName}: {currentAspectOption.summary}
-                    </p>
                   </div>
 
                   <div
@@ -2197,11 +2199,11 @@ export default function App() {
                   {showWeatherDetails && (
                     <div className="mt-2 pt-2 border-t border-stone-200/70 space-y-1 text-[11px] text-slate-600 tabular-nums">
                       <p className="font-medium text-slate-700">
-                        High {todayMaxTempC.toFixed(1)}°C · 7d Low {lowest7DayTempC.toFixed(1)}°C
+                        7d Low {lowest7DayTempC.toFixed(1)}°C · Soil {soilTemp6cmC.toFixed(1)}°C
                       </p>
                       <p>
                         {hazardSummary.frostRiskDetected
-                          ? `Frost alert: overnight low reaches ${lowest7DayTempC.toFixed(1)}°C`
+                          ? 'Ground/air frost risk (≤ 2°C)'
                           : 'Above ground-frost threshold'}
                       </p>
                     </div>
@@ -2299,16 +2301,9 @@ export default function App() {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-3 text-[11px] text-slate-500">
-                  <span className="inline-flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-sky-600 shrink-0" />
-                    <span>Frost</span>
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                    <span>Wind</span>
-                  </span>
-                </div>
+                <span className="text-[11px] text-slate-500">
+                  Daily low / high (°C), rain (mm) &amp; peak gust
+                </span>
               </div>
 
               {dailyForecast.length === 0 ? (
@@ -2346,28 +2341,17 @@ export default function App() {
                             : 'bg-stone-50/60 border-stone-200/80 hover:border-stone-300'
                         }`}
                       >
-                        {/* Compact single-row layout on mobile/tablet, stacked card on lg+ */}
                         <div className="flex items-center justify-between gap-2 lg:flex-col lg:items-stretch lg:gap-1.5 w-full">
-                          <div className="flex items-center gap-2 lg:justify-between min-w-0">
-                            <span
-                              className={`w-2 h-2 rounded-full shrink-0 lg:order-2 ${
-                                isFrost
-                                  ? 'bg-sky-600'
-                                  : isHighWind
-                                  ? 'bg-amber-500'
-                                  : 'bg-emerald-500/60'
-                              }`}
-                              title={isFrost ? 'Frost risk' : isHighWind ? 'High wind' : 'Normal'}
-                            />
+                          <div className="flex items-center justify-between gap-2 min-w-0">
                             <span
                               title={formattedDayLabel}
-                              className="text-xs font-bold text-slate-900 truncate w-20 sm:w-24 lg:w-auto lg:order-1"
+                              className="text-xs font-bold text-slate-900 truncate w-20 sm:w-24 lg:w-auto"
                             >
                               {formattedDayLabel}
                             </span>
                             {(isFrost || isHighWind) && (
                               <span
-                                className={`lg:hidden text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0 ${
+                                className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0 ${
                                   isFrost
                                     ? 'bg-sky-700 text-white'
                                     : 'bg-amber-600 text-white'
@@ -2379,43 +2363,24 @@ export default function App() {
                           </div>
 
                           <div className="flex items-center justify-end lg:justify-between gap-3 lg:gap-1 tabular-nums shrink-0 lg:w-full lg:pt-0.5">
-                            <span className="text-[11px] text-slate-600 lg:hidden w-14 text-right">
+                            <span className="text-[11px] text-slate-600 w-14 lg:w-auto text-right lg:text-left truncate">
                               {day.precipSumMm !== undefined && day.precipSumMm !== null
                                 ? `${day.precipSumMm} mm`
                                 : '0 mm'}
                             </span>
-                            <div className="flex items-baseline gap-1.5 lg:justify-between lg:w-full">
-                              <span className="text-xs text-slate-500 lg:order-2">
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-xs text-slate-500">
                                 {day.minTempC !== null && day.minTempC !== undefined
                                   ? `${day.minTempC}°C`
                                   : '--'}
                               </span>
-                              <span className="text-xs text-slate-300 lg:hidden">/</span>
-                              <span className="text-sm sm:text-base font-bold text-slate-900 lg:order-1">
+                              <span className="text-xs text-slate-300">/</span>
+                              <span className="text-sm sm:text-base font-bold text-slate-900">
                                 {day.maxTempC !== null && day.maxTempC !== undefined
                                   ? `${day.maxTempC}°`
                                   : '--'}
                               </span>
                             </div>
-                          </div>
-
-                          <div className="hidden lg:flex items-center justify-between gap-1 text-[11px] text-slate-600 tabular-nums w-full">
-                            <span className="truncate">
-                              {day.precipSumMm !== undefined && day.precipSumMm !== null
-                                ? `${day.precipSumMm} mm`
-                                : '0 mm'}
-                            </span>
-                            {(isFrost || isHighWind) && (
-                              <span
-                                className={`text-[10px] font-bold uppercase px-1.5 py-0.2 rounded ${
-                                  isFrost
-                                    ? 'bg-sky-700 text-white'
-                                    : 'bg-amber-600 text-white'
-                                }`}
-                              >
-                                {isFrost ? 'Frost' : 'Wind'}
-                              </span>
-                            )}
                           </div>
                         </div>
 
@@ -2434,7 +2399,7 @@ export default function App() {
               )}
             </section>
 
-            {/* 3. EXPANDABLE 1-LINE WEATHER ALERTS WITH INTERACTIVE PROTECTION CHECKLIST */}
+            {/* 3. EXPANDABLE WEATHER ALERTS WITH INTERACTIVE PROTECTION CHECKLIST */}
             <section className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -2447,18 +2412,10 @@ export default function App() {
                   </span>
                 </div>
 
-                {activeWarnings.length > 0 ? (
+                {activeWarnings.length > 0 && (
                   <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-100 text-amber-900">
                     Met Office {activeWarnings[0].level} Warning
                   </span>
-                ) : (
-                  weatherAlerts.length > 0 && (
-                    <span className="text-[11px] text-slate-500">
-                      {plantInventory.length > 0
-                        ? 'Tap an alert to tick off protected plants'
-                        : 'Tap an alert to view recommended actions'}
-                    </span>
-                  )
                 )}
               </div>
 
@@ -2472,7 +2429,7 @@ export default function App() {
                   {weatherAlerts.map((alert: any, idx: number) => {
                     const style =
                       UI_CONFIG.SEVERITY_STYLES[alert.severity] || UI_CONFIG.SEVERITY_STYLES.INFO;
-                    const isExpanded = Boolean(expandedAlertIndices[idx]);
+                    const isExpanded = expandedAlertIndices[idx] !== false;
                     const affectedList: string[] = alert.affectedPlants || [];
                     const plantCount = affectedList.length;
                     const protectedCount = affectedList.filter(
@@ -2491,7 +2448,7 @@ export default function App() {
                           onClick={() =>
                             setExpandedAlertIndices((prev) => ({
                               ...prev,
-                              [idx]: !prev[idx]
+                              [idx]: !(prev[idx] !== false)
                             }))
                           }
                           aria-expanded={isExpanded}

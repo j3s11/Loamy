@@ -140,57 +140,38 @@ const SevenDayRainfallRecharts = React.memo(function SevenDayRainfallRecharts({
   return (
     <div
       data-testid="seven-day-rainfall-barchart"
-      className="bg-white border border-stone-200/90 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4"
+      className="bg-white rounded-xl p-3 sm:p-4 space-y-3"
     >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3.5">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
-              <CloudRain className="w-4 h-4" />
-            </span>
-            <h3 className="text-base sm:text-lg font-bold text-slate-900">
-              Daily Rainfall Forecast (Next 7 Days)
-            </h3>
-            {lastUpdatedLabel && (
-              <span
-                data-testid="rainfall-chart-last-updated"
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-stone-50 border border-stone-200/80 px-2 py-0.5 rounded-md tabular-nums"
-              >
-                <Clock className="w-3 h-3 text-emerald-700 shrink-0" />
-                <span>Last updated: {lastUpdatedLabel}</span>
-              </span>
-            )}
-          </div>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Recharts daily precipitation forecast calibrated for {locationName}
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-stone-100">
+        <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-50/80 border border-blue-200 text-xs text-blue-950 font-medium">
+          <Droplets className="w-3.5 h-3.5 text-blue-700" />
+          <span>
+            7-Day Total:{' '}
+            <strong className="font-bold text-blue-900">
+              {total7DayRainfallMm.toFixed(1)} mm
+            </strong>
+          </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50/80 border border-blue-200 text-xs text-blue-950 font-medium">
-            <Droplets className="w-3.5 h-3.5 text-blue-700" />
-            <span>
-              7-Day Total:{' '}
-              <strong className="font-bold text-blue-900">
-                {total7DayRainfallMm.toFixed(1)} mm
-              </strong>
-            </span>
-          </div>
+        {lastUpdatedLabel && (
+          <span data-testid="rainfall-chart-last-updated" className="sr-only">
+            Last updated: {lastUpdatedLabel}
+          </span>
+        )}
 
-          <div className="hidden lg:flex items-center gap-2 text-[11px] text-slate-500">
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-xs bg-[#38bdf8]" />
-              Light (&lt;5mm)
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-xs bg-[#2563eb]" />
-              Moderate (5-15mm)
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-xs bg-[#1e3a8a]" />
-              Heavy (15mm+)
-            </span>
-          </div>
+        <div className="flex items-center gap-2.5 text-[11px] text-slate-500">
+          <span className="inline-flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-xs bg-[#38bdf8]" />
+            Light (&lt;5mm)
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-xs bg-[#2563eb]" />
+            Moderate (5-15mm)
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-xs bg-[#1e3a8a]" />
+            Heavy (15mm+)
+          </span>
         </div>
       </div>
 

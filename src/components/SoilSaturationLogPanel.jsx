@@ -290,59 +290,32 @@ export default function SoilSaturationLogPanel({
     <section
       aria-label="Historical Rainfall and Soil Saturation Database"
       data-testid="soil-saturation-log-panel"
-      className="bg-white border border-stone-200/90 rounded-2xl p-5 sm:p-6 shadow-xs space-y-6"
+      className="bg-white rounded-xl p-3 sm:p-4 space-y-5"
     >
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-stone-200 pb-4">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-stone-100 pb-3">
         <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <Database className="w-5 h-5 text-emerald-700 shrink-0" />
-            <h2
-              data-testid="soil-panel-location-heading"
-              className="text-lg sm:text-xl font-bold text-slate-900"
-            >
-              Clay Soil Saturation &amp; 30-Day Trend
-              {activeLocationName ? ` — ${activeLocationName}` : ''}
-            </h2>
-          </div>
+          <h2 data-testid="soil-panel-location-heading" className="sr-only">
+            Clay Soil Saturation &amp; 30-Day Trend
+            {activeLocationName ? ` — ${activeLocationName}` : ''}
+          </h2>
+          <span data-testid="soil-active-location-name" className="sr-only">
+            {activeLocationName}
+          </span>
+          <span data-testid="soil-last-updated-badge" className="sr-only">
+            Last updated: {latestRecordedDateLabel}
+          </span>
 
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600">
-            {activeLocationName && (
-              <>
-                <span className="inline-flex items-center gap-1 font-semibold text-emerald-800">
-                  <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                  <span data-testid="soil-active-location-name">{activeLocationName}</span>
-                </span>
-                <span aria-hidden="true">·</span>
-              </>
-            )}
-            <span className="inline-flex items-center gap-1 font-medium text-amber-800">
-              <Compass className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-              <span>{aspectLabel} Aspect</span>
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>RHS {activeRhsZone}</span>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
             {locationCalibration?.baselineClayRetentionPct && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="tabular-nums">
-                  Baseline Retention: <strong>{locationCalibration.baselineClayRetentionPct}%</strong>
-                </span>
-              </>
+              <span className="px-2 py-0.5 rounded-md bg-stone-100 border border-stone-200 font-semibold text-slate-800 tabular-nums">
+                Baseline Clay Retention: {locationCalibration.baselineClayRetentionPct}%
+              </span>
             )}
-            <span aria-hidden="true">·</span>
-            <span
-              data-testid="soil-last-updated-badge"
-              className="inline-flex items-center gap-1 font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-md tabular-nums"
-            >
-              <Clock className="w-3 h-3 text-emerald-700 shrink-0" />
-              <span>Last updated: {latestRecordedDateLabel}</span>
-            </span>
+            <p data-testid="soil-hydrology-note" className="text-xs text-slate-600">
+              {locationCalibration?.hydrologyNote ||
+                'Monitors 48-hour rainfall (mm) and heavy clay waterlogging thresholds (>= 85% saturation).'}
+            </p>
           </div>
-
-          <p data-testid="soil-hydrology-note" className="text-xs sm:text-sm text-slate-600 pt-0.5">
-            {locationCalibration?.hydrologyNote ||
-              'Monitors 48-hour rainfall (mm) and heavy clay waterlogging thresholds (>= 85% saturation).'}
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">

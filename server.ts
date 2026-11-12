@@ -160,15 +160,28 @@ async function startServer() {
   // 3. VITE DEV MIDDLEWARE / STATIC PRODUCTION ASSETS
   // ==========================================================================
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
+    let viteMiddleware: any = null;
+    const viteReadyPromise = createViteServer({
       server: {
         middlewareMode: true,
         hmr: false,
         watch: null
       },
       appType: 'spa'
+    }).then((vite) => {
+      viteMiddleware = vite.middlewares;
     });
-    app.use(vite.middlewares);
+
+    app.use(async (req, res, next) => {
+      try {
+        if (!viteMiddleware) {
+          await viteReadyPromise;
+        }
+        return viteMiddleware(req, res, next);
+      } catch (err) {
+        return next(err);
+      }
+    });
   } else {
     const distPath = path.resolve(process.cwd(), 'dist');
     app.use(express.static(distPath));

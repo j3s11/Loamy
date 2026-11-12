@@ -140,7 +140,7 @@ export default function HadstonMasterGuidePanel({
   onUpdatePlantPersonalNote
 }: HadstonMasterGuidePanelProps) {
   const [plantFilterQuery, setPlantFilterQuery] = useState<string>('');
-  const [scopeFilter, setScopeFilter] = useState<'ALL' | 'MY_GARDEN' | 'DUE_THIS_MONTH'>('ALL');
+  const [scopeFilter, setScopeFilter] = useState<'MY_GARDEN' | 'DUE_THIS_MONTH'>('MY_GARDEN');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [rhsFilter, setRhsFilter] = useState<'ALL' | 'TENDER_H1_H4' | 'HARDY_H5_H7'>('ALL');
   const [expandedPlantKeys, setExpandedPlantKeys] = useState<Record<string, boolean>>({});
@@ -381,14 +381,14 @@ export default function HadstonMasterGuidePanel({
   }, [focusedPlantId, onClearFocusedPlant]);
 
   const dueThisMonthCount = useMemo(
-    () => unifiedPlants.filter((p) => p.monthlyCare.isDueThisMonth).length,
+    () => unifiedPlants.filter((p) => p.inGarden && p.monthlyCare.isDueThisMonth).length,
     [unifiedPlants]
   );
 
   const filteredEntries = useMemo(() => {
     const q = plantFilterQuery.trim().toLowerCase();
     return unifiedPlants.filter((entry) => {
-      if (scopeFilter === 'MY_GARDEN' && !entry.inGarden) return false;
+      if (!entry.inGarden) return false;
       if (scopeFilter === 'DUE_THIS_MONTH' && !entry.monthlyCare.isDueThisMonth) return false;
       if (categoryFilter !== 'ALL' && entry.category !== categoryFilter) return false;
       if (
@@ -458,10 +458,11 @@ export default function HadstonMasterGuidePanel({
               </span>
             </div>
             <h2 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight mt-0.5">
-              Unified Plant Care, Health &amp; Botanical Reference ({unifiedPlants.length} Plants)
+              Unified Plant Care, Health &amp; Botanical Reference ({plantInventory.length}{' '}
+              {plantInventory.length === 1 ? 'Plant' : 'Plants'})
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Complete plant health scores, growth stages, feeding, pruning, winter care, and personal care logs in one place.
+              Complete plant health scores, growth stages, feeding, pruning, winter care, and personal care logs for your garden plants.
             </p>
           </div>
 
@@ -487,7 +488,7 @@ export default function HadstonMasterGuidePanel({
                 data-testid="master-guide-search-input"
                 value={plantFilterQuery}
                 onChange={(e) => setPlantFilterQuery(e.target.value)}
-                placeholder="Search plants by name, botanical name, soil pH, feeding, or pruning month..."
+                placeholder="Search my garden plants by name, botanical name, soil pH, feeding, or pruning month..."
                 className="w-full min-h-[38px] pl-9 pr-8 py-1.5 text-xs sm:text-sm rounded-xl bg-stone-50 border border-stone-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-emerald-700"
               />
               {plantFilterQuery && (
@@ -505,21 +506,9 @@ export default function HadstonMasterGuidePanel({
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
               <button
                 type="button"
-                data-testid="guide-scope-all"
-                onClick={() => setScopeFilter('ALL')}
-                className={`min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-semibold border transition whitespace-nowrap shrink-0 cursor-pointer ${
-                  scopeFilter === 'ALL'
-                    ? 'bg-emerald-800 text-white border-emerald-800'
-                    : 'bg-white text-slate-700 border-stone-200 hover:bg-stone-50'
-                }`}
-              >
-                All Plants ({unifiedPlants.length})
-              </button>
-
-              <button
-                type="button"
                 data-testid="guide-scope-my-garden"
                 onClick={() => setScopeFilter('MY_GARDEN')}
+                aria-pressed={scopeFilter === 'MY_GARDEN'}
                 className={`min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-semibold border transition whitespace-nowrap shrink-0 cursor-pointer ${
                   scopeFilter === 'MY_GARDEN'
                     ? 'bg-emerald-800 text-white border-emerald-800'
@@ -533,7 +522,9 @@ export default function HadstonMasterGuidePanel({
                 type="button"
                 data-testid="filter-due-this-month-button"
                 onClick={() =>
-                  setScopeFilter((prev) => (prev === 'DUE_THIS_MONTH' ? 'ALL' : 'DUE_THIS_MONTH'))
+                  setScopeFilter((prev) =>
+                    prev === 'DUE_THIS_MONTH' ? 'MY_GARDEN' : 'DUE_THIS_MONTH'
+                  )
                 }
                 aria-pressed={scopeFilter === 'DUE_THIS_MONTH'}
                 className={`min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition whitespace-nowrap shrink-0 cursor-pointer ${
@@ -598,17 +589,26 @@ export default function HadstonMasterGuidePanel({
       {filteredEntries.length === 0 ? (
         <div className="bg-white border border-stone-200/90 rounded-2xl p-6 text-center text-xs sm:text-sm text-slate-500 space-y-2">
           <p className="font-semibold text-slate-700">
-            {scopeFilter === 'MY_GARDEN' && plantInventory.length === 0
+            {plantInventory.length === 0
               ? 'You have not added any plants to My Garden Plants yet.'
-              : 'No plants match your current filter.'}
+              : 'No plants in your garden match your current filter.'}
           </p>
-          {scopeFilter === 'MY_GARDEN' && plantInventory.length === 0 && (
+          {plantInventory.length === 0 ? (
+            <p className="text-xs text-slate-500">
+              Use the live RHS Plant Finder on the Plants tab to add plants to your garden and view their care profiles here.
+            </p>
+          ) : (
             <button
               type="button"
-              onClick={() => setScopeFilter('ALL')}
+              onClick={() => {
+                setScopeFilter('MY_GARDEN');
+                setCategoryFilter('ALL');
+                setRhsFilter('ALL');
+                setPlantFilterQuery('');
+              }}
               className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-800 text-white hover:bg-emerald-700 transition cursor-pointer"
             >
-              Show All {unifiedPlants.length} Guide Plants
+              Show All {plantInventory.length} Plants In My Garden
             </button>
           )}
         </div>
