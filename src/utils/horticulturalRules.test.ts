@@ -59,6 +59,7 @@ test('No default location is pre-set on initial load and RHS Zone H4 thresholds 
   assert.equal(ADVISOR_CONFIG.DEFAULT_GARDEN_PROFILE.latitude, null);
   assert.equal(ADVISOR_CONFIG.DEFAULT_GARDEN_PROFILE.longitude, null);
   assert.equal(ADVISOR_CONFIG.DEFAULT_GARDEN_PROFILE.rhsHardinessZone, 'H4');
+  assert.deepEqual(ADVISOR_CONFIG.DEFAULT_PLANT_INVENTORY, []);
 });
 
 test('msToMph, kmhToMph, msToKmh and round1 convert meteorological values accurately', () => {
@@ -149,8 +150,8 @@ test('calculateClaySoilSaturation models heavy clay waterlogging and SQL schema 
   assert.equal(moderateResult.drainageState, 'FIELD_CAPACITY');
 });
 
-test('buildRuleBasedHorticulturalAdvice produces valid schema output for garden inventory', () => {
-  const advice = buildRuleBasedHorticulturalAdvice({
+test('buildRuleBasedHorticulturalAdvice returns empty alerts when no plants are selected and produces valid schema output for selected garden plants', () => {
+  const weatherFixture = {
     hazardSummary: {
       frostRiskDetected: true,
       lowestForecastTempC: -0.5,
@@ -160,28 +161,80 @@ test('buildRuleBasedHorticulturalAdvice produces valid schema output for garden 
       cumulativePrecip48hMm: 34.0
     },
     dailyForecast: [{ date: '2026-10-25', minTempC: -0.5, peakWindGustKmh: 45.0 }]
-  });
+  };
 
+  // 1. No selected plants -> empty weatherAlerts and seasonalTasks
+  const emptyAdvice = buildRuleBasedHorticulturalAdvice(weatherFixture, []);
+  assert.deepEqual(emptyAdvice.weatherAlerts, []);
+  assert.deepEqual(emptyAdvice.seasonalTasks, []);
+
+  // 2. Selected plants -> alerts and tasks strictly for the selected plants
+  const selectedPlants = [
+    {
+      id: 'rhs-lavender',
+      name: 'English Lavender (Lavandula angustifolia)',
+      rhsRating: 'H5',
+      location: 'Sunny South-Facing Border',
+      growthStage: 'Established Shrub',
+      vulnerabilities: ['Winter waterlogging in heavy clay']
+    },
+    {
+      id: 'rhs-salvia',
+      name: 'Mealycup Sage (Salvia farinacea)',
+      rhsRating: 'H3',
+      location: 'Terracotta Patio Pots',
+      growthStage: 'Late Flowering / Pre-Dormancy',
+      vulnerabilities: ['Frost below -2°C']
+    }
+  ];
+
+  const advice = buildRuleBasedHorticulturalAdvice(weatherFixture, selectedPlants);
   assert.ok(Array.isArray(advice.weatherAlerts));
   assert.ok(advice.weatherAlerts.length >= 2);
   assert.ok(Array.isArray(advice.seasonalTasks));
-  assert.ok(advice.seasonalTasks.length >= 3);
+  assert.ok(advice.seasonalTasks.length >= 2);
   assert.ok(typeof advice.soilAndMicroclimateNote === 'string');
 });
 
-test('monthlyClayChecklist provides 12 months of North East heavy clay tasks and accurate progress calculation', () => {
+test('monthlyClayChecklist returns empty tasks when no plants are selected and builds tasks strictly from selected garden plants', () => {
   assert.equal(MONTHLY_CLAY_PROFILES.length, 12);
 
   // Verify October (month index 9) detection for 2026-10-24
   const octDate = new Date('2026-10-24T12:00:00Z');
   assert.equal(getCurrentUkMonthIndex(octDate), 9);
 
-  const octProfile = getMonthlyClayChecklist(9);
+  // Empty inventory returns 0 tasks (no default plants)
+  const emptyOctProfile = getMonthlyClayChecklist(9, []);
+  assert.equal(emptyOctProfile.monthName, 'October');
+  assert.equal(emptyOctProfile.tasks.length, 0);
+
+  // Selected plants generate tasks strictly for those plants
+  const selectedPlants = [
+    {
+      id: 'rhs-lavender',
+      name: 'English Lavender (Lavandula angustifolia)',
+      rhsRating: 'H5',
+      location: 'Sunny South-Facing Border',
+      growthStage: 'Established Shrub',
+      vulnerabilities: ['Winter waterlogging in heavy clay']
+    },
+    {
+      id: 'rhs-rose',
+      name: "Shrub Rose 'Gertrude Jekyll'",
+      rhsRating: 'H6',
+      location: 'Main Clay Border',
+      growthStage: 'Autumn Dormancy Prep',
+      vulnerabilities: ['Wind-rock in wet clay']
+    }
+  ];
+
+  const octProfile = getMonthlyClayChecklist(9, selectedPlants);
   assert.equal(octProfile.monthName, 'October');
-  assert.ok(octProfile.tasks.length >= 4);
+  assert.equal(octProfile.tasks.length, 4);
+  assert.ok(octProfile.tasks.some((t) => t.title.includes('English Lavender')));
 
   const soilOnly = filterMonthlyTasks(octProfile.tasks, 'SOIL_CARE');
-  assert.ok(soilOnly.length >= 1);
+  assert.equal(soilOnly.length, 1);
   assert.ok(soilOnly.every((t) => t.category === 'SOIL_CARE'));
 
   const progress = calculateChecklistProgress(octProfile.tasks, {
@@ -239,7 +292,7 @@ test('searchRhsPlantCatalog searches plants to add by cultivar, common name, and
   assert.equal(inventoryRecords.length, 32);
 });
 
-test('Hadston Master Horticulturist Guide contains all 5 sections, 12 monthly calendars with Week 1-2 & Week 3-4 tasks, and Markdown export', () => {
+test('Hadston Master Horticulturist Guide contains all 5 sections, 12 monthly calendars, and Markdown export tailored strictly to selected garden plants', () => {
   assert.equal(HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR.length, 12);
   for (const m of HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR) {
     assert.ok(m.week1To2.wateringAndSoilCare.length > 10);
@@ -253,17 +306,33 @@ test('Hadston Master Horticulturist Guide contains all 5 sections, 12 monthly ca
   }
 
   assert.ok(HADSTON_LOCAL_RISK_MITIGATION.length >= 4);
-  const md = generateHadstonMasterGuideMarkdown();
-  assert.ok(md.includes('Section 1: Plant Inventory & Identification Summary'));
-  assert.ok(md.includes('Section 2: Month-by-Month & Weekly Task Calendar'));
-  assert.ok(md.includes('Section 3: Specialized Feed & Nutrition Strategy'));
-  assert.ok(md.includes('Section 4: Precision Pruning & Shaping Guide'));
-  assert.ok(md.includes('Section 5: Climate & Seasonal Risk Management'));
-  assert.ok(md.includes('Salvia farinacea'));
-  assert.ok(md.includes('Ceanothus'));
+
+  // Empty inventory Markdown does not include unselected default plants
+  const emptyMd = generateHadstonMasterGuideMarkdown('York', []);
+  assert.ok(emptyMd.includes('No plants selected in My Garden Plants yet'));
+  assert.ok(!emptyMd.includes('Salvia farinacea'));
+
+  // Selected plants Markdown includes only selected plants
+  const selectedMd = generateHadstonMasterGuideMarkdown('York', [
+    {
+      id: 'rhs-lavender',
+      name: 'English Lavender (Lavandula angustifolia)',
+      rhsRating: 'H5',
+      location: 'Sunny South-Facing Border',
+      growthStage: 'Established Shrub',
+      vulnerabilities: ['Winter waterlogging in heavy clay']
+    }
+  ]);
+  assert.ok(selectedMd.includes('Section 1: Plant Inventory & Identification Summary'));
+  assert.ok(selectedMd.includes('Section 2: Month-by-Month & Weekly Task Calendar'));
+  assert.ok(selectedMd.includes('Section 3: Specialized Feed & Nutrition Strategy'));
+  assert.ok(selectedMd.includes('Section 4: Precision Pruning & Shaping Guide'));
+  assert.ok(selectedMd.includes('Section 5: Climate & Seasonal Risk Management'));
+  assert.ok(selectedMd.includes('English Lavender (Lavandula angustifolia)'));
+  assert.ok(!selectedMd.includes('Salvia farinacea'));
 });
 
-test('buildRuleBasedHorticulturalAdvice adapts advice for garden location and south-facing aspect', () => {
+test('buildRuleBasedHorticulturalAdvice adapts advice for garden location and south-facing aspect for selected plants', () => {
   assert.ok(Array.isArray(ADVISOR_CONFIG.GARDEN_LOCATION_PRESETS));
   assert.ok(ADVISOR_CONFIG.GARDEN_LOCATION_PRESETS.length >= 6);
   assert.ok(
@@ -301,9 +370,20 @@ test('buildRuleBasedHorticulturalAdvice adapts advice for garden location and so
     dailyForecast: [{ date: '2026-10-25', minTempC: -0.5, peakWindGustMph: 29.1, peakWindGustKmh: 46.8 }]
   };
 
+  const selectedGardenPlants = [
+    {
+      id: 'rhs-acer',
+      name: 'Japanese Maple (Acer palmatum)',
+      rhsRating: 'H4',
+      location: 'Sheltered Courtyard Pot',
+      growthStage: 'Autumn Leaf Drop',
+      vulnerabilities: ['Morning frost thaw scorch']
+    }
+  ];
+
   const southFacingAdvice = buildRuleBasedHorticulturalAdvice(
     sampleWeather,
-    ADVISOR_CONFIG.DEFAULT_PLANT_INVENTORY,
+    selectedGardenPlants,
     {
       ...ADVISOR_CONFIG.DEFAULT_GARDEN_PROFILE,
       locationName: 'York, North Yorkshire, UK',
@@ -315,7 +395,7 @@ test('buildRuleBasedHorticulturalAdvice adapts advice for garden location and so
 
   const northFacingAdvice = buildRuleBasedHorticulturalAdvice(
     sampleWeather,
-    ADVISOR_CONFIG.DEFAULT_PLANT_INVENTORY,
+    selectedGardenPlants,
     {
       ...ADVISOR_CONFIG.DEFAULT_GARDEN_PROFILE,
       locationName: 'Edinburgh, Scotland, UK',
@@ -880,13 +960,9 @@ test('buildRuleBasedHorticulturalAdvice omits unselected plants when inventory i
     gardenAspect: 'SOUTH'
   });
 
-  for (const alert of emptyAdvice.weatherAlerts) {
-    assert.equal(alert.affectedPlants.length, 0);
-    assert.ok(!alert.actionRequired.includes('Citrus'));
-    assert.ok(!alert.actionRequired.includes('Dahlia'));
-    assert.ok(!alert.actionRequired.includes('Acer'));
-    assert.ok(!alert.actionRequired.includes('#3'));
-  }
+  // When no plants are selected in My Garden Plants, zero weatherAlerts or seasonalTasks are generated
+  assert.deepEqual(emptyAdvice.weatherAlerts, []);
+  assert.deepEqual(emptyAdvice.seasonalTasks, []);
 
   const singlePlantAdvice = buildRuleBasedHorticulturalAdvice(
     sampleWeather,
@@ -978,6 +1054,94 @@ test('normalizeLiveRhsPlant converts official live RHS Plant Finder responses in
   assert.ok(normalized.pruneTechnique?.includes('Pruning group 10'));
   assert.ok(normalized.vulnerabilities.length >= 1);
 });
+
+test('Pl@ntNet resolvePlantNetPrefixes, rankPlantNetSpecies, and convertPlantNetSpeciesToCatalogPlant merge Pl@ntNet taxonomy with RHS care data', async () => {
+  const {
+    resolvePlantNetPrefixes,
+    rankPlantNetSpecies,
+    convertPlantNetSpeciesToCatalogPlant,
+  } = await import('../services/plantNetService');
+
+  // 1. Common name and botanical prefix resolution
+  const lavenderPrefixes = resolvePlantNetPrefixes('Lavender');
+  assert.ok(lavenderPrefixes.includes('Lavandula'), `Expected Lavandula in ${JSON.stringify(lavenderPrefixes)}`);
+
+  const maplePrefixes = resolvePlantNetPrefixes('Japanese Maple');
+  assert.ok(maplePrefixes.includes('Acer palmatum'));
+
+  // 2. Ranking Pl@ntNet species by common name and scientific name match
+  const sampleSpecies = [
+    {
+      id: 1411430,
+      scientificNameWithoutAuthor: 'Lavandula stoechas',
+      scientificNameAuthorship: 'L.',
+      commonNames: ['French Lavender', 'Spanish Lavender'],
+      gbifId: 2927305,
+      powoId: '549116-1',
+    },
+    {
+      id: 1358506,
+      scientificNameWithoutAuthor: 'Lavandula angustifolia',
+      scientificNameAuthorship: 'Mill.',
+      commonNames: ['English Lavender', 'True Lavender'],
+      gbifId: 2927303,
+      powoId: '30037158-2',
+    },
+  ];
+
+  const rankedEnglish = rankPlantNetSpecies(sampleSpecies, 'English Lavender');
+  assert.equal(rankedEnglish[0].scientificNameWithoutAuthor, 'Lavandula angustifolia');
+
+  // 3. Merging Pl@ntNet species record with live RHS plant record
+  const mockRhsMatch = {
+    catalogId: 'rhs-9916',
+    rhsPlantId: 9916,
+    name: 'English lavender (Lavandula angustifolia)',
+    commonName: 'English lavender',
+    botanicalName: 'Lavandula angustifolia',
+    rhsRating: 'H5' as const,
+    category: 'SHRUBS' as const,
+    groupCategory: 'SHRUBS' as const,
+    recommendedLocation: 'Sunny South-Facing Border',
+    defaultOctGrowthStage: 'Established Shrub',
+    vulnerabilities: ['Root rot in winter-wet clay'],
+    soilAndSun: 'Full sun · Chalk, Loam, Sand · Well-drained',
+    feedWindowUk: 'April to July',
+    feedTypeNpk: 'Low-nitrogen potash feed',
+    feedFrequencyDosage: 'Once in spring',
+    pruneMonthsUk: 'August to September',
+    pruneType: 'RHS Pruning Group 10',
+    pruneTechnique: 'Pruning group 10; trim back after flowering in late summer.',
+    pruneAvoid: 'Avoid cutting into old wood',
+    overwinteringProtocol: 'Ensure sharp grit drainage in heavy clay.',
+    idDisambiguationNote: 'RHS AGM shrub',
+    photoUrl: 'https://apps.rhs.org.uk/plantselectorimages/detail/WSY0034978_4302.jpg',
+    rhsUrl: 'https://www.rhs.org.uk/plants/9916/lavandula-angustifolia/details',
+    isAgm: true,
+    isPollinatorFriendly: true,
+  };
+
+  const mergedPlant = convertPlantNetSpeciesToCatalogPlant(sampleSpecies[1], [mockRhsMatch], {
+    family: 'Lamiaceae',
+    plantNetScore: 0.94,
+  });
+
+  assert.equal(mergedPlant.catalogId, 'plantnet-1358506');
+  assert.equal(mergedPlant.plantNetId, '1358506');
+  assert.equal(mergedPlant.rhsPlantId, 9916);
+  assert.equal(mergedPlant.commonName, 'English Lavender');
+  assert.equal(mergedPlant.botanicalName, 'Lavandula angustifolia');
+  assert.equal(mergedPlant.scientificNameAuthorship, 'Mill.');
+  assert.equal(mergedPlant.gbifId, 2927303);
+  assert.equal(mergedPlant.powoId, '549116-1'.length > 0 ? '30037158-2' : '');
+  assert.equal(mergedPlant.family, 'Lamiaceae');
+  assert.equal(mergedPlant.plantNetScore, 0.94);
+  assert.equal(mergedPlant.rhsRating, 'H5');
+  assert.equal(mergedPlant.isAgm, true);
+  assert.equal(mergedPlant.dataSource, 'PLANTNET_RHS_MERGED');
+  assert.equal(mergedPlant.photoUrl, 'https://apps.rhs.org.uk/plantselectorimages/detail/WSY0034978_4302.jpg');
+});
+
 
 
 

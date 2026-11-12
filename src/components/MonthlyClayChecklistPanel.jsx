@@ -132,8 +132,8 @@ export default function MonthlyClayChecklistPanel({
   }, [customTasksByMonth]);
 
   const monthProfile = useMemo(
-    () => getMonthlyClayChecklist(selectedMonthIdx),
-    [selectedMonthIdx]
+    () => getMonthlyClayChecklist(selectedMonthIdx, plantInventory),
+    [selectedMonthIdx, plantInventory]
   );
 
   const monthFortnightSchedule = useMemo(
@@ -515,8 +515,8 @@ export default function MonthlyClayChecklistPanel({
               {plantInventory.length > 0
                 ? `Tailored for your ${plantInventory.length} selected ${
                     plantInventory.length === 1 ? 'plant' : 'plants'
-                  } in My Plants`
-                : 'General seasonal clay & border care · Add plants in My Plants to personalise'}
+                  } in My Garden Plants`
+                : 'No plants selected in My Garden Plants yet · Add plants on the Plants tab'}
             </p>
           </div>
 
@@ -679,74 +679,89 @@ export default function MonthlyClayChecklistPanel({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {visibleTasks.map((task) => {
-            const isCompleted = isTaskDone(task);
-            const priorityTextClass =
-              PRIORITY_TEXT_COLORS[task.priority] || 'text-slate-700 font-semibold';
+        {visibleTasks.length === 0 ? (
+          <div className="p-6 rounded-xl bg-stone-50/80 border border-stone-200/90 text-center space-y-1.5">
+            <p className="text-xs sm:text-sm font-semibold text-slate-800">
+              {plantInventory.length === 0
+                ? 'No plants selected in My Garden Plants yet.'
+                : 'No tasks match your selected category filter.'}
+            </p>
+            <p className="text-xs text-slate-500">
+              {plantInventory.length === 0
+                ? 'Add plants to My Garden Plants on the Plants tab to generate monthly care tasks for your plants.'
+                : 'Switch the category filter above to "All Tasks" to view your plant tasks.'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {visibleTasks.map((task) => {
+              const isCompleted = isTaskDone(task);
+              const priorityTextClass =
+                PRIORITY_TEXT_COLORS[task.priority] || 'text-slate-700 font-semibold';
 
-            return (
-              <div
-                key={task.id}
-                onClick={() => handleToggleUnifiedTask(task)}
-                className={`p-4 rounded-xl border transition cursor-pointer flex items-start gap-3 ${
-                  isCompleted
-                    ? 'bg-stone-50/70 border-stone-200 opacity-60'
-                    : 'bg-white border-stone-200/90 hover:border-emerald-600/60'
-                }`}
-              >
-                <button
-                  type="button"
-                  aria-label={`Mark "${task.title}" as ${isCompleted ? 'incomplete' : 'complete'}`}
-                  className="mt-0.5 text-emerald-700 shrink-0 focus:outline-none cursor-pointer"
+              return (
+                <div
+                  key={task.id}
+                  onClick={() => handleToggleUnifiedTask(task)}
+                  className={`p-4 rounded-xl border transition cursor-pointer flex items-start gap-3 ${
+                    isCompleted
+                      ? 'bg-stone-50/70 border-stone-200 opacity-60'
+                      : 'bg-white border-stone-200/90 hover:border-emerald-600/60'
+                  }`}
                 >
-                  {isCompleted ? (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-700" />
-                  ) : (
-                    <Circle className="w-5 h-5 text-stone-400 hover:text-emerald-700" />
-                  )}
-                </button>
-
-                <div className="flex-1 min-w-0 space-y-1.5">
-                  {/* Lead directly with Title, followed by quiet unboxed metadata */}
-                  <h4
-                    className={`text-sm sm:text-[15px] font-bold leading-snug ${
-                      isCompleted ? 'line-through text-slate-400' : 'text-slate-900'
-                    }`}
+                  <button
+                    type="button"
+                    aria-label={`Mark "${task.title}" as ${isCompleted ? 'incomplete' : 'complete'}`}
+                    className="mt-0.5 text-emerald-700 shrink-0 focus:outline-none cursor-pointer"
                   >
-                    {task.title}
-                  </h4>
+                    {isCompleted ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-700" />
+                    ) : (
+                      <Circle className="w-5 h-5 text-stone-400 hover:text-emerald-700" />
+                    )}
+                  </button>
 
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                    <span className={priorityTextClass}>{task.priorityLabel}</span>
-                    <span aria-hidden="true">·</span>
-                    <span className="font-medium text-slate-700">{task.categoryLabel}</span>
-                    {task.targetWindowUk && (
-                      <>
-                        <span aria-hidden="true">·</span>
-                        <span>{task.targetWindowUk}</span>
-                      </>
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    {/* Lead directly with Title, followed by quiet unboxed metadata */}
+                    <h4
+                      className={`text-sm sm:text-[15px] font-bold leading-snug ${
+                        isCompleted ? 'line-through text-slate-400' : 'text-slate-900'
+                      }`}
+                    >
+                      {task.title}
+                    </h4>
+
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                      <span className={priorityTextClass}>{task.priorityLabel}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="font-medium text-slate-700">{task.categoryLabel}</span>
+                      {task.targetWindowUk && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span>{task.targetWindowUk}</span>
+                        </>
+                      )}
+                    </div>
+
+                    <p className="text-xs sm:text-[13px] text-slate-600 leading-relaxed">
+                      {stripMarkdownFormatting(task.rhsGuidance)}
+                    </p>
+
+                    {task.claySoilTip && (
+                      <div className="pt-2 border-t border-stone-100 flex items-start gap-1.5 text-xs text-slate-600">
+                        <Sprout className="w-3.5 h-3.5 text-emerald-700 shrink-0 mt-0.5" />
+                        <span>
+                          <strong className="font-semibold text-slate-800">Clay &amp; Drainage: </strong>
+                          {stripMarkdownFormatting(task.claySoilTip)}
+                        </span>
+                      </div>
                     )}
                   </div>
-
-                  <p className="text-xs sm:text-[13px] text-slate-600 leading-relaxed">
-                    {stripMarkdownFormatting(task.rhsGuidance)}
-                  </p>
-
-                  {task.claySoilTip && (
-                    <div className="pt-2 border-t border-stone-100 flex items-start gap-1.5 text-xs text-slate-600">
-                      <Sprout className="w-3.5 h-3.5 text-emerald-700 shrink-0 mt-0.5" />
-                      <span>
-                        <strong className="font-semibold text-slate-800">Clay &amp; Drainage: </strong>
-                        {stripMarkdownFormatting(task.claySoilTip)}
-                      </span>
-                    </div>
-                  )}
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </section>
   );

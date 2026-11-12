@@ -368,492 +368,92 @@ export const HADSTON_LOCAL_RISK_MITIGATION: LocalRiskMitigationProtocol[] = [
     hazardTitle: '1. Wet Winters & Heavy Clay Waterlogging',
     hadstonMicroclimateTrigger:
       'Heavy boulder clay holds >80% pore saturation from November to March when 48h rainfall exceeds 30mm, suffocating fine roots and rotting half-hardy crowns.',
-    affectedPlants: [
-      '#1 Mealycup Sage',
-      '#2 Lemon Cypress',
-      '#3 Fuchsia',
-      '#9 Common Thyme',
-      '#16 Peony',
-      '#23 Purple Top Verbena',
-      '#32 California Lilac (Ceanothus)'
-    ],
+    affectedPlants: [],
     actionableSteps: [
-      'Never walk directly on wet clay borders between October and March—always work from 2.4m timber staging boards.',
-      'Remove all saucers from under patio pots in September and elevate containers on 3cm pot feet.',
-      'Leave hollow stems of Mealycup Sage (#1), Fuchsia (#3), and Verbena bonariensis (#23) unpruned until late April/May so winter rain cannot channel down cut stems into the crown.',
-      'Top-dress the collars of Common Thyme (#9), Verbena (#23), and Hosta (#19) with a 2cm ring of coarse horticultural grit in October.'
+      'Never walk directly on wet clay borders between October and March—always work from timber staging boards.',
+      'Remove all saucers from under patio pots in autumn and elevate containers on pot feet.',
+      'Leave hollow perennial stems unpruned until spring so winter rain cannot channel down cut stems into the crown.',
+      'Top-dress crowns of drainage-sensitive perennials with a 2cm ring of coarse horticultural grit in autumn.'
     ]
   },
   {
     id: 'risk-02',
-    hazardTitle: '2. Late Spring Radiation Frosts (Up to 25 May) & Rapid Morning Thaw',
+    hazardTitle: '2. Late Spring Radiation Frosts & Rapid Morning Thaw',
     hadstonMicroclimateTrigger:
       'In RHS H4 zones, clear skies in late April and May frequently bring -1°C to -3°C ground frosts that blacken newly emerged buds.',
-    affectedPlants: [
-      '#1 Mealycup Sage',
-      '#3 Fuchsia',
-      '#7 Variegated Hydrangea',
-      '#19 Hosta',
-      '#24 & #28 Bigleaf Hydrangea',
-      '#26 Camellia japonica'
-    ],
+    affectedPlants: [],
     actionableSteps: [
-      'Retain papery old flower heads on all three Hydrangeas (#7, #24, #28) until mid-to-late April to act as natural frost umbrellas over the top green buds.',
-      'Shield Camellia (#26) from direct East-facing early morning sun—rapid thawing of frozen flower buds ruptures petal cells and turns blooms brown.',
-      'Delay cutting back Mealycup Sage (#1), Fuchsia (#3), and Verbena (#23) until late April or mid-May when green basal shoots are actively breaking.',
-      'Drape a double layer of 30gsm horticultural fleece (supported on bamboo canes so it does not touch wet leaves) whenever May night temperatures drop to <= 2.0°C.'
+      'Retain old flower heads on frost-sensitive shrubs until mid-to-late April to act as natural frost protection over new buds.',
+      'Shield early-flowering shrubs from direct early morning sun after frost—rapid thawing of frozen buds ruptures petal cells.',
+      'Delay cutting back tender perennials until late April or May when green basal shoots are actively breaking.',
+      'Drape 30gsm horticultural fleece over tender plants whenever night temperatures drop to <= 2.0°C.'
     ]
   },
   {
     id: 'risk-03',
     hazardTitle: '3. Strong Gales & Wind-Rock on Wet Clay',
     hadstonMicroclimateTrigger:
-      'Exposed gardens experience cold easterly winds and 25–45 mph autumn/winter westerly gusts that rock tall shrubs, opening water-filled sockets around root collars.',
-    affectedPlants: [
-      '#2 Lemon Cypress',
-      '#5, #14 & #22 Roses',
-      '#11 Bamboo (Fargesia)',
-      '#17 Cabbage Palm (Cordyline)',
-      '#18 Dappled Willow',
-      '#31 Butterfly Bush (Buddleja)',
-      '#32 California Lilac (Ceanothus)'
-    ],
+      'Exposed plots experience cold easterly winds and 25–45 mph autumn/winter gusts that rock tall shrubs, opening water-filled sockets around root collars.',
+    affectedPlants: [],
     actionableSteps: [
-      'Perform a two-stage prune on Roses (#5, #14, #22) and Buddleja (#31): shorten tall whippy stems by one-third to one-half in late October to reduce wind sail, then complete the precision prune in March.',
-      'Firm the soil collar around Roses and Buddleja after autumn gales and top-fill any stem sockets with gritty compost.',
-      'Shelter Lemon Cypress (#2) and Ceanothus (#32) against a warm South- or West-facing wall out of freezing easterlies.',
-      'Bundle and tie Cordyline (#17) sword leaves upright before winter storms so gales cannot kink the central growing spear.'
+      'Shorten tall whippy stems on shrubs by one-third in late autumn to reduce wind sail, then complete precision pruning in spring.',
+      'Firm the soil collar around tall stems after autumn gales and top-fill any stem sockets with gritty compost.',
+      'Shelter tender evergreen containers against a warm wall out of freezing easterlies.',
+      'Check stakes and soft rubber ties ahead of forecasted gales >= 25 mph.'
     ]
   },
   {
     id: 'risk-04',
     hazardTitle: '4. Fungal Spore Pressure & Heavy Clay Slug Populations',
     hadstonMicroclimateTrigger:
-      'Cool, humid summers and moisture-retentive clay favour Rose Blackspot, Prunus Silver Leaf, Peony Botrytis, and keeled slugs.',
-    affectedPlants: [
-      '#5, #14 & #22 Roses',
-      '#15 Flowering Cherry (Prunus)',
-      '#16 Peony',
-      '#19 Hosta',
-      '#29 Clematis'
-    ],
+      'Cool, humid summers and moisture-retentive clay favour fungal leaf spots, botrytis, and keeled slugs.',
+    affectedPlants: [],
     actionableSteps: [
-      'Prune Flowering Cherry (#15) ONLY in midsummer (mid-June to late July) when active sap seals wounds against Silver Leaf spores—never prune Prunus in autumn or winter.',
-      'Cut Peony (#16) stems to 2cm in late October and clear Hosta (#19) yellow leaves in November; bin (never compost) both to eliminate Botrytis spores and overwintering slug eggs.',
-      'Plant Clematis (#29) 5–7cm deeper than its nursery pot level so underground buds re-sprout if Clematis Wilt strikes.',
-      'Apply monthly foliar seaweed sprays to Roses (#5, #14, #22) from May to July to thicken leaf cuticles against blackspot.'
+      'Prune stone-fruit and silver-leaf-susceptible trees only in midsummer (June to July) when active sap seals wounds.',
+      'Clear collapsing or diseased foliage in autumn and bin (never compost) to eliminate overwintering fungal spores and slug eggs.',
+      'Maintain good airflow through border canopies and water at soil level in the morning.',
+      'Use sharp grit or organic ferric phosphate barriers around emerging spring shoots.'
     ]
   }
 ];
 
-/**
- * Generates the complete, structured 5-Section Markdown Master Guide for download or copy.
- */
-export function generateHadstonMasterGuideMarkdown(locationName: string = 'My Garden Plot'): string {
-  const lines: string[] = [
-    `# ${locationName} — Master Horticulturist Garden Guide`,
-    `**Location:** ${locationName} (Hardiness Zone UK 8b / RHS H4–H5)`,
-    '**Soil & Microclimate:** Heavy clay to alluvial loam (pH 6.0–6.8); last spring frost mid-to-late May.',
-    '',
-    '---',
-    '',
-    '## Section 1: Plant Inventory & Identification Summary (32 Specimens)',
-    '',
-    '| Photo Ref | Plant Name (Botanical & Common) | RHS Zone | Soil & Sun Requirements (pH & Light) | Key Characteristics & Native Environment |',
-    '| :--- | :--- | :--- | :--- | :--- |'
-  ];
-
-  HADSTON_GARDEN_COLLECTION_32.forEach((p: RhsCatalogPlant) => {
-    lines.push(
-      `| **#${p.photoRef}** | **${p.commonName}** (*${p.botanicalName}*) | ${p.rhsRating} | ${p.soilAndSun} | ${p.characteristicsAndNative} |`
-    );
-  });
-
-  lines.push('', '### Identification Disambiguation & Multi-Specimen Notes', '');
-  HADSTON_GARDEN_COLLECTION_32.filter((p) => p.idDisambiguationNote).forEach((p) => {
-    lines.push(`- **Photo Ref #${p.photoRef} (${p.commonName}):** ${p.idDisambiguationNote}`);
-  });
-
-  lines.push('', '---', '', '## Section 2: Month-by-Month & Weekly Task Calendar (Jan–Dec)', '');
-  HADSTON_MONTH_BY_MONTH_WEEKLY_CALENDAR.forEach((m) => {
-    lines.push(`### ${m.monthName} — ${m.seasonSummary} (${m.typicalHadstonTempC})`, '');
-    lines.push('#### Week 1–2 Focus Tasks');
-    lines.push(`1. **Watering & Soil Care:** ${m.week1To2.wateringAndSoilCare}`);
-    lines.push(`2. **Feeding & Mulching:** ${m.week1To2.feedingAndMulching}`);
-    lines.push(`3. **Pruning & Deadheading:** ${m.week1To2.pruningAndDeadheading}`);
-    lines.push(`4. **Pest, Disease & Frost Protection:** ${m.week1To2.pestDiseaseAndFrost}`, '');
-    lines.push('#### Week 3–4 Focus Tasks');
-    lines.push(`1. **Watering & Soil Care:** ${m.week3To4.wateringAndSoilCare}`);
-    lines.push(`2. **Feeding & Mulching:** ${m.week3To4.feedingAndMulching}`);
-    lines.push(`3. **Pruning & Deadheading:** ${m.week3To4.pruningAndDeadheading}`);
-    lines.push(`4. **Pest, Disease & Frost Protection:** ${m.week3To4.pestDiseaseAndFrost}`, '');
-  });
-
-  lines.push('---', '', '## Section 3: Specialized Feed & Nutrition Strategy', '');
-  lines.push('| Photo Ref & Plant | Specific Feed Type & NPK Ratio | Application Window (UK NE) | Frequency, Dosage & Method |');
-  lines.push('| :--- | :--- | :--- | :--- |');
-  HADSTON_GARDEN_COLLECTION_32.forEach((p) => {
-    lines.push(
-      `| **#${p.photoRef} ${p.commonName}** | ${p.feedTypeNpk} | ${p.feedWindowUk} | ${p.feedFrequencyDosage} |`
-    );
-  });
-
-  lines.push('', '---', '', '## Section 4: Precision Pruning & Shaping Guide', '');
-  lines.push('| Photo Ref & Plant | Optimal Month(s) | Pruning Type | Step-by-Step Technique | What to Avoid |');
-  lines.push('| :--- | :--- | :--- | :--- | :--- |');
-  HADSTON_GARDEN_COLLECTION_32.forEach((p) => {
-    lines.push(
-      `| **#${p.photoRef} ${p.commonName}** | **${p.pruneMonthsUk}** | ${p.pruneType} | ${(p.pruneTechnique || '').replace(/\n/g, ' ')} | ${p.pruneAvoid} |`
-    );
-  });
-
-  lines.push('', '---', '', `## Section 5: Climate & Seasonal Risk Management (${locationName})`, '');
-  HADSTON_LOCAL_RISK_MITIGATION.forEach((r) => {
-    lines.push(`### ${r.hazardTitle}`);
-    lines.push(`- **Local Microclimate Trigger:** ${r.hadstonMicroclimateTrigger}`);
-    lines.push(`- **Key Vulnerable Plants:** ${r.affectedPlants.join(', ')}`);
-    r.actionableSteps.forEach((s) => lines.push(`  - ${s}`));
-    lines.push('');
-  });
-
-  lines.push('### Plant-by-Plant Overwintering Protocol', '');
-  HADSTON_GARDEN_COLLECTION_32.forEach((p) => {
-    lines.push(`- **#${p.photoRef} ${p.commonName} (${p.rhsRating}):** ${p.overwinteringProtocol}`);
-  });
-
-  return lines.join('\n');
-}
-
-/**
- * Plant-agnostic seasonal baseline for all 12 UK months (used when no plants are selected
- * or when none of the selected plants have a specific task in a given pillar).
- */
-export const GENERAL_SEASONAL_FORTNIGHT_CALENDAR: MonthlyWeeklyCalendarEntry[] = [
-  {
-    monthIndex: 0,
-    monthName: 'January',
-    shortName: 'Jan',
-    seasonSummary: 'Deep Winter Dormancy · Hard Frosts & Drainage Care',
-    typicalHadstonTempC: '1°C to 6°C (Soil 6cm: 2.8°C)',
-    week1To2: {
-      wateringAndSoilCare:
-        'Keep off saturated heavy clay borders completely to prevent structural pan compaction. Check patio container drainage holes so winter rain cannot pool.',
-      feedingAndMulching:
-        'Zero nitrogen or liquid feeding while plants are dormant. Top up wind-blown organic bark mulch on exposed borders to 5cm depth.',
-      pruningAndDeadheading:
-        'Inspect dormant deciduous trees and shrubs on dry, frost-free afternoons for dead, rubbing, or storm-damaged branches.',
-      pestDiseaseAndFrost:
-        'Check winter fleece ties and brush heavy wet snow off evergreen foliage and garden netting before branches split.'
-    },
-    week3To4: {
-      wateringAndSoilCare:
-        'Give overwintering patio pots under glass or porch shelter a sparing splash of tepid water at the root collar only if compost is bone-dry.',
-      feedingAndMulching:
-        'Spread a 5cm layer of well-rotted garden compost or manure over vacant clay beds on frosty mornings so freeze-thaw cycles break down clods.',
-      pruningAndDeadheading:
-        'Avoid pruning stone fruit trees or spring-flowering shrubs in deep winter. Clean and sharpen secateurs ahead of spring.',
-      pestDiseaseAndFrost:
-        'Inspect stored tender tubers and overwintering pots for grey mould (Botrytis) and ventilate cold frames on bright frost-free middays.'
-    }
-  },
-  {
-    monthIndex: 1,
-    monthName: 'February',
-    shortName: 'Feb',
-    seasonSummary: 'Late Winter Awakening · Early Sap Rise & Soil Prep',
-    typicalHadstonTempC: '1.5°C to 7°C (Soil 6cm: 3.4°C)',
-    week1To2: {
-      wateringAndSoilCare:
-        'Water sheltered evergreen containers with collected rainwater if drying easterly winds desiccate the top compost layer.',
-      feedingAndMulching:
-        'Apply a light dressing of Sulphate of Potash (30g/m²) around established fruit and flowering shrubs to strengthen spring blossom buds.',
-      pruningAndDeadheading:
-        'Complete winter formative pruning of dormant pip fruit trees and late-flowering deciduous shrubs before buds swell.',
-      pestDiseaseAndFrost:
-        'Keep 30gsm horticultural fleece ready to drape over early-swelling flower buds when clear radiation frosts are forecast.'
-    },
-    week3To4: {
-      wateringAndSoilCare:
-        'Place cloches or black polythene over spring vegetable and flower sowing beds to shed cold February rain and pre-warm heavy clay.',
-      feedingAndMulching:
-        'Top-dress established perennial borders with slow-release bone meal (40g/m²) and a fresh 5cm organic compost mulch.',
-      pruningAndDeadheading:
-        'Cut back late-summer flowering perennial stems and ornamental grasses before new basal shoots emerge.',
-      pestDiseaseAndFrost:
-        'Clear overwintering slugs and snails from beneath pot rims and cold frame ledges before mild spring nights arrive.'
-    }
-  },
-  {
-    monthIndex: 2,
-    monthName: 'March',
-    shortName: 'Mar',
-    seasonSummary: 'Early Spring Awakening · Structural Prune & Mulching',
-    typicalHadstonTempC: '3°C to 9.5°C (Soil 6cm: 5.5°C)',
-    week1To2: {
-      wateringAndSoilCare:
-        'Check soil moisture around evergreen shrubs and newly planted perennials as spring winds increase transpiration.',
-      feedingAndMulching:
-        'Mulch cleared perennial beds with a 5–7cm blanket of well-rotted garden compost to lock in spring moisture and suppress annual weeds.',
-      pruningAndDeadheading:
-        'Clear remaining winter debris from herbaceous borders and trim back frost-damaged tips as new buds break.',
-      pestDiseaseAndFrost:
-        'Apply organic ferric phosphate or sharp grit barriers around emerging perennial crowns to deter early spring slugs.'
-    },
-    week3To4: {
-      wateringAndSoilCare:
-        'Water newly mulched beds and spring containers thoroughly if late March is dry and breezy.',
-      feedingAndMulching:
-        'Apply a balanced spring slow-release fertiliser across established shrub and perennial borders as active root growth resumes.',
-      pruningAndDeadheading:
-        'Carry out main spring structural pruning on hardy shrubs and roses, cutting cleanly above outward-facing buds.',
-      pestDiseaseAndFrost:
-        'Protect newly emerging spring shoots and blossom from overnight radiation frosts with breathable fleece.'
-    }
-  },
-  {
-    monthIndex: 3,
-    monthName: 'April',
-    shortName: 'Apr',
-    seasonSummary: 'Mid-Spring Growth Surge · Soil Warming & Frost Watch',
-    typicalHadstonTempC: '4.5°C to 12°C (Soil 6cm: 8.2°C)',
-    week1To2: {
-      wateringAndSoilCare:
-        'Lightly fork and crumble dry clay surface crusts using staging boards; avoid cultivating heavy clay immediately after heavy April showers.',
-      feedingAndMulching:
-        'Feed acid-loving and evergreen shrubs with ericaceous or balanced organic feed and top up bark mulch.',
-      pruningAndDeadheading:
-        'Trim frost-bitten tips on mophead shrubs and deadhead early spring bulbs while leaving foliage to die back naturally.',
-      pestDiseaseAndFrost:
-        'Monitor overnight temperatures closely and fleece tender young shoots whenever sub-2°C radiation frosts are forecast.'
-    },
-    week3To4: {
-      wateringAndSoilCare:
-        'Water spring containers and newly planted border specimens deeply in the morning so foliage dries before nightfall.',
-      feedingAndMulching:
-        'Apply a foliar seaweed tonic or liquid balanced feed to established border plants to build resilient cell walls.',
-      pruningAndDeadheading:
-        'Prune early spring-flowering shrubs immediately after their blossom fades to encourage strong summer extension growth.',
-      pestDiseaseAndFrost:
-        'Inspect soft new shoot tips for early greenfly colonies and renew slug protection after spring rain.'
-    }
-  },
-  {
-    monthIndex: 4,
-    monthName: 'May',
-    shortName: 'May',
-    seasonSummary: 'Late Spring Transition · Hardening Off & Canopy Growth',
-    typicalHadstonTempC: '7°C to 14.5°C (Soil 6cm: 11.4°C)',
-    week1To2: {
-      wateringAndSoilCare:
-        'Keep newly planted shrubs, perennials, and vegetable modules evenly moist as daytime temperatures rise.',
-      feedingAndMulching:
-        'Apply liquid seaweed or balanced organic feed fortnightly to rapidly expanding border foliage.',
-      pruningAndDeadheading:
-        'Pinch out growing tips of bushy perennials and tender bedding under glass to promote branching.',
-      pestDiseaseAndFrost:
-        'Harden off tender plants by opening cold frames by day and closing them at night until late May frost risk passes.'
-    },
-    week3To4: {
-      wateringAndSoilCare:
-        'Transition tender patio pots outdoors once night temperatures stay reliably above 7°C and elevate pots on feet.',
-      feedingAndMulching:
-        'Top-dress summer flowering borders and vegetable rows with a balanced organic fertiliser.',
-      pruningAndDeadheading:
-        'Tie in climbing stems and stake tall herbaceous perennials before summer winds arrive.',
-      pestDiseaseAndFrost:
-        'Watch for late May ground frosts in low-lying pockets and check undersides of leaves for aphids and sawfly larvae.'
-    }
-  },
-  {
-    monthIndex: 5,
-    monthName: 'June',
-    shortName: 'Jun',
-    seasonSummary: 'Early Summer Peak · Moisture Retention & Deadheading',
-    typicalHadstonTempC: '10°C to 17.5°C (Soil 6cm: 14.5°C)',
-    week1To2: {
-      wateringAndSoilCare:
-        'Water patio containers daily in warm weather and soak heavy clay borders deeply once a week rather than light daily sprinkling.',
-      feedingAndMulching:
-        'Switch flowering containers and fruiting crops to a high-potash liquid feed every 10–14 days.',
-      pruningAndDeadheading:
-        'Deadhead spent late-spring blooms and pinch out side-shoots on trained crops.',
-      pestDiseaseAndFrost:
-        'Maintain good airflow around dense border canopies to prevent powdery mildew during warm, humid spells.'
-    },
-    week3To4: {
-      wateringAndSoilCare:
-        'Top up surface mulch around moisture-loving border plants after rain to prevent heavy clay shrinkage cracks.',
-      feedingAndMulching:
-        'Give repeat-flowering shrubs a mid-season feed after their first flush of blooms.',
-      pruningAndDeadheading:
-        'Cut back early-flowering perennials after blooming to encourage fresh basal foliage and a second flush.',
-      pestDiseaseAndFrost:
-        'Water at soil level in the morning rather than wetting foliage at dusk to deter fungal leaf spot and slugs.'
-    }
-  },
-  {
-    monthIndex: 6,
-    monthName: 'July',
-    shortName: 'Jul',
-    seasonSummary: 'Midsummer Bloom · Deep Soaking & Summer Pruning',
-    typicalHadstonTempC: '12°C to 19.5°C (Soil 6cm: 16.5°C)',
-    week1To2: {
-      wateringAndSoilCare:
-        'Deliver deep 20L/m² root-zone soaks to border plants during dry spells and check container moisture morning and evening.',
-      feedingAndMulching:
-        'Continue weekly high-potash liquid feeding for patio containers, tomatoes, and repeat-flowering perennials.',
-      pruningAndDeadheading:
-        'Deadhead summer border flowers regularly to keep plants producing fresh buds rather than setting seed.',
-      pestDiseaseAndFrost:
-        'Monitor warm, humid spells for blight or mildew and remove any yellowing lower leaves promptly.'
-    },
-    week3To4: {
-      wateringAndSoilCare:
-        'Loosen any baked surface crust lightly before watering so water penetrates to the clay subsoil rather than running off.',
-      feedingAndMulching:
-        'Complete final nitrogen-rich feeds for woody shrubs by late July so late-summer growth has time to harden before autumn.',
-      pruningAndDeadheading:
-        'Carry out summer pruning on trained fruit trees, wisteria laterals, and stone fruits while sap is active.',
-      pestDiseaseAndFrost:
-        'Keep bird netting and plant ties secure ahead of midsummer convective gusts.'
-    }
-  },
-  {
-    monthIndex: 7,
-    monthName: 'August',
-    shortName: 'Aug',
-    seasonSummary: 'Late Summer Ripening · Potash Transition & Stop-Nitrogen Rule',
-    typicalHadstonTempC: '12°C to 19°C (Soil 6cm: 16.0°C)',
-    week1To2: {
-      wateringAndSoilCare:
-        'Maintain consistent root moisture for late-summer flowering perennials and autumn-fruiting crops.',
-      feedingAndMulching:
-        'Cease high-nitrogen feeds on permanent border shrubs so soft shoots lignify before autumn frosts.',
-      pruningAndDeadheading:
-        'Trim lavender and evergreen hedges after flowering, cutting back into green growth without cutting into old brown wood.',
-      pestDiseaseAndFrost:
-        'Collect and bin any fallen diseased leaves beneath shrubs to prevent fungal spores overwintering in the clay.'
-    },
-    week3To4: {
-      wateringAndSoilCare:
-        'Flush container compost thoroughly with rainwater and sow hardy green manure on cleared vegetable beds.',
-      feedingAndMulching:
-        'Apply high-potash autumn feed only to late-flowering patio pots and developing fruit crops.',
-      pruningAndDeadheading:
-        'Deadhead late-summer blooms and thin out congested canes or stems to let August sunshine ripen wood.',
-      pestDiseaseAndFrost:
-        'Check stakes and ties on tall late-season perennials ahead of early autumn equinox winds.'
-    }
-  },
-  {
-    monthIndex: 8,
-    monthName: 'September',
-    shortName: 'Sep',
-    seasonSummary: 'Early Autumn Prep · Perennial Division & Potash Hardening',
-    typicalHadstonTempC: '9.5°C to 16°C (Soil 6cm: 12.8°C)',
-    week1To2: {
-      wateringAndSoilCare:
-        'Reduce container watering frequency as nights lengthen and cultivate heavy clay borders while soil remains warm and friable.',
-      feedingAndMulching:
-        'Apply an autumn lawn and border potash dressing (0-0-48) to toughen cell walls and root systems for winter.',
-      pruningAndDeadheading:
-        'Lift and divide congested herbaceous perennials now while soil temperatures remain above 10°C.',
-      pestDiseaseAndFrost:
-        'Clean greenhouse glass and prepare horticultural fleece ahead of the first early autumn ground frosts.'
-    },
-    week3To4: {
-      wateringAndSoilCare:
-        'Plant spring-flowering bulbs (daffodils, crocus, alliums) on a 2cm layer of sharp horticultural grit to prevent basal rot in clay.',
-      feedingAndMulching:
-        'Cease all liquid feeding of outdoor border plants. Top-dress newly divided perennials with leafmould.',
-      pruningAndDeadheading:
-        'Shorten top-heavy shrub roses and tall perennials by one-third to reduce winter wind-rock leverage in wet clay.',
-      pestDiseaseAndFrost:
-        'Bring the most tender H1c–H2 patio containers under glass or porch shelter before night temperatures dip below 5°C.'
-    }
-  },
-  {
-    monthIndex: 9,
-    monthName: 'October',
-    shortName: 'Oct',
-    seasonSummary: 'Mid-Autumn Frost Sentinel · Drainage & Wind-Rock Protection',
-    typicalHadstonTempC: '6.5°C to 12.5°C (Soil 6cm: 9.1°C)',
-    week1To2: {
-      wateringAndSoilCare:
-        'Remove all watering saucers from beneath outdoor pots and raise containers onto pot feet so autumn rain drains freely.',
-      feedingAndMulching:
-        'Zero fertiliser applications. Spread a 5cm blanket of leafmould or composted bark around acid-loving and woodland plants.',
-      pruningAndDeadheading:
-        'Leave hollow perennial stems and seedheads standing for winter insect shelter and crown frost protection.',
-      pestDiseaseAndFrost:
-        'Monitor overnight frost alerts closely; move half-hardy patio pots into a frost-free porch or cold frame.'
-    },
-    week3To4: {
-      wateringAndSoilCare:
-        'Rough-dig vacant heavy clay vegetable beds on a dry afternoon and lay timber staging boards along border paths.',
-      feedingAndMulching:
-        'Rake fallen autumn leaves off lawns and evergreen crowns to pack into leafmould bays.',
-      pruningAndDeadheading:
-        'Cut back disease-prone herbaceous stems (such as peonies) above ground level and bin foliage rather than composting.',
-      pestDiseaseAndFrost:
-        'Lift tender H3 tubers once foliage is blackened by the first air frost, or apply a 15cm dry insulating mulch under a rain cloche.'
-    }
-  },
-  {
-    monthIndex: 10,
-    monthName: 'November',
-    shortName: 'Nov',
-    seasonSummary: 'Late Autumn Overwintering · Winter Mulch & Bare-Root Planting',
-    typicalHadstonTempC: '3.5°C to 9°C (Soil 6cm: 5.8°C)',
-    week1To2: {
-      wateringAndSoilCare:
-        'Ensure all outdoor containers sit on pot feet with clear drainage holes and avoid stepping on wet heavy clay borders.',
-      feedingAndMulching:
-        'Mound 8–10cm of weathered bark or dry compost over the crowns of borderline-hardy border perennials.',
-      pruningAndDeadheading:
-        'Clear collapsing, slimy perennial leaves from border crowns and bin them so slugs cannot overwinter in decaying foliage.',
-      pestDiseaseAndFrost:
-        'Wrap outdoor taps and insulate exposed courtyard containers with hessian or bubble wrap ahead of November frosts.'
-    },
-    week3To4: {
-      wateringAndSoilCare:
-        'Plant tulip bulbs 15–20cm deep on a 3cm layer of sharp grit now that cold soil suppresses tulip fire fungus.',
-      feedingAndMulching:
-        'Dust planting pits with mycorrhizal fungi when planting bare-root hedging, roses, or fruit trees in non-waterlogged soil.',
-      pruningAndDeadheading:
-        'Wait until full leaf drop before carrying out formative winter pruning on dormant deciduous trees and shrubs.',
-      pestDiseaseAndFrost:
-        'Check tree stakes, rubber ties, and brassica netting ahead of late-autumn gales so stems do not rock in wet clay.'
-    }
-  },
-  {
-    monthIndex: 11,
-    monthName: 'December',
-    shortName: 'Dec',
-    seasonSummary: 'Winter Solstice · Strict No-Tread Clay Policy & Dormant Care',
-    typicalHadstonTempC: '1.5°C to 6.5°C (Soil 6cm: 3.5°C)',
-    week1To2: {
-      wateringAndSoilCare:
-        'Enforce a strict no-tread policy on saturated clay borders; flush silt and fallen leaves from field drains and gutters.',
-      feedingAndMulching:
-        'Check winter mulch mounds after gales and replenish any bark or bracken blown off tender crowns.',
-      pruningAndDeadheading:
-        'Carry out formative pruning on fully dormant maples, birches, and deciduous trees on dry frost-free days.',
-      pestDiseaseAndFrost:
-        'Ensure double-layered 30gsm horticultural fleece is secured over vulnerable shrubs during sub-zero spells.'
-    },
-    week3To4: {
-      wateringAndSoilCare:
-        'Keep overwintering pots under glass almost dry, watering sparingly only when compost pulls away from the pot rim.',
-      feedingAndMulching:
-        'Plan next season’s crop rotation and order seed potatoes and organic soil conditioners.',
-      pruningAndDeadheading:
-        'Prune free-standing apple, pear, and currant bushes while dormant on crisp, frost-free afternoons.',
-      pestDiseaseAndFrost:
-        'Ventilate unheated greenhouses for 2 hours at midday on sunny winter days to purge damp air and deter Botrytis.'
-    }
+export function getDynamicRiskMitigation(
+  plantInventory: Array<any> = []
+): LocalRiskMitigationProtocol[] {
+  const safeInventory = Array.isArray(plantInventory) ? plantInventory : [];
+  if (safeInventory.length === 0) {
+    return [];
   }
-];
+
+  const cleanName = (n: string) => String(n || '').replace(/^#\d+\s+/, '').trim();
+  const allNames = safeInventory.map((p) => cleanName(p.commonName || p.name));
+  const tenderNames = safeInventory
+    .filter((p) => ['H1a', 'H1b', 'H1c', 'H2', 'H3', 'H4'].includes(String(p.rhsRating || 'H4')))
+    .map((p) => cleanName(p.commonName || p.name));
+  const windNames = safeInventory
+    .filter((p) => {
+      const blob = `${p.category || ''} ${p.location || ''} ${(p.vulnerabilities || []).join(' ')}`.toLowerCase();
+      return blob.includes('shrub') || blob.includes('wind') || blob.includes('exposed') || blob.includes('stake');
+    })
+    .map((p) => cleanName(p.commonName || p.name));
+
+  return HADSTON_LOCAL_RISK_MITIGATION.map((risk, idx) => {
+    const affected =
+      idx === 0 || idx === 1
+        ? tenderNames.length > 0
+          ? tenderNames
+          : allNames
+        : idx === 2
+        ? windNames.length > 0
+          ? windNames
+          : allNames
+        : allNames;
+    return {
+      ...risk,
+      affectedPlants: affected
+    };
+  });
+}
 
 const CATALOG_LOOKUP_BY_ID = new Map<string, RhsCatalogPlant>();
 const CATALOG_LOOKUP_BY_NAME = new Map<string, RhsCatalogPlant>();
@@ -882,10 +482,353 @@ function matchInventoryPlantToCatalog(plant: any): RhsCatalogPlant | null {
 }
 
 /**
+ * Generates the structured 5-Section Markdown Master Guide strictly from the user's selected plants in `plantInventory`.
+ */
+export function generateHadstonMasterGuideMarkdown(
+  locationName: string = 'My Garden Plot',
+  plantInventory: Array<any> = []
+): string {
+  const safeInventory = Array.isArray(plantInventory) ? plantInventory : [];
+  const lines: string[] = [
+    `# ${locationName} — Master Horticulturist Garden Guide`,
+    `**Location:** ${locationName} (Hardiness Zone UK 8b / RHS H4–H5)`,
+    '**Soil & Microclimate:** Heavy clay to alluvial loam (pH 6.0–6.8); last spring frost mid-to-late May.',
+    '',
+    '---',
+    '',
+    `## Section 1: Plant Inventory & Identification Summary (${safeInventory.length} Selected ${
+      safeInventory.length === 1 ? 'Plant' : 'Plants'
+    })`,
+    ''
+  ];
+
+  if (safeInventory.length === 0) {
+    lines.push('_No plants currently selected in My Garden Plants._', '');
+  } else {
+    lines.push(
+      '| Plant Name | Botanical Name | RHS Zone | Soil & Sun Requirements | Location |',
+      '| :--- | :--- | :--- | :--- | :--- |'
+    );
+    safeInventory.forEach((gp) => {
+      const cat = matchInventoryPlantToCatalog(gp);
+      const name = String(gp.commonName || gp.name || 'Garden Plant').replace(/^#\d+\s+/, '').trim();
+      const bot = gp.botanicalName || cat?.botanicalName || '—';
+      const rhs = gp.rhsRating || cat?.rhsRating || 'H4';
+      const soil = gp.soilAndSun || cat?.soilAndSun || 'Fertile, well-drained soil';
+      const loc = gp.location || cat?.recommendedLocation || 'Main Border';
+      lines.push(`| **${name}** | *${bot}* | ${rhs} | ${soil} | ${loc} |`);
+    });
+    lines.push('');
+  }
+
+  lines.push('---', '', '## Section 2: Month-by-Month & Weekly Task Calendar (Jan–Dec)', '');
+  for (let mIdx = 0; mIdx < 12; mIdx++) {
+    const m = getDynamicFortnightlyCareSchedule(mIdx, safeInventory);
+    lines.push(`### ${m.monthName} — ${m.seasonSummary} (${m.typicalHadstonTempC})`, '');
+    lines.push('#### Week 1–2 Focus Tasks');
+    lines.push(`1. **Watering & Soil Care:** ${m.week1To2.wateringAndSoilCare}`);
+    lines.push(`2. **Feeding & Mulching:** ${m.week1To2.feedingAndMulching}`);
+    lines.push(`3. **Pruning & Deadheading:** ${m.week1To2.pruningAndDeadheading}`);
+    lines.push(`4. **Pest, Disease & Frost Protection:** ${m.week1To2.pestDiseaseAndFrost}`, '');
+    lines.push('#### Week 3–4 Focus Tasks');
+    lines.push(`1. **Watering & Soil Care:** ${m.week3To4.wateringAndSoilCare}`);
+    lines.push(`2. **Feeding & Mulching:** ${m.week3To4.feedingAndMulching}`);
+    lines.push(`3. **Pruning & Deadheading:** ${m.week3To4.pruningAndDeadheading}`);
+    lines.push(`4. **Pest, Disease & Frost Protection:** ${m.week3To4.pestDiseaseAndFrost}`, '');
+  }
+
+  lines.push('---', '', '## Section 3: Specialized Feed & Nutrition Strategy', '');
+  if (safeInventory.length === 0) {
+    lines.push('_Select plants in My Garden Plants to view feeding strategies._', '');
+  } else {
+    lines.push('| Plant | Specific Feed Type & NPK Ratio | Application Window | Frequency & Method |');
+    lines.push('| :--- | :--- | :--- | :--- |');
+    safeInventory.forEach((gp) => {
+      const cat = matchInventoryPlantToCatalog(gp);
+      const name = String(gp.commonName || gp.name || 'Garden Plant').replace(/^#\d+\s+/, '').trim();
+      lines.push(
+        `| **${name}** | ${gp.feedTypeNpk || cat?.feedTypeNpk || 'Balanced organic feed'} | ${
+          gp.feedWindowUk || cat?.feedWindowUk || 'March to July'
+        } | ${gp.feedFrequencyDosage || cat?.feedFrequencyDosage || 'Monthly during active growth'} |`
+      );
+    });
+    lines.push('');
+  }
+
+  lines.push('---', '', '## Section 4: Precision Pruning & Shaping Guide', '');
+  if (safeInventory.length === 0) {
+    lines.push('_Select plants in My Garden Plants to view pruning schedules._', '');
+  } else {
+    lines.push('| Plant | Optimal Month(s) | Pruning Type | Step-by-Step Technique | What to Avoid |');
+    lines.push('| :--- | :--- | :--- | :--- | :--- |');
+    safeInventory.forEach((gp) => {
+      const cat = matchInventoryPlantToCatalog(gp);
+      const name = String(gp.commonName || gp.name || 'Garden Plant').replace(/^#\d+\s+/, '').trim();
+      lines.push(
+        `| **${name}** | **${gp.pruneMonthsUk || cat?.pruneMonthsUk || 'Seasonal'}** | ${
+          gp.pruneType || cat?.pruneType || 'Maintenance prune'
+        } | ${((gp.pruneTechnique || cat?.pruneTechnique || 'Remove dead or crossing stems.') as string).replace(/\n/g, ' ')} | ${
+          gp.pruneAvoid || cat?.pruneAvoid || 'Avoid pruning in hard frost.'
+        } |`
+      );
+    });
+    lines.push('');
+  }
+
+  lines.push('---', '', `## Section 5: Climate & Seasonal Risk Management (${locationName})`, '');
+  const dynamicRisks = getDynamicRiskMitigation(safeInventory);
+  if (dynamicRisks.length === 0) {
+    lines.push('_Select plants in My Garden Plants to view plant-specific risk mitigation._', '');
+  } else {
+    dynamicRisks.forEach((r) => {
+      lines.push(`### ${r.hazardTitle}`);
+      lines.push(`- **Local Microclimate Trigger:** ${r.hadstonMicroclimateTrigger}`);
+      lines.push(`- **Selected Plants Affected:** ${r.affectedPlants.join(', ')}`);
+      r.actionableSteps.forEach((s) => lines.push(`  - ${s}`));
+      lines.push('');
+    });
+  }
+
+  return lines.join('\n');
+}
+
+const EMPTY_FORTNIGHT_PILLAR_MESSAGE =
+  'No plants selected in My Garden Plants yet. Add plants on the Plants tab to generate care tasks for your garden.';
+
+export const GENERAL_SEASONAL_FORTNIGHT_CALENDAR: MonthlyWeeklyCalendarEntry[] = [
+  {
+    monthIndex: 0,
+    monthName: 'January',
+    shortName: 'Jan',
+    seasonSummary: 'Deep Winter Dormancy · Hard Frosts & Drainage Care',
+    typicalHadstonTempC: '1°C to 6°C (Soil 6cm: 2.8°C)',
+    week1To2: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    },
+    week3To4: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    }
+  },
+  {
+    monthIndex: 1,
+    monthName: 'February',
+    shortName: 'Feb',
+    seasonSummary: 'Late Winter Awakening · Early Sap Rise & Soil Prep',
+    typicalHadstonTempC: '1.5°C to 7°C (Soil 6cm: 3.4°C)',
+    week1To2: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    },
+    week3To4: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    }
+  },
+  {
+    monthIndex: 2,
+    monthName: 'March',
+    shortName: 'Mar',
+    seasonSummary: 'Early Spring Awakening · Structural Prune & Mulching',
+    typicalHadstonTempC: '3°C to 9.5°C (Soil 6cm: 5.5°C)',
+    week1To2: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    },
+    week3To4: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    }
+  },
+  {
+    monthIndex: 3,
+    monthName: 'April',
+    shortName: 'Apr',
+    seasonSummary: 'Mid-Spring Growth Surge · Soil Warming & Frost Watch',
+    typicalHadstonTempC: '4.5°C to 12°C (Soil 6cm: 8.2°C)',
+    week1To2: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    },
+    week3To4: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    }
+  },
+  {
+    monthIndex: 4,
+    monthName: 'May',
+    shortName: 'May',
+    seasonSummary: 'Late Spring Transition · Hardening Off & Canopy Growth',
+    typicalHadstonTempC: '7°C to 14.5°C (Soil 6cm: 11.4°C)',
+    week1To2: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    },
+    week3To4: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    }
+  },
+  {
+    monthIndex: 5,
+    monthName: 'June',
+    shortName: 'Jun',
+    seasonSummary: 'Early Summer Peak · Moisture Retention & Deadheading',
+    typicalHadstonTempC: '10°C to 17.5°C (Soil 6cm: 14.5°C)',
+    week1To2: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    },
+    week3To4: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    }
+  },
+  {
+    monthIndex: 6,
+    monthName: 'July',
+    shortName: 'Jul',
+    seasonSummary: 'Midsummer Bloom · Deep Soaking & Summer Pruning',
+    typicalHadstonTempC: '12°C to 19.5°C (Soil 6cm: 16.5°C)',
+    week1To2: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    },
+    week3To4: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    }
+  },
+  {
+    monthIndex: 7,
+    monthName: 'August',
+    shortName: 'Aug',
+    seasonSummary: 'Late Summer Ripening · Potash Transition & Stop-Nitrogen Rule',
+    typicalHadstonTempC: '12°C to 19°C (Soil 6cm: 16.0°C)',
+    week1To2: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    },
+    week3To4: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    }
+  },
+  {
+    monthIndex: 8,
+    monthName: 'September',
+    shortName: 'Sep',
+    seasonSummary: 'Early Autumn Prep · Perennial Division & Potash Hardening',
+    typicalHadstonTempC: '9.5°C to 16°C (Soil 6cm: 12.8°C)',
+    week1To2: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    },
+    week3To4: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    }
+  },
+  {
+    monthIndex: 9,
+    monthName: 'October',
+    shortName: 'Oct',
+    seasonSummary: 'Mid-Autumn Frost Sentinel · Drainage & Wind-Rock Protection',
+    typicalHadstonTempC: '6.5°C to 12.5°C (Soil 6cm: 9.1°C)',
+    week1To2: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    },
+    week3To4: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    }
+  },
+  {
+    monthIndex: 10,
+    monthName: 'November',
+    shortName: 'Nov',
+    seasonSummary: 'Late Autumn Overwintering · Winter Mulch & Drainage',
+    typicalHadstonTempC: '3.5°C to 9°C (Soil 6cm: 5.8°C)',
+    week1To2: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    },
+    week3To4: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    }
+  },
+  {
+    monthIndex: 11,
+    monthName: 'December',
+    shortName: 'Dec',
+    seasonSummary: 'Winter Solstice · Strict No-Tread Clay Policy & Dormant Care',
+    typicalHadstonTempC: '1.5°C to 6.5°C (Soil 6cm: 3.5°C)',
+    week1To2: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    },
+    week3To4: {
+      wateringAndSoilCare: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      feedingAndMulching: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pruningAndDeadheading: EMPTY_FORTNIGHT_PILLAR_MESSAGE,
+      pestDiseaseAndFrost: EMPTY_FORTNIGHT_PILLAR_MESSAGE
+    }
+  }
+];
+
+/**
  * Dynamically builds the Fortnightly Care Schedule for a given month (0 = Jan .. 11 = Dec)
- * tailored strictly to the plants currently in `plantInventory`.
- * - If `plantInventory` is empty, returns clean plant-agnostic seasonal care (never mentioning unselected plants).
- * - If `plantInventory` has plants, weaves their specific feeding, pruning, soil, and frost care into Weeks 1–2 and Weeks 3–4.
+ * tailored strictly and exclusively to the plants currently in `plantInventory`.
  */
 export function getDynamicFortnightlyCareSchedule(
   monthIndex: number,
@@ -902,8 +845,38 @@ export function getDynamicFortnightlyCareSchedule(
   const resolvedPlants = plantInventory.map((gp) => {
     const catalogMatch = matchInventoryPlantToCatalog(gp);
     const displayName =
-      catalogMatch?.commonName || String(gp.name || 'Garden Plant').replace(/^#\d+\s+/, '');
+      gp.commonName ||
+      catalogMatch?.commonName ||
+      String(gp.name || 'Garden Plant').replace(/^#\d+\s+/, '').trim();
     const rhsRating = gp.rhsRating || catalogMatch?.rhsRating || 'H4';
+    const soilAndSun =
+      gp.soilAndSun ||
+      catalogMatch?.soilAndSun ||
+      'Moist, well-drained border soil; avoid winter waterlogging.';
+    const feedWindowUk = gp.feedWindowUk || catalogMatch?.feedWindowUk || 'March to July';
+    const feedTypeNpk =
+      gp.feedTypeNpk || catalogMatch?.feedTypeNpk || 'Balanced seasonal organic fertiliser';
+    const feedFrequencyDosage =
+      gp.feedFrequencyDosage ||
+      catalogMatch?.feedFrequencyDosage ||
+      'Apply according to active growth stage';
+    const pruneMonthsUk =
+      gp.pruneMonthsUk || catalogMatch?.pruneMonthsUk || 'Late winter or after flowering';
+    const pruneTechnique =
+      gp.pruneTechnique ||
+      catalogMatch?.pruneTechnique ||
+      'Remove dead, damaged, or crossing stems cleanly.';
+    const pruneAvoid =
+      gp.pruneAvoid || catalogMatch?.pruneAvoid || 'Avoid pruning during frost.';
+    const overwinteringProtocol =
+      gp.overwinteringProtocol ||
+      catalogMatch?.overwinteringProtocol ||
+      `RHS ${rhsRating}: Mulch crown zone and prevent winter waterlogging.`;
+    const vulnerabilities =
+      Array.isArray(gp.vulnerabilities) && gp.vulnerabilities.length > 0
+        ? gp.vulnerabilities
+        : catalogMatch?.vulnerabilities || [];
+
     const monthlyCare = getPlantMonthlyCareStatus(
       {
         id: catalogMatch?.catalogId || gp.id,
@@ -911,8 +884,8 @@ export function getDynamicFortnightlyCareSchedule(
         name: gp.name || displayName,
         commonName: displayName,
         rhsRating,
-        feedWindowUk: catalogMatch?.feedWindowUk,
-        pruneMonthsUk: catalogMatch?.pruneMonthsUk
+        feedWindowUk,
+        pruneMonthsUk
       },
       safeIdx
     );
@@ -921,7 +894,15 @@ export function getDynamicFortnightlyCareSchedule(
       displayName,
       rhsRating,
       location: gp.location || 'Main Border',
-      catalogMatch,
+      soilAndSun,
+      feedWindowUk,
+      feedTypeNpk,
+      feedFrequencyDosage,
+      pruneMonthsUk,
+      pruneTechnique,
+      pruneAvoid,
+      overwinteringProtocol,
+      vulnerabilities,
       monthlyCare
     };
   });
@@ -938,128 +919,102 @@ export function getDynamicFortnightlyCareSchedule(
     /pot|container|courtyard|terracotta|patio/i.test(p.location)
   );
 
-  // Build Weeks 1–2 and Weeks 3–4 Watering & Soil tailored to user's plants
+  // Build Weeks 1–2 and Weeks 3–4 Watering & Soil strictly from selected plants
   const week1Soil =
     containerPlants.length > 0
-      ? `Check drainage and moisture for your container plants (${containerPlants
+      ? `Check container drainage and moisture for ${containerPlants
           .slice(0, 4)
-          .map((p) => p.displayName)
-          .join(', ')}). ${baseMonth.week1To2.wateringAndSoilCare}`
-      : `Monitor soil moisture around ${plantNamesList.slice(0, 4).join(', ')}. ${
-          baseMonth.week1To2.wateringAndSoilCare
-        }`;
+          .map((p) => `${p.displayName} (${p.location})`)
+          .join(', ')}.`
+      : `Monitor soil moisture and drainage around ${plantNamesList.slice(0, 4).join(', ')}.`;
 
-  const week3Soil =
-    resolvedPlants[0]?.catalogMatch?.soilAndSun
-      ? `Maintain optimal soil conditions for ${resolvedPlants
-          .slice(0, 3)
-          .map((p) => `${p.displayName} (${p.catalogMatch?.soilAndSun})`)
-          .join('; ')}.`
-      : baseMonth.week3To4.wateringAndSoilCare;
+  const week3Soil = `Soil & aspect requirements for your selected plants: ${resolvedPlants
+    .slice(0, 3)
+    .map((p) => `${p.displayName} (${p.soilAndSun})`)
+    .join('; ')}.`;
 
-  // Build Feeding & Mulch tailored strictly to user's plants
+  // Build Feeding & Mulch strictly from selected plants
   const week1Feed =
     feedDuePlants.length > 0
       ? feedDuePlants
           .slice(0, 3)
-          .map(
-            (p) =>
-              `${p.displayName}: ${
-                p.catalogMatch?.feedTypeNpk || 'Apply balanced seasonal fertiliser'
-              } (${p.catalogMatch?.feedFrequencyDosage || p.catalogMatch?.feedWindowUk || 'this month'}).`
-          )
+          .map((p) => `${p.displayName}: ${p.feedTypeNpk} (${p.feedFrequencyDosage}).`)
           .join(' ')
-      : `No active liquid feed due for ${plantNamesList
+      : `No active feed due in ${baseMonth.monthName} for ${plantNamesList
+          .slice(0, 4)
+          .join(', ')} (scheduled feed windows: ${resolvedPlants
           .slice(0, 3)
-          .join(', ')} this fortnight. ${baseMonth.week1To2.feedingAndMulching}`;
+          .map((p) => `${p.displayName}: ${p.feedWindowUk}`)
+          .join('; ')}).`;
 
   const week3Feed =
     feedDuePlants.length > 3
       ? feedDuePlants
           .slice(3, 6)
-          .map(
-            (p) =>
-              `${p.displayName}: ${
-                p.catalogMatch?.feedTypeNpk || 'Continue scheduled seasonal feed'
-              }.`
-          )
+          .map((p) => `${p.displayName}: ${p.feedTypeNpk}.`)
           .join(' ')
       : feedDuePlants.length > 0
       ? `Follow up feeding and mulch check for ${feedDuePlants
           .slice(0, 3)
           .map((p) => p.displayName)
-          .join(', ')}. ${baseMonth.week3To4.feedingAndMulching}`
-      : baseMonth.week3To4.feedingAndMulching;
+          .join(', ')}.`
+      : `Maintain organic mulch around ${plantNamesList.slice(0, 4).join(', ')}; withhold fertiliser outside active feeding windows.`;
 
-  // Build Pruning tailored strictly to user's plants
+  // Build Pruning strictly from selected plants
   const week1Prune =
     pruneDuePlants.length > 0
       ? pruneDuePlants
-          .slice(0, 2)
-          .map(
-            (p) =>
-              `${p.displayName} (${p.catalogMatch?.pruneMonthsUk || 'Due now'}): ${
-                p.catalogMatch?.pruneTechnique || 'Remove dead, damaged, or crossing stems.'
-              }`
-          )
-          .join(' ')
-      : `No structural pruning due for ${plantNamesList
           .slice(0, 3)
-          .join(', ')} in Weeks 1–2. ${baseMonth.week1To2.pruningAndDeadheading}`;
+          .map((p) => `${p.displayName} (${p.pruneMonthsUk}): ${p.pruneTechnique}`)
+          .join(' ')
+      : `No structural pruning due in ${baseMonth.monthName} for ${plantNamesList
+          .slice(0, 4)
+          .join(', ')} (optimal pruning windows: ${resolvedPlants
+          .slice(0, 3)
+          .map((p) => `${p.displayName}: ${p.pruneMonthsUk}`)
+          .join('; ')}).`;
 
   const week3Prune =
-    pruneDuePlants.length > 2
+    pruneDuePlants.length > 3
       ? pruneDuePlants
-          .slice(2, 4)
-          .map(
-            (p) =>
-              `${p.displayName}: ${
-                p.catalogMatch?.pruneTechnique || 'Complete seasonal pruning.'
-              }`
-          )
+          .slice(3, 6)
+          .map((p) => `${p.displayName}: ${p.pruneTechnique}`)
           .join(' ')
-      : pruneDuePlants.length > 0
-      ? pruneDuePlants
-          .slice(0, 2)
-          .map(
-            (p) =>
-              `${p.displayName} caution: ${
-                p.catalogMatch?.pruneAvoid || 'Avoid pruning during frost.'
-              }`
-          )
-          .join(' ')
-      : baseMonth.week3To4.pruningAndDeadheading;
+      : resolvedPlants
+          .slice(0, 3)
+          .map((p) => `${p.displayName} pruning note: ${p.pruneAvoid}`)
+          .join(' ');
 
-  // Build Frost & Pests tailored strictly to user's plants
+  // Build Frost & Pests strictly from selected plants
   const isColdSeason = [0, 1, 2, 3, 9, 10, 11].includes(safeIdx);
   const week1Frost =
     isColdSeason && protectionDuePlants.length > 0
       ? protectionDuePlants
           .slice(0, 3)
+          .map((p) => `${p.displayName} (RHS ${p.rhsRating}): ${p.overwinteringProtocol}`)
+          .join(' ')
+      : resolvedPlants
+          .slice(0, 3)
           .map(
             (p) =>
               `${p.displayName} (RHS ${p.rhsRating}): ${
-                p.catalogMatch?.overwinteringProtocol ||
-                'Protect crown and roots from frost and winter wet.'
-              }`
+                p.vulnerabilities.length > 0
+                  ? `Watch for ${p.vulnerabilities.join(', ')}`
+                  : p.overwinteringProtocol
+              }.`
           )
-          .join(' ')
-      : `Inspect ${plantNamesList.slice(0, 3).join(', ')} for seasonal pests and weather stress. ${
-          baseMonth.week1To2.pestDiseaseAndFrost
-        }`;
+          .join(' ');
 
   const week3Frost =
     isColdSeason && protectionDuePlants.length > 3
       ? protectionDuePlants
           .slice(3, 6)
-          .map(
-            (p) =>
-              `${p.displayName} (RHS ${p.rhsRating}): ${
-                p.catalogMatch?.overwinteringProtocol || 'Maintain winter protection.'
-              }`
-          )
+          .map((p) => `${p.displayName} (RHS ${p.rhsRating}): ${p.overwinteringProtocol}`)
           .join(' ')
-      : baseMonth.week3To4.pestDiseaseAndFrost;
+      : resolvedPlants
+          .slice(0, 3)
+          .map((p) => `${p.displayName}: ${p.overwinteringProtocol}`)
+          .join(' ');
 
   return {
     ...baseMonth,
@@ -1077,4 +1032,5 @@ export function getDynamicFortnightlyCareSchedule(
     }
   };
 }
+
 

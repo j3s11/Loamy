@@ -8,12 +8,19 @@ import { EXTENDED_RHS_CATALOG_PLANTS } from './rhsExtendedCatalogData';
 
 export interface RhsCatalogPlant {
   catalogId: string;
+  plantNetId?: string;
   rhsPlantId?: number;
   photoRef?: number;
   isHadstonCollection?: boolean;
   name: string;
   commonName: string;
   botanicalName?: string;
+  scientificNameAuthorship?: string;
+  gbifId?: number | string;
+  powoId?: string;
+  family?: string;
+  plantNetScore?: number;
+  dataSource?: 'PLANTNET_RHS_MERGED' | 'PLANTNET_SPECIES' | 'RHS_LIVE_API' | 'RHS_LOCAL_FALLBACK';
   category: 'ORNAMENTAL' | 'EDIBLE_ALLOTMENT' | 'SHRUB_TREE' | 'TENDER_PATIO' | PlantGroupCategoryId | string;
   groupCategory?: PlantGroupCategoryId | string;
   rhsRating: 'H1a' | 'H1b' | 'H1c' | 'H2' | 'H3' | 'H4' | 'H5' | 'H6' | 'H7' | string;
@@ -1964,7 +1971,7 @@ export async function fetchLiveRhsCatalogPlants(
   limit: number = 16,
   signal?: AbortSignal
 ): Promise<{
-  source: 'RHS_LIVE_API' | 'LOCAL_FALLBACK';
+  source: 'PLANTNET_RHS_MERGED' | 'RHS_LIVE_API' | 'LOCAL_FALLBACK';
   totalHits: number;
   plants: RhsCatalogPlant[];
 }> {
@@ -1974,14 +1981,14 @@ export async function fetchLiveRhsCatalogPlants(
     limit: String(limit)
   });
 
-  const res = await fetch(`/api/rhs/plants/search?${params.toString()}`, {
+  const res = await fetch(`/api/plantnet/search?${params.toString()}`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
     signal
   });
 
   if (!res.ok) {
-    throw new Error(`RHS search endpoint returned HTTP ${res.status}`);
+    throw new Error(`Pl@ntNet + RHS search endpoint returned HTTP ${res.status}`);
   }
 
   const data = await res.json();
@@ -1991,9 +1998,49 @@ export async function fetchLiveRhsCatalogPlants(
   }
 
   return {
-    source: data?.source === 'RHS_LIVE_API' ? 'RHS_LIVE_API' : 'LOCAL_FALLBACK',
+    source:
+      data?.source === 'PLANTNET_RHS_MERGED'
+        ? 'PLANTNET_RHS_MERGED'
+        : data?.source === 'RHS_LIVE_API'
+        ? 'RHS_LIVE_API'
+        : 'LOCAL_FALLBACK',
     totalHits: Number(data?.totalHits ?? plants.length),
     plants
+  };
+}
+
+export async function identifyPlantWithPlantNetClient(options: {
+  imageBase64: string;
+  mimeType?: string;
+  organ?: 'auto' | 'flower' | 'leaf' | 'fruit' | 'bark';
+}): Promise<{
+  bestMatch: string;
+  predictedOrgan?: string;
+  results: RhsCatalogPlant[];
+}> {
+  const res = await fetch('/api/plantnet/identify', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: JSON.stringify(options)
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error || `Pl@ntNet photo identification returned HTTP ${res.status}`);
+  }
+
+  const results: RhsCatalogPlant[] = Array.isArray(data?.results) ? data.results : [];
+  for (const p of results) {
+    registerLiveRhsPlant(p);
+  }
+
+  return {
+    bestMatch: data?.bestMatch || results[0]?.botanicalName || 'Identified Plant',
+    predictedOrgan: data?.predictedOrgan,
+    results
   };
 }
 

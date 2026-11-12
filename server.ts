@@ -13,6 +13,10 @@ import {
   fetchRawRhsPlantDetail,
   normalizeLiveRhsPlant
 } from './src/services/rhsLiveService.ts';
+import {
+  searchPlantNamesWithPlantNetAndRhs,
+  identifyPlantPhotoWithPlantNet
+} from './src/services/plantNetService.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -32,8 +36,43 @@ async function startServer() {
   app.use(metOfficeProxy);
 
   // ==========================================================================
-  // 1B. LIVE RHS PLANT FINDER WEBSITE SEARCH & DETAIL PROXY ROUTES
+  // 1B. PL@NTNET + RHS PLANT NAME SEARCH & PHOTO IDENTIFICATION ROUTES
   // ==========================================================================
+  app.get('/api/plantnet/search', async (req, res) => {
+    try {
+      const q = typeof req.query.q === 'string' ? req.query.q : '';
+      const category = typeof req.query.category === 'string' ? req.query.category : 'ALL';
+      const limit = req.query.limit !== undefined ? Number(req.query.limit) : 14;
+
+      const result = await searchPlantNamesWithPlantNetAndRhs(q, category, limit);
+      return res.json(result);
+    } catch (err: any) {
+      return res.status(500).json({
+        error: err?.message || 'Failed to query Pl@ntNet + RHS plant database.'
+      });
+    }
+  });
+
+  app.post('/api/plantnet/identify', async (req, res) => {
+    try {
+      const { imageBase64, mimeType, organ, project } = req.body || {};
+      if (!imageBase64 || typeof imageBase64 !== 'string') {
+        return res.status(400).json({ error: 'imageBase64 is required for Pl@ntNet identification.' });
+      }
+      const result = await identifyPlantPhotoWithPlantNet({
+        imageBase64,
+        mimeType,
+        organ,
+        project
+      });
+      return res.json(result);
+    } catch (err: any) {
+      return res.status(500).json({
+        error: err?.message || 'Failed to identify plant photo via Pl@ntNet.'
+      });
+    }
+  });
+
   app.get('/api/rhs/plants/search', async (req, res) => {
     try {
       const q = typeof req.query.q === 'string' ? req.query.q : '';

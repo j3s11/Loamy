@@ -156,41 +156,8 @@ export const ADVISOR_CONFIG = {
     }
   ],
 
-  // Default Starter Plant Inventory (used if localStorage/Firestore is empty)
-  DEFAULT_PLANT_INVENTORY: [
-    {
-      id: 'plt-01',
-      name: "Dahlia 'Bishop of Llandaff'",
-      rhsRating: 'H3',
-      location: 'South-Facing Mixed Border (Heavy Clay)',
-      growthStage: 'Late Flowering / Pre-Dormancy',
-      vulnerabilities: ['Air frost blackens foliage', 'Tuber rot in waterlogged winter clay']
-    },
-    {
-      id: 'plt-02',
-      name: "Purple Sprouting Broccoli 'Rudolph'",
-      rhsRating: 'H5',
-      location: 'Open Allotment Bed (Exposed)',
-      growthStage: 'Overwintering Vegetative Growth',
-      vulnerabilities: ['Wind-rock in wet clay creating water pockets around stem', 'Pigeon damage', 'Clubroot']
-    },
-    {
-      id: 'plt-03',
-      name: "Citrus × meyeri 'Meyer Lemon'",
-      rhsRating: 'H2',
-      location: 'Terracotta Patio Pot',
-      growthStage: 'Fruiting / Ripening',
-      vulnerabilities: ['Root-ball freezing below 0°C', 'Cold drying winds', 'Winter waterlogging in saucers']
-    },
-    {
-      id: 'plt-04',
-      name: "Acer palmatum 'Bloodgood' (Japanese Maple)",
-      rhsRating: 'H5',
-      location: 'Sheltered Lawn Corner',
-      growthStage: 'Leaf Drop / Autumn Dormancy',
-      vulnerabilities: ['Cold gale-force wind scorch', 'Late spring frost on emerging buds']
-    }
-  ]
+  // No default starter plants — all data is driven strictly by user-selected plants in My Garden Plants
+  DEFAULT_PLANT_INVENTORY: []
 };
 
 export const UK_GARDEN_LOCATION_DIRECTORY = [
@@ -1582,7 +1549,7 @@ export function formatUkDateTime(isoDateOrTimestamp) {
  */
 export function buildRuleBasedHorticulturalAdvice(
   weatherData,
-  plantInventory = ADVISOR_CONFIG.DEFAULT_PLANT_INVENTORY,
+  plantInventory = [],
   gardenProfile = ADVISOR_CONFIG.DEFAULT_GARDEN_PROFILE
 ) {
   const hazard = weatherData?.hazardSummary || {};
@@ -1596,6 +1563,25 @@ export function buildRuleBasedHorticulturalAdvice(
   const cleanPlantName = (name) => String(name || '').replace(/^#\d+\s+/, '').trim();
   const safeInventory = Array.isArray(plantInventory) ? plantInventory : [];
 
+  const peakGustMph =
+    hazard.maxForecastGustMph ??
+    (hazard.maxForecastGustKmh !== undefined ? Number((hazard.maxForecastGustKmh * 0.621371).toFixed(1)) : 29.1);
+  const rainMm = hazard.cumulativePrecip48hMm ?? 19.0;
+  const minT = hazard.lowestForecastTempC !== undefined && hazard.lowestForecastTempC < 90 ? hazard.lowestForecastTempC : -0.5;
+  const aspectSummary = isSouthFacing
+    ? 'South-facing aspect (+2°C daytime solar gain aids surface drying, but watch for rapid morning thaw on frosted buds)'
+    : `${aspectCode}-facing aspect (reduced winter solar gain means heavy clay stays wet and cold 10–14 days longer)`;
+
+  // Only provide plant weather alerts and seasonal tasks when plants are selected in My Garden Plants
+  if (safeInventory.length === 0) {
+    return {
+      evaluatedAt: weatherData?.fetchedAt || new Date().toISOString(),
+      weatherAlerts: [],
+      seasonalTasks: [],
+      soilAndMicroclimateNote: `${placeName} (RHS ${profile.rhsHardinessZone}) · ${aspectSummary}. Forecast: ${rainMm}mm 48h rain, 7-day low ${minT}°C, peak gusts ${peakGustMph} mph. Add plants in My Garden Plants for plant-specific alerts and care tasks.`
+    };
+  }
+
   const tenderPlants = safeInventory
     .filter((p) => ['H1a', 'H1b', 'H1c', 'H2', 'H3'].includes(p.rhsRating))
     .map((p) => cleanPlantName(p.name));
@@ -1603,18 +1589,15 @@ export function buildRuleBasedHorticulturalAdvice(
 
   const windVulnerablePlants = safeInventory
     .filter((p) => {
-      const lowerName = String(p.name || '').toLowerCase();
       const lowerLoc = String(p.location || '').toLowerCase();
+      const lowerCat = String(p.category || '').toLowerCase();
       const lowerVuln = Array.isArray(p.vulnerabilities) ? p.vulnerabilities.join(' ').toLowerCase() : '';
       return (
-        lowerName.includes('broccoli') ||
-        lowerName.includes('acer') ||
-        lowerName.includes('rose') ||
-        lowerName.includes('rosa') ||
-        lowerName.includes('buddleja') ||
-        lowerName.includes('cordyline') ||
+        lowerCat.includes('shrub') ||
         lowerLoc.includes('exposed') ||
-        lowerVuln.includes('wind')
+        lowerVuln.includes('wind') ||
+        lowerVuln.includes('gale') ||
+        lowerVuln.includes('stake')
       );
     })
     .map((p) => cleanPlantName(p.name));
@@ -1631,10 +1614,7 @@ export function buildRuleBasedHorticulturalAdvice(
 
   if (hazard.frostRiskDetected || (hazard.lowestForecastTempC !== undefined && hazard.lowestForecastTempC <= 3.5)) {
     const affectedFrostPlants = tenderPlants.length > 0 ? tenderPlants : allPlantNames.slice(0, 3);
-    const frostTargetLabel =
-      affectedFrostPlants.length > 0
-        ? affectedFrostPlants.slice(0, 3).join(', ')
-        : 'tender patio containers and half-hardy border crowns';
+    const frostTargetLabel = affectedFrostPlants.slice(0, 3).join(', ');
 
     const frostAction = isSouthFacing
       ? `South-Facing Plot (${shortTown}): Shelter or fleece ${frostTargetLabel} before dusk and move tender pots into a frost-free porch or cold glasshouse. Because south-facing beds receive direct morning sun after frost, shade frosted foliage from rapid morning thaw scorch.`
@@ -1649,25 +1629,19 @@ export function buildRuleBasedHorticulturalAdvice(
     });
   }
 
-  const peakGustMph =
-    hazard.maxForecastGustMph ??
-    (hazard.maxForecastGustKmh !== undefined ? Number((hazard.maxForecastGustKmh * 0.621371).toFixed(1)) : 29.1);
-
   if (
     hazard.windRockRiskDetected ||
     peakGustMph >= 22.0 ||
     (hazard.maxForecastGustKmh !== undefined && hazard.maxForecastGustKmh >= 35)
   ) {
-    const windTargetLabel =
-      windVulnerablePlants.length > 0
-        ? windVulnerablePlants.slice(0, 3).join(', ')
-        : 'tall shrubs, standards, and staked stems';
+    const affectedWindPlants = windVulnerablePlants.length > 0 ? windVulnerablePlants : allPlantNames.slice(0, 3);
+    const windTargetLabel = affectedWindPlants.slice(0, 3).join(', ');
 
     weatherAlerts.push({
       severity: 'WARNING',
       hazardType: 'HIGH_WIND',
       forecastWindow: firstWindyDay?.date ? `${firstWindyDay.date} (Peak Gusts ${peakGustMph} mph)` : 'Incoming Frontal Passage',
-      affectedPlants: windVulnerablePlants,
+      affectedPlants: affectedWindPlants,
       actionRequired: `Check stakes and soft rubber ties on ${windTargetLabel} in ${shortTown}; heel in soil collars firmly around stems to prevent wind-rock cavities collecting freezing water in heavy clay.`
     });
   }
@@ -1680,85 +1654,47 @@ export function buildRuleBasedHorticulturalAdvice(
       forecastWindow: `7-Day ${shortTown} Basin Outlook`,
       affectedPlants: affectedWaterloggingPlants,
       actionRequired: isSouthFacing
-        ? 'Remove saucers from beneath patio containers and raise terracotta pots onto pot feet; take advantage of south-facing sunshine to aerate the top 3cm of raised beds without treading on wet clay borders.'
-        : `Remove saucers from beneath patio containers and raise pots onto feet; ${aspectCode.toLowerCase()}-facing clay borders evaporate slowly in autumn/winter—strictly use timber staging boards to avoid compaction.`
+        ? `Check drainage around ${affectedWaterloggingPlants.slice(0, 3).join(', ')}; remove saucers from beneath patio containers and raise pots onto feet on your south-facing plot.`
+        : `Check drainage around ${affectedWaterloggingPlants.slice(0, 3).join(', ')}; remove saucers from beneath patio containers and raise pots onto feet in ${aspectCode.toLowerCase()}-facing borders.`
     });
   }
 
-  let seasonalTasks = [];
+  const h3OrTender = safeInventory.filter((p) => ['H1a', 'H1b', 'H1c', 'H2', 'H3'].includes(p.rhsRating)).map((p) => cleanPlantName(p.name));
+  const hardyShrubsOrCrops = safeInventory.filter((p) => ['H4', 'H5', 'H6', 'H7'].includes(p.rhsRating)).map((p) => cleanPlantName(p.name));
+  const protectionTargets = h3OrTender.length > 0 ? h3OrTender : allPlantNames.slice(0, 3);
+  const windTargets = windVulnerablePlants.length > 0 ? windVulnerablePlants : (hardyShrubsOrCrops.length > 0 ? hardyShrubsOrCrops.slice(0, 3) : allPlantNames.slice(0, 3));
 
-  if (safeInventory.length === 0) {
-    seasonalTasks = [
-      {
-        taskTitle: isSouthFacing
-          ? 'Mulch & Insulate South-Facing Heavy Clay Borders Before Hard Frost'
-          : `Protect Cold ${aspectCode}-Facing Clay Borders From Winter Compaction`,
-        category: 'PROTECTION',
-        targetPlants: [],
-        instructions: isSouthFacing
-          ? `In ${shortTown} (RHS ${profile.rhsHardinessZone}), south-facing beds warm faster by day, but heavy clay still holds winter water. Spread a 5–8cm blanket of composted bark over border soil and elevate patio containers onto pot feet.`
-          : `In ${shortTown} (RHS ${profile.rhsHardinessZone}), ${aspectCode.toLowerCase()}-facing heavy clay receives little winter sun and stays saturated. Avoid walking on wet borders and apply a 5–8cm organic mulch to insulate soil structure.`
-      },
-      {
-        taskTitle: 'Inspect Stakes, Ties & Windbreaks Ahead of Gale-Force Gusts',
-        category: 'SOIL_CARE',
-        targetPlants: [],
-        instructions: `Firm soil collars around tall stems ahead of ${peakGustMph} mph gusts so wind-rock cavities do not pool freezing rainwater around root crowns.`
-      },
-      {
-        taskTitle: 'Clear Fallen Leaves From Crowns & Check Container Drainage',
-        category: 'PRUNING',
-        targetPlants: [],
-        instructions: 'Remove wet decaying leaves from perennial crowns to prevent botrytis and slug shelter, and ensure all patio pot drainage holes are unblocked.'
-      }
-    ];
-  } else {
-    const h3OrTender = safeInventory.filter((p) => ['H1a', 'H1b', 'H1c', 'H2', 'H3'].includes(p.rhsRating)).map((p) => cleanPlantName(p.name));
-    const hardyShrubsOrCrops = safeInventory.filter((p) => ['H4', 'H5', 'H6', 'H7'].includes(p.rhsRating)).map((p) => cleanPlantName(p.name));
-
-    seasonalTasks = [
-      {
-        taskTitle:
-          h3OrTender.length > 0
-            ? `Insulate & Shelter Tender Plants (${h3OrTender.slice(0, 2).join(', ')})`
-            : isSouthFacing
-            ? 'Mulch & Protect Border Crowns in South-Facing Clay'
-            : `Mulch & Protect Crowns in Cold ${aspectCode}-Facing Clay`,
-        category: 'PROTECTION',
-        targetPlants: h3OrTender.length > 0 ? h3OrTender : allPlantNames.slice(0, 2),
-        instructions: isSouthFacing
-          ? `In ${shortTown} (RHS ${profile.rhsHardinessZone}), a sheltered south-facing border against a warm wall is 2°C warmer, but heavy clay still holds winter water. Apply a 10cm dry bark mulch around root zones and fleece tender growth before sub-zero nights.`
-          : `In ${shortTown} (RHS ${profile.rhsHardinessZone}), ${aspectCode.toLowerCase()}-facing heavy clay receives little winter sun and stays waterlogged. Move container specimens under frost-free shelter and apply a deep dry bark mound over border crowns.`
-      },
-      {
-        taskTitle: 'Firm Soil Collars & Check Stakes Against Wind-Rock',
-        category: 'SOIL_CARE',
-        targetPlants: windVulnerablePlants.length > 0 ? windVulnerablePlants : hardyShrubsOrCrops.slice(0, 3),
-        instructions: `Check stakes and soft ties and firm soil gently around stems ahead of ${peakGustMph} mph gusts so wind-rock cavities cannot collect freezing water in heavy clay.`
-      },
-      {
-        taskTitle: 'Elevate Patio Pots & Clear Fallen Foliage From Crowns',
-        category: 'PRUNING',
-        targetPlants: allPlantNames.slice(0, 3),
-        instructions:
-          aspectCode === 'EAST' || isSouthFacing
-            ? 'Raise all containers onto pot feet to prevent waterlogging and shield frost-sensitive buds from rapid early morning thaw scorch.'
-            : 'Raise containers onto pot feet to prevent root rot in cold wet compost, and clear decaying leaves from around plant crowns.'
-      }
-    ];
-  }
-
-  const rainMm = hazard.cumulativePrecip48hMm ?? 19.0;
-  const minT = hazard.lowestForecastTempC !== undefined && hazard.lowestForecastTempC < 90 ? hazard.lowestForecastTempC : -0.5;
-  const aspectSummary = isSouthFacing
-    ? 'South-facing aspect (+2°C daytime solar gain aids surface drying, but watch for rapid morning thaw on frosted buds)'
-    : `${aspectCode}-facing aspect (reduced winter solar gain means heavy clay stays wet and cold 10–14 days longer)`;
+  const seasonalTasks = [
+    {
+      taskTitle: `Protect & Mulch Selected Plants (${protectionTargets.slice(0, 2).join(', ')})`,
+      category: 'PROTECTION',
+      targetPlants: protectionTargets,
+      instructions: isSouthFacing
+        ? `In ${shortTown} (RHS ${profile.rhsHardinessZone}), protect ${protectionTargets.slice(0, 3).join(', ')} with a 5–8cm dry bark mulch around root zones and fleece tender growth before sub-zero nights.`
+        : `In ${shortTown} (RHS ${profile.rhsHardinessZone}), ${aspectCode.toLowerCase()}-facing clay stays cold longer. Shelter ${protectionTargets.slice(0, 3).join(', ')} and apply a deep dry bark mound over root crowns.`
+    },
+    {
+      taskTitle: `Firm Soil Collars & Check Stakes (${windTargets.slice(0, 2).join(', ')})`,
+      category: 'SOIL_CARE',
+      targetPlants: windTargets,
+      instructions: `Check stakes and firm soil gently around ${windTargets.slice(0, 3).join(', ')} ahead of ${peakGustMph} mph gusts so wind-rock cavities cannot collect freezing water in heavy clay.`
+    },
+    {
+      taskTitle: `Prune, Deadhead & Check Drainage (${allPlantNames.slice(0, 2).join(', ')})`,
+      category: 'PRUNING',
+      targetPlants: allPlantNames.slice(0, 3),
+      instructions:
+        aspectCode === 'EAST' || isSouthFacing
+          ? `Inspect ${allPlantNames.slice(0, 3).join(', ')}: ensure free drainage and shield frost-sensitive buds from rapid early morning thaw scorch.`
+          : `Inspect ${allPlantNames.slice(0, 3).join(', ')}: ensure free drainage and clear decaying leaves from around plant crowns.`
+    }
+  ];
 
   return {
     evaluatedAt: weatherData?.fetchedAt || new Date().toISOString(),
     weatherAlerts,
     seasonalTasks,
-    soilAndMicroclimateNote: `${placeName} (RHS ${profile.rhsHardinessZone}) · ${aspectSummary}. Forecast: ${rainMm}mm 48h rain, 7-day low ${minT}°C, peak gusts ${peakGustMph} mph. Use timber staging boards on heavy clay borders and keep container drainage clear.`
+    soilAndMicroclimateNote: `${placeName} (RHS ${profile.rhsHardinessZone}) · ${aspectSummary}. Forecast: ${rainMm}mm 48h rain, 7-day low ${minT}°C, peak gusts ${peakGustMph} mph. Monitoring ${safeInventory.length} selected ${safeInventory.length === 1 ? 'plant' : 'plants'}: ${allPlantNames.slice(0, 4).join(', ')}.`
   };
 }
 

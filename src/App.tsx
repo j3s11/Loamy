@@ -37,7 +37,8 @@ import {
   ChevronUp,
   Clock,
   Upload,
-  Copy
+  Copy,
+  Camera
 } from 'lucide-react';
 import {
   useGardenAdvisor,
@@ -55,7 +56,6 @@ import PlantThumbnailWithModal from './components/PlantThumbnailWithModal';
 import {
   searchRhsPlantCatalog,
   CatalogPlantItem,
-  getAllRhsCatalogInventoryRecords,
   RHS_PLANT_CATALOG,
   RhsCatalogPlant,
   PLANT_CATEGORY_DEFINITIONS,
@@ -67,6 +67,7 @@ import {
   calculatePlantHealthScore,
   PlantHealthAssessment,
   fetchLiveRhsCatalogPlants,
+  identifyPlantWithPlantNetClient,
   LIVE_RHS_PLANT_CACHE,
   registerLiveRhsPlant
 } from './utils/rhsPlantCatalog';
@@ -340,33 +341,20 @@ function exportGardenReportToCsv(
 export default function App() {
   // Start with an empty garden plant inventory unless the user has added or imported custom plants
   const initialSavedInventory = useMemo<PlantRecord[]>(() => {
+    const legacyStarterIds = new Set(['plt-01', 'plt-02', 'plt-03', 'plt-04']);
     try {
       localStorage.removeItem('gws_garden_inventory_v3');
+      localStorage.removeItem('gws_garden_inventory_v4');
       const savedV5 = localStorage.getItem(UI_CONFIG.STORAGE_KEYS.INVENTORY);
       if (savedV5) {
         const parsed = JSON.parse(savedV5);
         if (Array.isArray(parsed)) {
-          return parsed.map((p) => ({
-            ...p,
-            name: String(p.name || '').replace(/^#\d+\s+/, '').trim()
-          }));
-        }
-      }
-      // Migrate from v4 only if it wasn't the old 32-plant default collection
-      const savedV4 = localStorage.getItem('gws_garden_inventory_v4');
-      localStorage.removeItem('gws_garden_inventory_v4');
-      if (savedV4) {
-        const parsedV4 = JSON.parse(savedV4);
-        if (Array.isArray(parsedV4)) {
-          const isOld32Default =
-            parsedV4.length === 32 &&
-            parsedV4.every((p) => String(p?.id || '').startsWith('hadston-') || /^#\d+\s+/.test(String(p?.name || '')));
-          if (!isOld32Default) {
-            return parsedV4.map((p) => ({
+          return parsed
+            .filter((p) => !legacyStarterIds.has(String(p?.id || '')))
+            .map((p) => ({
               ...p,
               name: String(p.name || '').replace(/^#\d+\s+/, '').trim()
             }));
-          }
         }
       }
     } catch (err) {
@@ -558,14 +546,66 @@ export default function App() {
   const [formLiveSuggestions, setFormLiveSuggestions] = useState<RhsCatalogPlant[]>([]);
   const [isFormLookupLoading, setIsFormLookupLoading] = useState(false);
 
-  // Live RHS Plant Finder Search-to-Add state
+  // Live Pl@ntNet + RHS Plant Search-to-Add state
   const [catalogSearchQuery, setCatalogSearchQuery] = useState('');
   const [catalogCategory, setCatalogCategory] = useState('ALL');
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [liveRhsPlants, setLiveRhsPlants] = useState<RhsCatalogPlant[]>([]);
   const [liveRhsTotalHits, setLiveRhsTotalHits] = useState<number>(0);
   const [isLiveRhsLoading, setIsLiveRhsLoading] = useState<boolean>(false);
-  const [liveRhsSource, setLiveRhsSource] = useState<'RHS_LIVE_API' | 'LOCAL_FALLBACK'>('RHS_LIVE_API');
+  const [liveRhsSource, setLiveRhsSource] = useState<
+    'PLANTNET_RHS_MERGED' | 'RHS_LIVE_API' | 'LOCAL_FALLBACK'
+  >('PLANTNET_RHS_MERGED');
+
+  // Pl@ntNet Photo Identification state
+  const [isPhotoIdentifyOpen, setIsPhotoIdentifyOpen] = useState<boolean>(false);
+  const [photoIdentifyOrgan, setPhotoIdentifyOrgan] = useState<
+    'auto' | 'flower' | 'leaf' | 'fruit' | 'bark'
+  >('auto');
+  const [isPhotoIdentifying, setIsPhotoIdentifying] = useState<boolean>(false);
+  const [photoIdentifyError, setPhotoIdentifyError] = useState<string>('');
+  const [photoIdentifyBestMatch, setPhotoIdentifyBestMatch] = useState<string>('');
+  const [photoIdentifyResults, setPhotoIdentifyResults] = useState<RhsCatalogPlant[]>([]);
+  const [photoIdentifyPreviewUrl, setPhotoIdentifyPreviewUrl] = useState<string>('');
+  const photoFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handlePhotoIdentifyFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setPhotoIdentifyError('');
+    setIsPhotoIdentifying(true);
+
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Failed to read image file.'));
+        reader.readAsDataURL(file);
+      });
+
+      setPhotoIdentifyPreviewUrl(dataUrl);
+      const res = await identifyPlantWithPlantNetClient({
+        imageBase64: dataUrl,
+        mimeType: file.type || 'image/jpeg',
+        organ: photoIdentifyOrgan
+      });
+
+      for (const plant of res.results) {
+        registerLivePlantImage(plant);
+      }
+
+      setPhotoIdentifyBestMatch(res.bestMatch);
+      setPhotoIdentifyResults(res.results);
+    } catch (err: any) {
+      setPhotoIdentifyError(
+        err?.message || 'Could not identify plant from this photo. Try a clearer leaf or flower image.'
+      );
+    } finally {
+      setIsPhotoIdentifying(false);
+      e.target.value = '';
+    }
+  };
 
   // Garden Plants Backup Export / Import state
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
@@ -586,15 +626,23 @@ export default function App() {
     }
   }, [plantInventory]);
 
-  // Query live RHS website whenever user searches or browses the RHS Plant Catalogue
+  // Query live Pl@ntNet + RHS only when user enters a plant name search query
   useEffect(() => {
+    const trimmedQuery = catalogSearchQuery.trim();
+    if (!trimmedQuery) {
+      setLiveRhsPlants([]);
+      setLiveRhsTotalHits(0);
+      setIsLiveRhsLoading(false);
+      return;
+    }
+
     const controller = new AbortController();
     setIsLiveRhsLoading(true);
 
     const timer = window.setTimeout(async () => {
       try {
         const res = await fetchLiveRhsCatalogPlants(
-          catalogSearchQuery,
+          trimmedQuery,
           catalogCategory,
           16,
           controller.signal
@@ -607,7 +655,7 @@ export default function App() {
         setLiveRhsSource(res.source);
       } catch (err: any) {
         if (err?.name !== 'AbortError') {
-          const fallback = searchRhsPlantCatalog(catalogSearchQuery, catalogCategory).slice(0, 16);
+          const fallback = searchRhsPlantCatalog(trimmedQuery, catalogCategory).slice(0, 16);
           setLiveRhsPlants(fallback);
           setLiveRhsTotalHits(fallback.length);
           setLiveRhsSource('LOCAL_FALLBACK');
@@ -617,7 +665,7 @@ export default function App() {
           setIsLiveRhsLoading(false);
         }
       }
-    }, catalogSearchQuery.trim() ? 220 : 20);
+    }, 220);
 
     return () => {
       window.clearTimeout(timer);
@@ -660,13 +708,13 @@ export default function App() {
     };
   }, [plantForm.name, isFormOpen]);
 
-  const matchingCatalogPlants = useMemo(
-    () =>
-      liveRhsPlants.length > 0
-        ? liveRhsPlants
-        : searchRhsPlantCatalog(catalogSearchQuery, catalogCategory).slice(0, 16),
-    [liveRhsPlants, catalogSearchQuery, catalogCategory]
-  );
+  const matchingCatalogPlants = useMemo(() => {
+    const trimmed = catalogSearchQuery.trim();
+    if (!trimmed) return [];
+    return liveRhsPlants.length > 0
+      ? liveRhsPlants
+      : searchRhsPlantCatalog(trimmed, catalogCategory).slice(0, 16);
+  }, [liveRhsPlants, catalogSearchQuery, catalogCategory]);
 
   const activeInventoryNameSet = useMemo(() => {
     const set = new Set<string>();
@@ -1048,14 +1096,6 @@ export default function App() {
 
   const handleResetInventory = () => {
     setPlantInventory([]);
-  };
-
-  const handleLoadAllRhsCatalogPlants = () => {
-    const allCatalogRecords = getAllRhsCatalogInventoryRecords() as PlantRecord[];
-    setPlantInventory(allCatalogRecords);
-    if (hasConfiguredLocation) {
-      runGardenAnalysis(false, gardenProfile);
-    }
   };
 
   const handleExportPlantsBackup = useCallback(() => {
@@ -2422,7 +2462,11 @@ export default function App() {
               {weatherAlerts.length === 0 ? (
                 <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 text-xs sm:text-sm text-emerald-950 flex items-center gap-2.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-                  <span>No severe weather hazards flagged for your plants over the next 7 days.</span>
+                  <span>
+                    {plantInventory.length === 0
+                      ? 'No plants selected in My Garden Plants yet — add plants on the Plants tab to receive plant-specific weather alerts.'
+                      : 'No severe weather hazards flagged for your selected garden plants over the next 7 days.'}
+                  </span>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -2835,18 +2879,18 @@ export default function App() {
                 </div>
               )}
 
-              {/* Live RHS Plant Finder Website Search Bar to Add More Plants */}
+              {/* Pl@ntNet + RHS Plant Finder Search Bar & Photo Identification */}
               <div className="p-3.5 sm:p-4 rounded-2xl bg-stone-50/90 border border-stone-200/90 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <Sprout className="w-4 h-4 text-emerald-700 shrink-0" />
                     <span className="text-xs sm:text-sm font-bold text-slate-900">
-                      Search Live RHS Plant Finder (rhs.org.uk)
+                      Search Plant Names (Pl@ntNet API + RHS Care Data)
                     </span>
                     <span
                       data-testid="live-rhs-status-badge"
                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border ${
-                        liveRhsSource === 'RHS_LIVE_API'
+                        liveRhsSource === 'PLANTNET_RHS_MERGED' || liveRhsSource === 'RHS_LIVE_API'
                           ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
                           : 'bg-stone-100 text-slate-700 border-stone-200'
                       }`}
@@ -2855,22 +2899,25 @@ export default function App() {
                         className={`w-1.5 h-1.5 rounded-full ${
                           isLiveRhsLoading
                             ? 'bg-amber-500 animate-pulse'
-                            : liveRhsSource === 'RHS_LIVE_API'
+                            : liveRhsSource === 'PLANTNET_RHS_MERGED' ||
+                              liveRhsSource === 'RHS_LIVE_API'
                             ? 'bg-emerald-600'
                             : 'bg-slate-400'
                         }`}
                       />
                       <span>
                         {isLiveRhsLoading
-                          ? 'Searching rhs.org.uk...'
+                          ? 'Searching Pl@ntNet + RHS...'
+                          : liveRhsSource === 'PLANTNET_RHS_MERGED'
+                          ? `Pl@ntNet + RHS Live · ${liveRhsTotalHits.toLocaleString()} matches`
                           : liveRhsSource === 'RHS_LIVE_API'
-                          ? `Live rhs.org.uk · ${liveRhsTotalHits.toLocaleString()} matches`
+                          ? `RHS Live · ${liveRhsTotalHits.toLocaleString()} matches`
                           : 'Offline reference mode'}
                       </span>
                     </span>
                   </div>
                   <span className="text-[11px] text-slate-500">
-                    Search 250,000+ live RHS plants by common or botanical name to add to your garden
+                    Pl@ntNet species search paired with RHS UK hardiness, pruning &amp; feeding profiles
                   </span>
                 </div>
 
@@ -2878,13 +2925,13 @@ export default function App() {
                   <div className="relative flex-1">
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <label htmlFor="plant-catalog-search" className="sr-only">
-                      Search live RHS website to add plants
+                      Search plant names via Pl@ntNet and RHS
                     </label>
                     <input
                       id="plant-catalog-search"
                       data-testid="rhs-catalog-search-input"
                       type="text"
-                      placeholder="Search live rhs.org.uk database (e.g. Lavandula, Fuchsia, Hydrangea, Acer, Olive, Agapanthus)..."
+                      placeholder="Search plant names via Pl@ntNet + RHS (e.g. Lavandula, Lavender, Rosa, Fuchsia, Hydrangea, Acer)..."
                       value={catalogSearchQuery}
                       onFocus={() => setIsCatalogOpen(true)}
                       onChange={(e) => {
@@ -2908,14 +2955,28 @@ export default function App() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      data-testid="open-plantnet-photo-identify-btn"
+                      onClick={() => setIsPhotoIdentifyOpen((prev) => !prev)}
+                      className={`min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition whitespace-nowrap cursor-pointer ${
+                        isPhotoIdentifyOpen
+                          ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                          : 'bg-white hover:bg-stone-100 text-slate-800 border-stone-300'
+                      }`}
+                    >
+                      <Camera className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                      <span>Identify by Photo</span>
+                    </button>
+
                     <button
                       type="button"
                       data-testid="browse-rhs-catalogue-btn"
                       onClick={() => setIsCatalogOpen((prev) => !prev)}
                       className="min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-stone-100 text-slate-800 border border-stone-300 transition whitespace-nowrap cursor-pointer"
                     >
-                      {isCatalogOpen ? 'Hide Live Search' : 'Browse Live RHS'}
+                      {isCatalogOpen ? 'Hide Search' : 'Browse Pl@ntNet + RHS'}
                     </button>
 
                     <button
@@ -2923,12 +2984,150 @@ export default function App() {
                       data-testid="add-all-rhs-catalogue-btn"
                       onClick={handleAddAllMatchingCatalogPlants}
                       className="min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-800 hover:bg-emerald-700 text-white transition whitespace-nowrap cursor-pointer"
-                      title="Add all currently shown RHS search results to your plot"
+                      title="Add all currently shown Pl@ntNet + RHS search results to your plot"
                     >
                       + Add Shown Results
                     </button>
                   </div>
                 </div>
+
+                {/* Pl@ntNet Visual Photo Identification Drawer */}
+                {isPhotoIdentifyOpen && (
+                  <div
+                    data-testid="plantnet-photo-identify-panel"
+                    className="p-3.5 rounded-xl bg-white border border-emerald-200 space-y-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                          <Camera className="w-4 h-4 text-emerald-700 shrink-0" />
+                          <span>Pl@ntNet Visual Plant Identification</span>
+                        </h3>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Upload a photo of a flower, leaf, fruit, or bark to identify species via Pl@ntNet and match RHS care data.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label htmlFor="plantnet-organ-select" className="text-xs font-semibold text-slate-700">
+                          Organ:
+                        </label>
+                        <select
+                          id="plantnet-organ-select"
+                          data-testid="plantnet-organ-select"
+                          value={photoIdentifyOrgan}
+                          onChange={(e) => setPhotoIdentifyOrgan(e.target.value as any)}
+                          className="min-h-[34px] px-2.5 py-1 text-xs rounded-lg bg-stone-50 border border-stone-300 text-slate-800"
+                        >
+                          <option value="auto">Auto-detect</option>
+                          <option value="flower">Flower</option>
+                          <option value="leaf">Leaf</option>
+                          <option value="fruit">Fruit</option>
+                          <option value="bark">Bark</option>
+                        </select>
+
+                        <input
+                          ref={photoFileInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          data-testid="plantnet-photo-file-input"
+                          onChange={handlePhotoIdentifyFileSelected}
+                          className="sr-only"
+                        />
+                        <button
+                          type="button"
+                          data-testid="trigger-plantnet-photo-upload"
+                          disabled={isPhotoIdentifying}
+                          onClick={() => photoFileInputRef.current?.click()}
+                          className="min-h-[34px] inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-800 hover:bg-emerald-700 disabled:bg-emerald-800/60 text-white transition cursor-pointer"
+                        >
+                          <Upload className="w-3.5 h-3.5 shrink-0" />
+                          <span>{isPhotoIdentifying ? 'Identifying...' : 'Upload Plant Photo'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {photoIdentifyError && (
+                      <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs font-medium text-rose-900">
+                        {photoIdentifyError}
+                      </div>
+                    )}
+
+                    {photoIdentifyResults.length > 0 && (
+                      <div className="space-y-2 pt-1 border-t border-stone-100">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-emerald-900">
+                            Best Pl@ntNet Match: <strong>{photoIdentifyBestMatch}</strong>
+                          </span>
+                          {photoIdentifyPreviewUrl && (
+                            <img
+                              src={photoIdentifyPreviewUrl}
+                              alt="Uploaded plant preview"
+                              className="w-8 h-8 rounded-lg object-cover border border-stone-200"
+                            />
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {photoIdentifyResults.map((item) => {
+                            const isAlreadyInPlot =
+                              activeInventoryNameSet.has(item.name.toLowerCase()) ||
+                              (item.commonName &&
+                                activeInventoryNameSet.has(item.commonName.toLowerCase()));
+                            return (
+                              <div
+                                key={item.catalogId}
+                                className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 flex items-center justify-between gap-2.5"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                  <PlantThumbnailWithModal
+                                    plantId={item.catalogId}
+                                    plantName={item.commonName || item.name}
+                                    photoUrl={item.photoUrl}
+                                    size="sm"
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-xs font-bold text-slate-900 truncate">
+                                        {item.commonName || item.name}
+                                      </span>
+                                      {item.plantNetScore !== undefined && (
+                                        <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-[10px] font-bold text-emerald-900">
+                                          {item.plantNetScore}% match
+                                        </span>
+                                      )}
+                                      <span className="px-1.5 py-0.5 rounded bg-stone-200 text-[10px] font-bold text-slate-700">
+                                        {item.rhsRating}
+                                      </span>
+                                    </div>
+                                    {item.botanicalName && (
+                                      <p className="text-[11px] italic text-slate-500 truncate">
+                                        {item.botanicalName}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  disabled={Boolean(isAlreadyInPlot)}
+                                  onClick={() => handleQuickAddCatalogPlant(item)}
+                                  className={`min-h-[32px] px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 transition cursor-pointer ${
+                                    isAlreadyInPlot
+                                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                      : 'bg-emerald-800 hover:bg-emerald-700 text-white'
+                                  }`}
+                                >
+                                  {isAlreadyInPlot ? 'In Plot ✓' : '+ Add'}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Secondary Plot Management Controls */}
                 {showPlantManagerDrawer && (
@@ -2947,15 +3146,17 @@ export default function App() {
                         <span>Custom Plant</span>
                       </button>
 
-                      <button
-                        type="button"
-                        data-testid="inventory-load-all-rhs"
-                        onClick={handleLoadAllRhsCatalogPlants}
-                        className="min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-emerald-50 text-emerald-900 border border-stone-300 transition cursor-pointer"
-                      >
-                        <Sprout className="w-3.5 h-3.5 text-emerald-700" />
-                        <span>Load Shown RHS Results ({matchingCatalogPlants.length})</span>
-                      </button>
+                      {matchingCatalogPlants.length > 0 && (
+                        <button
+                          type="button"
+                          data-testid="inventory-load-all-rhs"
+                          onClick={handleAddAllMatchingCatalogPlants}
+                          className="min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-emerald-50 text-emerald-900 border border-stone-300 transition cursor-pointer"
+                        >
+                          <Sprout className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>Add Search Results ({matchingCatalogPlants.length})</span>
+                        </button>
+                      )}
 
                       {plantInventory.length > 0 && (
                         <button
@@ -3007,7 +3208,7 @@ export default function App() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
                         {[
-                          { id: 'ALL', label: 'All RHS Plants' },
+                          { id: 'ALL', label: 'All Plants' },
                           { id: 'SHRUBS', label: 'Shrubs & Trees' },
                           { id: 'FLOWERS', label: 'Flowers & Perennials' },
                           { id: 'VEGETABLES', label: 'Vegetables, Fruit & Herbs' },
@@ -3030,75 +3231,93 @@ export default function App() {
                       </div>
                       <span className="text-xs font-semibold text-slate-600">
                         {isLiveRhsLoading
-                          ? 'Fetching live RHS results...'
-                          : `Showing ${matchingCatalogPlants.length} of ${liveRhsTotalHits.toLocaleString()} live RHS plants`}
+                          ? 'Fetching Pl@ntNet + RHS results...'
+                          : `Showing ${matchingCatalogPlants.length} of ${liveRhsTotalHits.toLocaleString()} Pl@ntNet + RHS plants`}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-80 overflow-y-auto pr-1">
-                      {matchingCatalogPlants.map((item) => {
-                        const isAlreadyInPlot =
-                          activeInventoryNameSet.has(item.name.toLowerCase()) ||
-                          (item.commonName &&
-                            activeInventoryNameSet.has(item.commonName.toLowerCase())) ||
-                          activeInventoryNameSet.has(item.catalogId.toLowerCase());
-                        return (
-                          <div
-                            key={item.catalogId}
-                            className="p-2.5 rounded-xl bg-white border border-stone-200 flex items-center justify-between gap-2.5 hover:border-emerald-600/50 transition"
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                              <PlantThumbnailWithModal
-                                plantId={item.catalogId}
-                                plantName={item.commonName || item.name}
-                                photoRef={item.photoRef}
-                                photoUrl={item.photoUrl}
-                                size="sm"
-                              />
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
-                                    {item.commonName || item.name}
-                                  </span>
-                                  <span className="px-1.5 py-0.5 rounded bg-stone-100 border border-stone-200 text-[10px] font-bold text-slate-700 shrink-0">
-                                    {item.rhsRating}
-                                  </span>
-                                  {item.isAgm && (
-                                    <span className="px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-[10px] font-bold text-amber-900 shrink-0">
-                                      AGM
+                    {matchingCatalogPlants.length === 0 && !isLiveRhsLoading ? (
+                      <div className="p-3.5 rounded-xl bg-white border border-stone-200 text-xs text-slate-600 text-center">
+                        {catalogSearchQuery.trim() === ''
+                          ? 'Type a plant common or botanical name above (e.g. Lavender, Rosa, Hydrangea, Acer) or use Identify by Photo to search Pl@ntNet + RHS.'
+                          : `No Pl@ntNet or RHS plants matched "${catalogSearchQuery}". Try another common or botanical name.`}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-80 overflow-y-auto pr-1">
+                        {matchingCatalogPlants.map((item) => {
+                          const isAlreadyInPlot =
+                            activeInventoryNameSet.has(item.name.toLowerCase()) ||
+                            (item.commonName &&
+                              activeInventoryNameSet.has(item.commonName.toLowerCase())) ||
+                            activeInventoryNameSet.has(item.catalogId.toLowerCase());
+                          return (
+                            <div
+                              key={item.catalogId}
+                              className="p-2.5 rounded-xl bg-white border border-stone-200 flex items-center justify-between gap-2.5 hover:border-emerald-600/50 transition"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                <PlantThumbnailWithModal
+                                  plantId={item.catalogId}
+                                  plantName={item.commonName || item.name}
+                                  photoRef={item.photoRef}
+                                  photoUrl={item.photoUrl}
+                                  size="sm"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                                      {item.commonName || item.name}
                                     </span>
+                                    {(item.plantNetId ||
+                                      item.dataSource === 'PLANTNET_RHS_MERGED' ||
+                                      item.dataSource === 'PLANTNET_SPECIES') && (
+                                      <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-800 shrink-0">
+                                        Pl@ntNet
+                                      </span>
+                                    )}
+                                    <span className="px-1.5 py-0.5 rounded bg-stone-100 border border-stone-200 text-[10px] font-bold text-slate-700 shrink-0">
+                                      RHS {item.rhsRating}
+                                    </span>
+                                    {item.isAgm && (
+                                      <span className="px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-[10px] font-bold text-amber-900 shrink-0">
+                                        AGM
+                                      </span>
+                                    )}
+                                  </div>
+                                  {item.botanicalName && (
+                                    <p className="text-[11px] italic text-slate-500 truncate">
+                                      {item.botanicalName}
+                                      {item.scientificNameAuthorship
+                                        ? ` ${item.scientificNameAuthorship}`
+                                        : ''}
+                                    </p>
                                   )}
                                 </div>
-                                {item.botanicalName && (
-                                  <p className="text-[11px] italic text-slate-500 truncate">
-                                    {item.botanicalName}
-                                  </p>
-                                )}
                               </div>
-                            </div>
 
-                            <button
-                              type="button"
-                              data-testid={`rhs-catalog-add-${item.catalogId}`}
-                              disabled={isAlreadyInPlot}
-                              onClick={() => handleQuickAddCatalogPlant(item)}
-                              className={`min-h-[34px] px-3 py-1 rounded-lg text-xs font-semibold shrink-0 transition cursor-pointer ${
-                                isAlreadyInPlot
-                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-default'
-                                  : 'bg-emerald-800 hover:bg-emerald-700 text-white'
-                              }`}
-                            >
-                              {isAlreadyInPlot ? 'In Plot ✓' : '+ Add'}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
+                              <button
+                                type="button"
+                                data-testid={`rhs-catalog-add-${item.catalogId}`}
+                                disabled={Boolean(isAlreadyInPlot)}
+                                onClick={() => handleQuickAddCatalogPlant(item)}
+                                className={`min-h-[34px] px-3 py-1 rounded-lg text-xs font-semibold shrink-0 transition cursor-pointer ${
+                                  isAlreadyInPlot
+                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-default'
+                                    : 'bg-emerald-800 hover:bg-emerald-700 text-white'
+                                }`}
+                              >
+                                {isAlreadyInPlot ? 'In Plot ✓' : '+ Add'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* Add / Edit Custom Plant Form (with Live RHS Auto-Fill Lookup) */}
+              {/* Add / Edit Custom Plant Form (with Live Pl@ntNet + RHS Auto-Fill Lookup) */}
               {isFormOpen && (
                 <form
                   onSubmit={handleSavePlant}
@@ -3106,7 +3325,7 @@ export default function App() {
                 >
                   <div className="flex items-center justify-between border-b border-stone-200 pb-2">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-900">
-                      {editingPlantId ? 'Edit Plant' : 'Add Plant (with Live RHS Lookup)'}
+                      {editingPlantId ? 'Edit Plant' : 'Add Plant (with Pl@ntNet + RHS Lookup)'}
                     </h3>
                     <button
                       type="button"
@@ -3120,13 +3339,13 @@ export default function App() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div className="relative">
                       <label htmlFor="plant-name-input" className="block text-xs font-semibold text-slate-700 mb-1">
-                        Plant Name * {isFormLookupLoading && <span className="text-[11px] font-normal text-emerald-700">(Searching rhs.org.uk...)</span>}
+                        Plant Name * {isFormLookupLoading && <span className="text-[11px] font-normal text-emerald-700">(Searching Pl@ntNet + RHS...)</span>}
                       </label>
                       <input
                         id="plant-name-input"
                         type="text"
                         required
-                        placeholder="Type a plant name to search rhs.org.uk..."
+                        placeholder="Type a plant name to search Pl@ntNet + RHS..."
                         value={plantForm.name}
                         onChange={(e) => setPlantForm({ ...plantForm, name: e.target.value })}
                         className="w-full min-h-[38px] px-3 py-1.5 text-sm rounded-xl bg-white border border-stone-300 text-slate-900"
@@ -3134,7 +3353,7 @@ export default function App() {
                       {formLiveSuggestions.length > 0 && (
                         <div className="mt-1.5 p-2 rounded-xl bg-white border border-emerald-200 shadow-sm space-y-1">
                           <span className="block text-[10px] font-bold uppercase tracking-wider text-emerald-800 px-1">
-                            Tap a live rhs.org.uk match to auto-fill:
+                            Tap a Pl@ntNet + RHS match to auto-fill:
                           </span>
                           {formLiveSuggestions.map((sug) => (
                             <button
