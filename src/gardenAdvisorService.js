@@ -1,166 +1,11 @@
 /**
  * Garden & Weather Sentinel - Frontend Orchestration Service
- * Target Environment: React 18+ / Google AI Studio Build Mode / Vite
- * Dependencies: npm install @google/genai
+ * Target Environment: React 19 / Vite
  */
 
 import { useState, useCallback, useEffect } from 'react';
 
-const SchemaType = {
-  OBJECT: 'OBJECT',
-  ARRAY: 'ARRAY',
-  STRING: 'STRING'
-};
-
-// ============================================================================
-// 1. EDITABLE CONFIGURATION BLOCK
-// ============================================================================
-export const ADVISOR_CONFIG = {
-  // Backend Proxy URL & Browser Fallback Toggle
-  MET_OFFICE_PROXY_URL: '/api/weather/metoffice',
-  ENABLE_OPEN_METEO_UKMO_FALLBACK: true,
-  OPEN_METEO_UKMO_URL: 'https://api.open-meteo.com/v1/ukmo',
-
-  // No default location pre-set: user is prompted on first visit
-  DEFAULT_GARDEN_PROFILE: {
-    locationId: '',
-    locationName: '',
-    latitude: null,
-    longitude: null,
-    regionCode: 'uk',
-    rhsHardinessZone: 'H4',
-    usdaEquivalent: '8b',
-    isSouthFacing: true,
-    gardenAspect: 'SOUTH',
-    soilProfile: 'Heavy clay to moisture-retentive garden loam, pH 6.0-6.8, prone to winter waterlogging and slow spring warming',
-    microclimateNotes:
-      'UK temperate maritime/inland microclimate; frost pockets in low-lying ground; high wind exposure during Atlantic fronts; average last spring frost mid-May; average first autumn frost October.'
-  },
-
-  // Selectable UK Regional Garden Location Presets
-  GARDEN_LOCATION_PRESETS: [
-    {
-      id: 'york',
-      locationName: 'York, North Yorkshire, UK',
-      shortLabel: 'York (Vale of York)',
-      latitude: 53.9591,
-      longitude: -1.0815,
-      regionCode: 'yh',
-      rhsHardinessZone: 'H4',
-      soilProfile: 'Vale alluvial clay & moisture-retentive loam (pH 6.4–7.0)',
-      microclimateNotes: 'Flat lowland vale prone to winter waterlogging and overnight radiation frost.'
-    },
-    {
-      id: 'edinburgh',
-      locationName: 'Edinburgh, Scotland, UK',
-      shortLabel: 'Edinburgh (Lothian)',
-      latitude: 55.9533,
-      longitude: -3.1883,
-      regionCode: 'st',
-      rhsHardinessZone: 'H4',
-      soilProfile: 'Glacial boulder clay to fertile garden loam (pH 6.0–6.8)',
-      microclimateNotes: 'Firth of Forth maritime breeze; cool spring nights and brisk westerlies.'
-    },
-    {
-      id: 'manchester',
-      locationName: 'Manchester, North West, UK',
-      shortLabel: 'Manchester (North West)',
-      latitude: 53.4808,
-      longitude: -2.2426,
-      regionCode: 'nw',
-      rhsHardinessZone: 'H4',
-      soilProfile: 'Moisture-retentive clay loam over glacial till (pH 6.0–6.7)',
-      microclimateNotes: 'Higher annual rainfall; focus on winter drainage and raised bed aeration.'
-    },
-    {
-      id: 'bristol',
-      locationName: 'Bristol, South West, UK',
-      shortLabel: 'Bristol (South West)',
-      latitude: 51.4545,
-      longitude: -2.5879,
-      regionCode: 'sw',
-      rhsHardinessZone: 'H5',
-      soilProfile: 'Neutral to mildly alkaline clay loam (pH 6.5–7.2)',
-      microclimateNotes: 'Milder maritime winters (RHS H5); earlier spring growth and warm south walls.'
-    },
-    {
-      id: 'cambridge',
-      locationName: 'Cambridge, East Anglia, UK',
-      shortLabel: 'Cambridge (East Anglia)',
-      latitude: 52.2053,
-      longitude: 0.1218,
-      regionCode: 'ee',
-      rhsHardinessZone: 'H4',
-      soilProfile: 'Calcareous clay loam to fen silt (pH 6.8–7.4)',
-      microclimateNotes: 'Drier continental influence; warm summers and crisp frosty winter nights.'
-    },
-    {
-      id: 'cardiff',
-      locationName: 'Cardiff, South Wales, UK',
-      shortLabel: 'Cardiff (South Wales)',
-      latitude: 51.4816,
-      longitude: -3.1791,
-      regionCode: 'wl',
-      rhsHardinessZone: 'H5',
-      soilProfile: 'Alluvial clay-silt & coastal loam (pH 6.2–6.9)',
-      microclimateNotes: 'Severn Estuary maritime moderation; mild winters with wet Atlantic fronts.'
-    },
-    {
-      id: 'london',
-      locationName: 'London (Kew / Richmond), UK',
-      shortLabel: 'London (South East)',
-      latitude: 51.4787,
-      longitude: -0.2956,
-      regionCode: 'se',
-      rhsHardinessZone: 'H5',
-      soilProfile: 'London clay to improved alluvial loam (pH 6.5–7.2)',
-      microclimateNotes: 'Urban heat-island shelter (+1.5°C warmer overnight minimums).'
-    },
-    {
-      id: 'durham',
-      locationName: 'Durham City, County Durham, UK',
-      shortLabel: 'Durham City (Wear Valley)',
-      latitude: 54.7753,
-      longitude: -1.5849,
-      regionCode: 'ne',
-      rhsHardinessZone: 'H4',
-      soilProfile: 'Wear Valley heavy boulder clay (pH 6.0–6.8)',
-      microclimateNotes: 'Steep river valley frost pocket; slow-draining winter clay.'
-    }
-  ],
-
-  GARDEN_ASPECT_OPTIONS: [
-    {
-      code: 'SOUTH',
-      isSouthFacing: true,
-      label: 'South-Facing',
-      summary: 'Maximum solar gain (+2°C soil warmth), faster clay surface drying, warm wall microclimate.'
-    },
-    {
-      code: 'WEST',
-      isSouthFacing: false,
-      label: 'West-Facing',
-      summary: 'Warm afternoon sun, protected from early morning frost-thaw scorch, exposed to westerly gusts.'
-    },
-    {
-      code: 'EAST',
-      isSouthFacing: false,
-      label: 'East-Facing',
-      summary: 'Early morning sun causes rapid thaw scorch on frozen buds (Camellia, Acer); cooler afternoons.'
-    },
-    {
-      code: 'NORTH',
-      isSouthFacing: false,
-      label: 'North-Facing',
-      summary: 'Cool & shaded; heavy clay stays wet and frozen 10–14 days longer in winter and spring.'
-    }
-  ],
-
-  // No default starter plants — all data is driven strictly by user-selected plants in My Garden Plants
-  DEFAULT_PLANT_INVENTORY: []
-};
-
-export const UK_GARDEN_LOCATION_DIRECTORY = [
+const CORE_UK_PRESET_DIRECTORY_ENTRIES = [
   {
     id: 'york',
     town: 'York',
@@ -280,7 +125,92 @@ export const UK_GARDEN_LOCATION_DIRECTORY = [
     rhsHardinessZone: 'H4',
     soilProfile: 'Wear Valley heavy boulder clay (pH 6.0–6.8)',
     microclimateNotes: 'Steep river valley frost pocket; slow-draining winter clay.'
+  }
+];
+
+// ============================================================================
+// 1. EDITABLE CONFIGURATION BLOCK
+// ============================================================================
+export const ADVISOR_CONFIG = {
+  // Backend Proxy URL & Browser Fallback Toggle
+  MET_OFFICE_PROXY_URL: '/api/weather/metoffice',
+  ENABLE_OPEN_METEO_UKMO_FALLBACK: true,
+  OPEN_METEO_UKMO_URL: 'https://api.open-meteo.com/v1/ukmo',
+
+  // No default location pre-set: user is prompted on first visit
+  DEFAULT_GARDEN_PROFILE: {
+    locationId: '',
+    locationName: '',
+    latitude: null,
+    longitude: null,
+    regionCode: 'uk',
+    rhsHardinessZone: 'H4',
+    usdaEquivalent: '8b',
+    isSouthFacing: true,
+    gardenAspect: 'SOUTH',
+    soilProfile: 'Heavy clay to moisture-retentive garden loam, pH 6.0-6.8, prone to winter waterlogging and slow spring warming',
+    microclimateNotes:
+      'UK temperate maritime/inland microclimate; frost pockets in low-lying ground; high wind exposure during Atlantic fronts; average last spring frost mid-May; average first autumn frost October.'
   },
+
+  // Selectable UK Regional Garden Location Presets
+  GARDEN_LOCATION_PRESETS: CORE_UK_PRESET_DIRECTORY_ENTRIES.map(
+    ({
+      id,
+      locationName,
+      shortLabel,
+      latitude,
+      longitude,
+      regionCode,
+      rhsHardinessZone,
+      soilProfile,
+      microclimateNotes
+    }) => ({
+      id,
+      locationName,
+      shortLabel,
+      latitude,
+      longitude,
+      regionCode,
+      rhsHardinessZone,
+      soilProfile,
+      microclimateNotes
+    })
+  ),
+
+  GARDEN_ASPECT_OPTIONS: [
+    {
+      code: 'SOUTH',
+      isSouthFacing: true,
+      label: 'South-Facing',
+      summary: 'Maximum solar gain (+2°C soil warmth), faster clay surface drying, warm wall microclimate.'
+    },
+    {
+      code: 'WEST',
+      isSouthFacing: false,
+      label: 'West-Facing',
+      summary: 'Warm afternoon sun, protected from early morning frost-thaw scorch, exposed to westerly gusts.'
+    },
+    {
+      code: 'EAST',
+      isSouthFacing: false,
+      label: 'East-Facing',
+      summary: 'Early morning sun causes rapid thaw scorch on frozen buds (Camellia, Acer); cooler afternoons.'
+    },
+    {
+      code: 'NORTH',
+      isSouthFacing: false,
+      label: 'North-Facing',
+      summary: 'Cool & shaded; heavy clay stays wet and frozen 10–14 days longer in winter and spring.'
+    }
+  ],
+
+  // No default starter plants — all data is driven strictly by user-selected plants in My Garden Plants
+  DEFAULT_PLANT_INVENTORY: []
+};
+
+export const UK_GARDEN_LOCATION_DIRECTORY = [
+  ...CORE_UK_PRESET_DIRECTORY_ENTRIES,
   // North East & Northumberland
   {
     id: 'hadston',
@@ -1430,34 +1360,34 @@ Strict Operational Rules:
 5. Explicitly address regional hazards when triggered by the forecast: winter waterlogging in heavy clay, wind-rock on tall brassicas/shrubs in wet soil, slug/snail pressure after rain, late/early frost pockets, and damp fungal diseases (e.g., potato/tomato blight, botrytis).`;
 
 export const GARDEN_ADVICE_SCHEMA = {
-  type: SchemaType.OBJECT,
+  type: 'OBJECT',
   properties: {
     weatherAlerts: {
-      type: SchemaType.ARRAY,
+      type: 'ARRAY',
       description: 'Immediate protective actions triggered by the 7-day Met Office forecast and active warnings.',
       items: {
-        type: SchemaType.OBJECT,
+        type: 'OBJECT',
         properties: {
           severity: {
-            type: SchemaType.STRING,
+            type: 'STRING',
             enum: ['INFO', 'WARNING', 'CRITICAL'],
             description: 'CRITICAL for imminent frost on tender plants or Amber/Red warnings; WARNING for wind-rock/heavy rain.'
           },
           hazardType: {
-            type: SchemaType.STRING,
+            type: 'STRING',
             enum: ['FROST', 'HIGH_WIND', 'WATERLOGGING', 'HEAT_DROUGHT', 'BLIGHT_HUMIDITY', 'PEST_PRESSURE']
           },
           forecastWindow: {
-            type: SchemaType.STRING,
+            type: 'STRING',
             description: 'UK formatted date/time window when the hazard occurs (e.g., "Sunday 25 Oct, 02:00 - 07:00").'
           },
           affectedPlants: {
-            type: SchemaType.ARRAY,
-            items: { type: SchemaType.STRING },
+            type: 'ARRAY',
+            items: { type: 'STRING' },
             description: 'Exact names of vulnerable plants from the user inventory.'
           },
           actionRequired: {
-            type: SchemaType.STRING,
+            type: 'STRING',
             description: 'Direct, practical horticultural action (e.g., double-layer 30gsm fleece, stake and firm soil collar, move pot under glass).'
           }
         },
@@ -1465,22 +1395,22 @@ export const GARDEN_ADVICE_SCHEMA = {
       }
     },
     seasonalTasks: {
-      type: SchemaType.ARRAY,
+      type: 'ARRAY',
       description: 'Time-of-year gardening tasks tailored to the current date in North East England.',
       items: {
-        type: SchemaType.OBJECT,
+        type: 'OBJECT',
         properties: {
-          taskTitle: { type: SchemaType.STRING },
+          taskTitle: { type: 'STRING' },
           category: {
-            type: SchemaType.STRING,
+            type: 'STRING',
             enum: ['PRUNING', 'SOWING_PLANTING', 'SOIL_CARE', 'PEST_DISEASE', 'PROTECTION']
           },
           targetPlants: {
-            type: SchemaType.ARRAY,
-            items: { type: SchemaType.STRING }
+            type: 'ARRAY',
+            items: { type: 'STRING' }
           },
           instructions: {
-            type: SchemaType.STRING,
+            type: 'STRING',
             description: 'Concise UK RHS-standard instructions adjusted for heavy clay and cool northern conditions.'
           }
         },
@@ -1488,7 +1418,7 @@ export const GARDEN_ADVICE_SCHEMA = {
       }
     },
     soilAndMicroclimateNote: {
-      type: SchemaType.STRING,
+      type: 'STRING',
       description: 'Assessment of current soil workability, drainage, and frost-pocket status based on incoming rain and temperatures.'
     }
   },
@@ -1704,6 +1634,32 @@ export function buildRuleBasedHorticulturalAdvice(
 
 const clientWeatherCache = new Map();
 const CLIENT_WEATHER_CACHE_TTL_MS = 10 * 60 * 1000;
+const MAX_CLIENT_WEATHER_CACHE_ENTRIES = 50;
+
+function getCachedClientWeather(cacheKey) {
+  const cached = clientWeatherCache.get(cacheKey);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp >= CLIENT_WEATHER_CACHE_TTL_MS) {
+    clientWeatherCache.delete(cacheKey);
+    return null;
+  }
+  // LRU promotion
+  clientWeatherCache.delete(cacheKey);
+  clientWeatherCache.set(cacheKey, cached);
+  return cached.data;
+}
+
+function setCachedClientWeather(cacheKey, data) {
+  if (clientWeatherCache.has(cacheKey)) {
+    clientWeatherCache.delete(cacheKey);
+  }
+  while (clientWeatherCache.size >= MAX_CLIENT_WEATHER_CACHE_ENTRIES) {
+    const oldestKey = clientWeatherCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    clientWeatherCache.delete(oldestKey);
+  }
+  clientWeatherCache.set(cacheKey, { timestamp: Date.now(), data });
+}
 
 export async function fetchGardenWeather(gardenProfile = ADVISOR_CONFIG.DEFAULT_GARDEN_PROFILE, forceRefresh = false) {
   const resolvedProfile = gardenProfile?.locationName
@@ -1713,9 +1669,9 @@ export async function fetchGardenWeather(gardenProfile = ADVISOR_CONFIG.DEFAULT_
 
   const cacheKey = `${latitude ?? ''}_${longitude ?? ''}_${regionCode || 'uk'}_${(locationName || '').trim().toLowerCase()}`;
   if (!forceRefresh) {
-    const cached = clientWeatherCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CLIENT_WEATHER_CACHE_TTL_MS) {
-      return cached.data;
+    const cachedData = getCachedClientWeather(cacheKey);
+    if (cachedData) {
+      return cachedData;
     }
   }
 
@@ -1737,7 +1693,7 @@ export async function fetchGardenWeather(gardenProfile = ADVISOR_CONFIG.DEFAULT_
         fetchedAt: forceRefresh ? nowIso : data.fetchedAt || nowIso,
         dataSourceMode: 'MET_OFFICE_DATAHUB_PROXY'
       };
-      clientWeatherCache.set(cacheKey, { timestamp: Date.now(), data: result });
+      setCachedClientWeather(cacheKey, result);
       logClientEvent('INFO', 'WEATHER_FETCH_PROXY_SUCCESS', {
         source: 'MET_OFFICE_DATAHUB_PROXY',
         cached: data.cached

@@ -1,9 +1,10 @@
 import {
   RhsCatalogPlant,
   PlantGroupCategoryId,
-  searchRhsPlantCatalog,
+  findRhsCatalogBySpeciesOrGenus,
   resolvePlantGroupCategory
 } from '../utils/rhsPlantCatalog.ts';
+import { TtlCache } from '../utils/ttlCache.ts';
 import { searchLiveRhsWebsite } from './rhsLiveService.ts';
 
 export const PLANTNET_API_BASE = 'https://my-api.plantnet.org/v2';
@@ -195,13 +196,16 @@ export function resolvePlantNetPrefixes(
 }
 
 // ============================================================================
-// SERVER-SIDE CACHE FOR PL@NTNET SPECIES QUERIES
+// SERVER-SIDE BOUNDED CACHE FOR PL@NTNET SPECIES QUERIES
 // ============================================================================
-const plantNetSpeciesCache = new Map<string, { timestamp: number; data: PlantNetRawSpecies[] }>();
 const CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutes
+const plantNetSpeciesCache = new TtlCache<string, PlantNetRawSpecies[]>({
+  ttlMs: CACHE_TTL_MS,
+  maxEntries: 150
+});
 
 /**
- * Queries Pl@ntNet's official /v2/species endpoint by prefix.
+ * Queries Pl@ntNet's official /v2/species endpoint by prefix with in-flight deduplication.
  */
 export async function fetchPlantNetSpeciesByPrefix(
   prefix: string,
@@ -211,31 +215,28 @@ export async function fetchPlantNetSpeciesByPrefix(
   if (!cleanPrefix) return [];
 
   const cacheKey = `${cleanPrefix.toLowerCase()}::${pageSize}`;
-  const cached = plantNetSpeciesCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    return cached.data;
-  }
+  return plantNetSpeciesCache.getOrFetch(
+    cacheKey,
+    async () => {
+      const apiKey = getPlantNetApiKey();
+      const url = `${PLANTNET_API_BASE}/species?lang=en&type=kt&pageSize=${pageSize}&page=1&prefix=${encodeURIComponent(
+        cleanPrefix
+      )}&api-key=${encodeURIComponent(apiKey)}`;
 
-  const apiKey = getPlantNetApiKey();
-  const url = `${PLANTNET_API_BASE}/species?lang=en&type=kt&pageSize=${pageSize}&page=1&prefix=${encodeURIComponent(
-    cleanPrefix
-  )}&api-key=${encodeURIComponent(apiKey)}`;
-
-  try {
-    const res = await fetch(url, {
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(6500)
-    });
-    if (!res.ok) {
-      return [];
-    }
-    const data = await res.json();
-    if (!Array.isArray(data)) return [];
-    plantNetSpeciesCache.set(cacheKey, { timestamp: Date.now(), data });
-    return data;
-  } catch {
-    return [];
-  }
+      try {
+        const res = await fetch(url, {
+          headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(6500)
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return Array.isArray(data) ? data : [];
+      } catch {
+        return [];
+      }
+    },
+    (data) => Array.isArray(data) && data.length > 0
+  );
 }
 
 /**
@@ -331,11 +332,8 @@ export function convertPlantNetSpeciesToCatalogPlant(
       return genusLower.length >= 3 && (rBot.startsWith(genusLower + ' ') || rBot === genusLower);
     });
 
-  // Also check local RHS catalogue for genus/species horticultural defaults
-  const localCatalogMatches = searchRhsPlantCatalog(sciName, 'ALL');
-  const localGenusMatches =
-    localCatalogMatches.length > 0 ? localCatalogMatches : searchRhsPlantCatalog(genus, 'ALL');
-  const fallbackRhs = genusRhsMatch || localGenusMatches[0];
+  // O(1) indexed lookup in local RHS catalogue for species/genus horticultural defaults
+  const fallbackRhs = genusRhsMatch || findRhsCatalogBySpeciesOrGenus(sciName, genus);
 
   const groupCategory = (
     fallbackRhs?.groupCategory ||
@@ -597,6 +595,20 @@ export async function identifyPlantPhotoWithPlantNet(options: {
   const rawResults: any[] = Array.isArray(payload?.results) ? payload.results.slice(0, 5) : [];
   const predictedOrgan = payload?.predictedOrgans?.[0]?.organ || organ;
 
+  // Deduplicate live RHS lookups across candidates with the same botanical name
+  const rhsLookupPromises = new Map<string, Promise<RhsCatalogPlant[]>>();
+  const getRhsMatchesForSciName = (sciName: string): Promise<RhsCatalogPlant[]> => {
+    const key = sciName.trim().toLowerCase();
+    if (!key) return Promise.resolve([]);
+    const existing = rhsLookupPromises.get(key);
+    if (existing) return existing;
+    const promise = searchLiveRhsWebsite(sciName, 'ALL', 3, 0)
+      .then((rhsRes) => rhsRes.plants)
+      .catch(() => [] as RhsCatalogPlant[]);
+    rhsLookupPromises.set(key, promise);
+    return promise;
+  };
+
   // Enrich top matches with RHS horticultural data in parallel
   const enrichedResults = await Promise.all(
     rawResults.map(async (item: any) => {
@@ -610,15 +622,7 @@ export async function identifyPlantPhotoWithPlantNet(options: {
         item?.images?.[0]?.url?.s ||
         undefined;
 
-      let rhsMatches: RhsCatalogPlant[] = [];
-      if (sciName) {
-        try {
-          const rhsRes = await searchLiveRhsWebsite(sciName, 'ALL', 3, 0);
-          rhsMatches = rhsRes.plants;
-        } catch {
-          rhsMatches = [];
-        }
-      }
+      const rhsMatches = await getRhsMatchesForSciName(sciName);
 
       const rawSpeciesObj: PlantNetRawSpecies = {
         id: String(item?.gbif?.id || item?.powo?.id || sciName),

@@ -696,8 +696,9 @@ export function getAllSoilRainfallLogs(
     return log.locationKey === calibration.locationKey;
   });
 
+  const deletedIdSet = new Set(state.deletedIds);
   const combined = [...matchingCustomLogs, ...seedLogs]
-    .filter((log) => !state.deletedIds.includes(log.id))
+    .filter((log) => !deletedIdSet.has(log.id))
     .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
 
   return {

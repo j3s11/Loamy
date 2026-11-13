@@ -22,8 +22,9 @@ export const CONFIG = {
   PUBLIC_WARNINGS_RSS_BASE: 'https://www.metoffice.gov.uk/public/data/PWSCache/WarningsRSS/Region',
   OPEN_METEO_UKMO_URL: 'https://api.open-meteo.com/v1/ukmo',
 
-  // Cache TTL (30 minutes)
+  // Cache TTL (30 minutes) and bounded size
   CACHE_TTL_MS: 30 * 60 * 1000,
+  MAX_CACHE_ENTRIES: 120,
 
   // Horticultural Hazard Thresholds (North East England / Heavy Clay Profile)
   THRESHOLDS: {
@@ -47,8 +48,41 @@ const xmlParser = new XMLParser({
   attributeNamePrefix: '@_'
 });
 
-// Simple in-memory cache keyed by coordinates and region
+// Bounded LRU + TTL in-memory cache keyed by coordinates and region
 const responseCache = new Map();
+
+function getCachedWeatherResponse(cacheKey) {
+  const cached = responseCache.get(cacheKey);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp >= CONFIG.CACHE_TTL_MS) {
+    responseCache.delete(cacheKey);
+    return null;
+  }
+  responseCache.delete(cacheKey);
+  responseCache.set(cacheKey, cached);
+  return cached;
+}
+
+function setCachedWeatherResponse(cacheKey, payload) {
+  const now = Date.now();
+  if (responseCache.has(cacheKey)) {
+    responseCache.delete(cacheKey);
+  } else if (responseCache.size >= CONFIG.MAX_CACHE_ENTRIES) {
+    for (const [k, entry] of responseCache) {
+      if (now - entry.timestamp >= CONFIG.CACHE_TTL_MS) {
+        responseCache.delete(k);
+      } else {
+        break;
+      }
+    }
+    while (responseCache.size >= CONFIG.MAX_CACHE_ENTRIES) {
+      const oldestKey = responseCache.keys().next().value;
+      if (oldestKey === undefined) break;
+      responseCache.delete(oldestKey);
+    }
+  }
+  responseCache.set(cacheKey, { timestamp: now, payload });
+}
 
 /**
  * Structured logger outputting ISO timestamp, level, event, and metadata
@@ -404,9 +438,9 @@ app.get('/api/weather/metoffice', async (req, res) => {
   const forceRefresh = req.query.refresh === 'true';
 
   const cacheKey = `${lat.toFixed(4)}_${lon.toFixed(4)}_${String(region).toLowerCase()}_${resolvedLocationName}`;
-  const cached = responseCache.get(cacheKey);
+  const cached = !forceRefresh ? getCachedWeatherResponse(cacheKey) : null;
 
-  if (!forceRefresh && cached && Date.now() - cached.timestamp < CONFIG.CACHE_TTL_MS) {
+  if (cached) {
     logEvent('INFO', 'CACHE_HIT', { cacheKey });
     return res.json({ ...cached.payload, cached: true });
   }
@@ -485,10 +519,7 @@ app.get('/api/weather/metoffice', async (req, res) => {
     hourlyForecast: []
   };
 
-  responseCache.set(cacheKey, {
-    timestamp: Date.now(),
-    payload
-  });
+  setCachedWeatherResponse(cacheKey, payload);
 
   logEvent('INFO', 'MET_OFFICE_SYNC_SUCCESS', {
     location: payload.location.name,

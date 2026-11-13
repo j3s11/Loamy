@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Database,
   Droplets,
   Plus,
   Trash2,
@@ -9,10 +8,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   ChevronDown,
-  ChevronUp,
-  MapPin,
-  Compass,
-  Clock
+  ChevronUp
 } from 'lucide-react';
 import SoilSaturationD3Chart from './SoilSaturationD3Chart';
 import { formatUkDateTime } from '../gardenAdvisorService';
@@ -273,14 +269,31 @@ export default function SoilSaturationLogPanel({
     }
   };
 
-  const filteredLogs = logs.filter((l) => (filterState === 'ALL' ? true : l.drainageState === filterState));
-  const avgSaturation =
-    logs.length > 0
-      ? (logs.reduce((acc, item) => acc + (item.soilSaturationPct || 0), 0) / logs.length).toFixed(1)
-      : '0.0';
-  const peakRain48h =
-    logs.length > 0 ? Math.max(...logs.map((item) => item.rainfall48hMm || 0)).toFixed(1) : '0.0';
-  const waterloggedDaysCount = logs.filter((l) => l.waterloggingHazard).length;
+  const filteredLogs = useMemo(
+    () => (filterState === 'ALL' ? logs : logs.filter((l) => l.drainageState === filterState)),
+    [logs, filterState]
+  );
+
+  const { avgSaturation, peakRain48h, waterloggedDaysCount } = useMemo(() => {
+    if (logs.length === 0) {
+      return { avgSaturation: '0.0', peakRain48h: '0.0', waterloggedDaysCount: 0 };
+    }
+    let satSum = 0;
+    let maxRain = 0;
+    let waterlogged = 0;
+    for (const item of logs) {
+      satSum += item.soilSaturationPct || 0;
+      const rain = item.rainfall48hMm || 0;
+      if (rain > maxRain) maxRain = rain;
+      if (item.waterloggingHazard) waterlogged += 1;
+    }
+    return {
+      avgSaturation: (satSum / logs.length).toFixed(1),
+      peakRain48h: maxRain.toFixed(1),
+      waterloggedDaysCount: waterlogged
+    };
+  }, [logs]);
+
   const latestRecordedDateLabel = useMemo(() => {
     const rawTimestamp = logs[0]?.recordedAt || lastSyncedAt;
     return formatUkDateTime(rawTimestamp);

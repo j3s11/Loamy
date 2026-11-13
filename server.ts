@@ -108,20 +108,28 @@ async function startServer() {
     }
   });
 
+  const parseOptionalNumber = (raw: unknown): number | undefined => {
+    if (raw === undefined || raw === null || raw === '') return undefined;
+    const num = Number(raw);
+    return Number.isFinite(num) ? num : undefined;
+  };
+
+  const parseLocationQuery = (query: Record<string, unknown>) => ({
+    locationId: typeof query.locationId === 'string' ? query.locationId : undefined,
+    locationName: typeof query.locationName === 'string' ? query.locationName : undefined,
+    latitude: parseOptionalNumber(query.lat),
+    longitude: parseOptionalNumber(query.lon),
+    soilProfile: typeof query.soilProfile === 'string' ? query.soilProfile : undefined,
+    gardenAspect: typeof query.gardenAspect === 'string' ? query.gardenAspect : undefined,
+    rhsHardinessZone: typeof query.rhsZone === 'string' ? query.rhsZone : undefined
+  });
+
   // ==========================================================================
   // 2. HISTORICAL RAINFALL & SOIL SATURATION DATABASE ROUTES
   // ==========================================================================
   app.get('/api/soil-logs', (req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-    const locationQuery = {
-      locationId: typeof req.query.locationId === 'string' ? req.query.locationId : undefined,
-      locationName: typeof req.query.locationName === 'string' ? req.query.locationName : undefined,
-      latitude: req.query.lat !== undefined && req.query.lat !== '' ? Number(req.query.lat) : undefined,
-      longitude: req.query.lon !== undefined && req.query.lon !== '' ? Number(req.query.lon) : undefined,
-      soilProfile: typeof req.query.soilProfile === 'string' ? req.query.soilProfile : undefined,
-      gardenAspect: typeof req.query.gardenAspect === 'string' ? req.query.gardenAspect : undefined,
-      rhsHardinessZone: typeof req.query.rhsZone === 'string' ? req.query.rhsZone : undefined
-    };
+    const locationQuery = parseLocationQuery(req.query as Record<string, unknown>);
     const data = getAllSoilRainfallLogs(locationQuery);
     res.json(data);
   });
@@ -146,15 +154,17 @@ async function startServer() {
         source
       } = req.body || {};
 
-      if (rainfall24hMm === undefined || rainfall48hMm === undefined) {
-        return res.status(400).json({ error: 'rainfall24hMm and rainfall48hMm are required numeric fields.' });
+      const parsedRain24 = parseOptionalNumber(rainfall24hMm);
+      const parsedRain48 = parseOptionalNumber(rainfall48hMm);
+      if (parsedRain24 === undefined || parsedRain48 === undefined || parsedRain24 < 0 || parsedRain48 < 0) {
+        return res.status(400).json({ error: 'rainfall24hMm and rainfall48hMm are required non-negative numeric fields.' });
       }
 
       const locationQuery = {
         locationId,
         locationName,
-        latitude: latitude !== undefined && latitude !== null && latitude !== '' ? Number(latitude) : undefined,
-        longitude: longitude !== undefined && longitude !== null && longitude !== '' ? Number(longitude) : undefined,
+        latitude: parseOptionalNumber(latitude),
+        longitude: parseOptionalNumber(longitude),
         soilProfile,
         gardenAspect,
         rhsHardinessZone
@@ -163,10 +173,10 @@ async function startServer() {
       const created = insertSoilRainfallLog({
         ...locationQuery,
         locationZone,
-        rainfall24hMm: Number(rainfall24hMm),
-        rainfall48hMm: Number(rainfall48hMm),
-        soilSaturationPct: soilSaturationPct !== undefined && soilSaturationPct !== '' ? Number(soilSaturationPct) : undefined,
-        soilTemp6cmC: soilTemp6cmC !== undefined && soilTemp6cmC !== '' ? Number(soilTemp6cmC) : undefined,
+        rainfall24hMm: parsedRain24,
+        rainfall48hMm: parsedRain48,
+        soilSaturationPct: parseOptionalNumber(soilSaturationPct),
+        soilTemp6cmC: parseOptionalNumber(soilTemp6cmC),
         frostPocketActive: Boolean(frostPocketActive),
         notes,
         source
@@ -183,15 +193,7 @@ async function startServer() {
     if (!removed) {
       return res.status(404).json({ error: 'Soil log entry not found.' });
     }
-    const locationQuery = {
-      locationId: typeof req.query.locationId === 'string' ? req.query.locationId : undefined,
-      locationName: typeof req.query.locationName === 'string' ? req.query.locationName : undefined,
-      latitude: req.query.lat !== undefined && req.query.lat !== '' ? Number(req.query.lat) : undefined,
-      longitude: req.query.lon !== undefined && req.query.lon !== '' ? Number(req.query.lon) : undefined,
-      soilProfile: typeof req.query.soilProfile === 'string' ? req.query.soilProfile : undefined,
-      gardenAspect: typeof req.query.gardenAspect === 'string' ? req.query.gardenAspect : undefined,
-      rhsHardinessZone: typeof req.query.rhsZone === 'string' ? req.query.rhsZone : undefined
-    };
+    const locationQuery = parseLocationQuery(req.query as Record<string, unknown>);
     return res.json(getAllSoilRainfallLogs(locationQuery));
   });
 

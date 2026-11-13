@@ -251,7 +251,7 @@ export default function SoilSaturationD3Chart({ logs = [], locationName = '' }) 
       .attr('class', 'saturation-node')
       .attr('cx', (d) => xScale(d.date))
       .attr('cy', (d) => yScale(d.soilSaturationPct))
-      .attr('r', (d) => (selectedPoint?.id === d.id ? 6.5 : 4.5))
+      .attr('r', 4.5)
       .attr('fill', pointColor)
       .attr('stroke', '#FFFFFF')
       .attr('stroke-width', 2)
@@ -276,7 +276,15 @@ export default function SoilSaturationD3Chart({ logs = [], locationName = '' }) 
       .on('click', (_event, d) => {
         setSelectedPoint(d);
       });
-  }, [series, chartWidth, showRainOverlay, selectedPoint]);
+  }, [series, chartWidth, showRainOverlay]);
+
+  useEffect(() => {
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+    d3.select(svgEl)
+      .selectAll('.saturation-node')
+      .attr('r', (d) => (selectedPoint && d?.id === selectedPoint.id ? 6.5 : 4.5));
+  }, [selectedPoint, series, chartWidth, showRainOverlay]);
 
   return (
     <div

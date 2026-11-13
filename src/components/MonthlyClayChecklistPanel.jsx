@@ -60,13 +60,13 @@ function stripMarkdownFormatting(text) {
  *   alertsLastUpdatedLabel?: string;
  * }} props
  */
-export default function MonthlyClayChecklistPanel({
+function MonthlyClayChecklistPanel({
   plantInventory = [],
   seasonalTasks = [],
   completedSeasonalTasks = {},
   onToggleSeasonalTask,
   alertsLastUpdatedLabel = ''
-} = {}) {
+}) {
   const currentUkMonthIdx = useMemo(() => getCurrentUkMonthIndex(new Date()), []);
   const [selectedMonthIdx, setSelectedMonthIdx] = useState(currentUkMonthIdx);
   const [categoryFilter, setCategoryFilter] = useState('ALL');
@@ -700,38 +700,37 @@ export default function MonthlyClayChecklistPanel({
                 PRIORITY_TEXT_COLORS[task.priority] || 'text-slate-700 font-semibold';
 
               return (
-                <div
+                <button
                   key={task.id}
+                  type="button"
+                  aria-pressed={isCompleted}
+                  aria-label={`Mark "${task.title}" as ${isCompleted ? 'incomplete' : 'complete'}`}
                   onClick={() => handleToggleUnifiedTask(task)}
-                  className={`p-4 rounded-xl border transition cursor-pointer flex items-start gap-3 ${
+                  className={`w-full text-left p-4 rounded-xl border transition cursor-pointer flex items-start gap-3 ${
                     isCompleted
                       ? 'bg-stone-50/70 border-stone-200 opacity-60'
                       : 'bg-white border-stone-200/90 hover:border-emerald-600/60'
                   }`}
                 >
-                  <button
-                    type="button"
-                    aria-label={`Mark "${task.title}" as ${isCompleted ? 'incomplete' : 'complete'}`}
-                    className="mt-0.5 text-emerald-700 shrink-0 focus:outline-none cursor-pointer"
-                  >
+                  <span aria-hidden="true" className="mt-0.5 text-emerald-700 shrink-0">
                     {isCompleted ? (
                       <CheckCircle2 className="w-5 h-5 text-emerald-700" />
                     ) : (
-                      <Circle className="w-5 h-5 text-stone-400 hover:text-emerald-700" />
+                      <Circle className="w-5 h-5 text-stone-400" />
                     )}
-                  </button>
+                  </span>
 
-                  <div className="flex-1 min-w-0 space-y-1.5">
+                  <span className="flex-1 min-w-0 space-y-1.5 block">
                     {/* Lead directly with Title, followed by quiet unboxed metadata */}
-                    <h4
-                      className={`text-sm sm:text-[15px] font-bold leading-snug ${
+                    <span
+                      className={`block text-sm sm:text-[15px] font-bold leading-snug ${
                         isCompleted ? 'line-through text-slate-400' : 'text-slate-900'
                       }`}
                     >
                       {task.title}
-                    </h4>
+                    </span>
 
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                    <span className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                       <span className={priorityTextClass}>{task.priorityLabel}</span>
                       <span aria-hidden="true">·</span>
                       <span className="font-medium text-slate-700">{task.categoryLabel}</span>
@@ -741,23 +740,23 @@ export default function MonthlyClayChecklistPanel({
                           <span>{task.targetWindowUk}</span>
                         </>
                       )}
-                    </div>
+                    </span>
 
-                    <p className="text-xs sm:text-[13px] text-slate-600 leading-relaxed">
+                    <span className="block text-xs sm:text-[13px] text-slate-600 leading-relaxed">
                       {stripMarkdownFormatting(task.rhsGuidance)}
-                    </p>
+                    </span>
 
                     {task.claySoilTip && (
-                      <div className="pt-2 border-t border-stone-100 flex items-start gap-1.5 text-xs text-slate-600">
+                      <span className="pt-2 border-t border-stone-100 flex items-start gap-1.5 text-xs text-slate-600">
                         <Sprout className="w-3.5 h-3.5 text-emerald-700 shrink-0 mt-0.5" />
                         <span>
                           <strong className="font-semibold text-slate-800">Clay &amp; Drainage: </strong>
                           {stripMarkdownFormatting(task.claySoilTip)}
                         </span>
-                      </div>
+                      </span>
                     )}
-                  </div>
-                </div>
+                  </span>
+                </button>
               );
             })}
           </div>
@@ -766,3 +765,5 @@ export default function MonthlyClayChecklistPanel({
     </section>
   );
 }
+
+export default React.memo(MonthlyClayChecklistPanel);

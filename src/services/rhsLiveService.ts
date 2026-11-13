@@ -4,6 +4,7 @@ import {
   searchRhsPlantCatalog,
   resolvePlantGroupCategory
 } from '../utils/rhsPlantCatalog.ts';
+import { TtlCache, mapWithConcurrency } from '../utils/ttlCache.ts';
 
 export const RHS_LIVE_API_BASE = 'https://lwapp-uks-prod-psearch-01.azurewebsites.net';
 export const RHS_IMAGE_CDN_BASE = 'https://apps.rhs.org.uk/plantselectorimages/detail/';
@@ -400,33 +401,50 @@ export function normalizeLiveRhsPlant(hit: any, detail?: any): RhsCatalogPlant {
 }
 
 // ============================================================================
-// SERVER-SIDE CACHES FOR LIVE RHS API RESPONSES
+// SERVER-SIDE BOUNDED CACHES FOR LIVE RHS API RESPONSES
 // ============================================================================
-const rhsDetailCache = new Map<number, { timestamp: number; data: any }>();
-const rhsSearchCache = new Map<string, { timestamp: number; payload: any }>();
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const RHS_DETAIL_CONCURRENCY = 6;
+
+const rhsDetailCache = new TtlCache<number, any | null>({
+  ttlMs: CACHE_TTL_MS,
+  maxEntries: 300
+});
+const rhsSearchCache = new TtlCache<
+  string,
+  {
+    source: 'RHS_LIVE_API' | 'LOCAL_FALLBACK';
+    totalHits: number;
+    count: number;
+    plants: RhsCatalogPlant[];
+  }
+>({
+  ttlMs: CACHE_TTL_MS,
+  maxEntries: 120
+});
 
 export async function fetchRawRhsPlantDetail(rhsId: number): Promise<any | null> {
-  const cached = rhsDetailCache.get(rhsId);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    return cached.data;
-  }
+  if (!Number.isFinite(rhsId) || rhsId <= 0) return null;
 
-  try {
-    const res = await fetch(`${RHS_LIVE_API_BASE}/api/v1/plants/details/${rhsId}`, {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'Mozilla/5.0 (compatible; LoamyGardenCompanion/1.0)'
-      },
-      signal: AbortSignal.timeout(6000)
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    rhsDetailCache.set(rhsId, { timestamp: Date.now(), data });
-    return data;
-  } catch {
-    return null;
-  }
+  return rhsDetailCache.getOrFetch(
+    rhsId,
+    async () => {
+      try {
+        const res = await fetch(`${RHS_LIVE_API_BASE}/api/v1/plants/details/${rhsId}`, {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'Mozilla/5.0 (compatible; LoamyGardenCompanion/1.0)'
+          },
+          signal: AbortSignal.timeout(6000)
+        });
+        if (!res.ok) return null;
+        return await res.json();
+      } catch {
+        return null;
+      }
+    },
+    (data) => data !== null
+  );
 }
 
 export async function searchLiveRhsWebsite(
@@ -445,75 +463,75 @@ export async function searchLiveRhsWebsite(
   const safeOffset = Math.max(0, Number(offset) || 0);
   const cacheKey = `${cleanQuery.toLowerCase()}|${categoryFilter}|${safeLimit}|${safeOffset}`;
 
-  const cached = rhsSearchCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    return cached.payload;
-  }
+  return rhsSearchCache.getOrFetch(
+    cacheKey,
+    async () => {
+      try {
+        const plantTypes = CATEGORY_TO_RHS_PLANT_TYPES[categoryFilter] || undefined;
+        const requestBody: Record<string, any> = {
+          startFrom: safeOffset,
+          pageSize: safeLimit,
+          keywords: cleanQuery
+        };
 
-  try {
-    const plantTypes = CATEGORY_TO_RHS_PLANT_TYPES[categoryFilter] || undefined;
-    const requestBody: Record<string, any> = {
-      startFrom: safeOffset,
-      pageSize: safeLimit,
-      keywords: cleanQuery
-    };
+        if (plantTypes && plantTypes.length > 0) {
+          requestBody.plantTypes = plantTypes;
+        }
 
-    if (plantTypes && plantTypes.length > 0) {
-      requestBody.plantTypes = plantTypes;
-    }
+        // When browsing with an empty search query, show RHS Award of Garden Merit (AGM) plants
+        if (!cleanQuery) {
+          requestBody.isAgm = true;
+        }
 
-    // When browsing with an empty search query, show RHS Award of Garden Merit (AGM) plants
-    if (!cleanQuery) {
-      requestBody.isAgm = true;
-    }
+        const searchRes = await fetch(`${RHS_LIVE_API_BASE}/api/v1/plants/search/advanced`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'User-Agent': 'Mozilla/5.0 (compatible; LoamyGardenCompanion/1.0)'
+          },
+          body: JSON.stringify(requestBody),
+          signal: AbortSignal.timeout(7000)
+        });
 
-    const searchRes = await fetch(`${RHS_LIVE_API_BASE}/api/v1/plants/search/advanced`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'User-Agent': 'Mozilla/5.0 (compatible; LoamyGardenCompanion/1.0)'
-      },
-      body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(7000)
-    });
+        if (!searchRes.ok) {
+          throw new Error(`RHS live search returned HTTP ${searchRes.status}`);
+        }
 
-    if (!searchRes.ok) {
-      throw new Error(`RHS live search returned HTTP ${searchRes.status}`);
-    }
+        const searchData = await searchRes.json();
+        const rawHits: any[] = Array.isArray(searchData?.hits) ? searchData.hits : [];
+        const totalHits = Number(searchData?.totalHit ?? rawHits.length);
 
-    const searchData = await searchRes.json();
-    const rawHits: any[] = Array.isArray(searchData?.hits) ? searchData.hits : [];
-    const totalHits = Number(searchData?.totalHit ?? rawHits.length);
+        // Enrich top hits with bounded concurrency (avoids opening 24 simultaneous HTTPS sockets)
+        const enrichedPlants = await mapWithConcurrency(
+          rawHits.slice(0, safeLimit),
+          RHS_DETAIL_CONCURRENCY,
+          async (hit) => {
+            const detail = hit?.id ? await fetchRawRhsPlantDetail(Number(hit.id)) : null;
+            return normalizeLiveRhsPlant(hit, detail);
+          }
+        );
 
-    // Enrich top hits in parallel with full RHS detail profiles (cultivation, pruning, hardinessLevel, soilType)
-    const enrichedPlants = await Promise.all(
-      rawHits.slice(0, safeLimit).map(async (hit) => {
-        const detail = hit?.id ? await fetchRawRhsPlantDetail(Number(hit.id)) : null;
-        return normalizeLiveRhsPlant(hit, detail);
-      })
-    );
-
-    const payload = {
-      source: 'RHS_LIVE_API' as const,
-      totalHits,
-      count: enrichedPlants.length,
-      plants: enrichedPlants
-    };
-
-    rhsSearchCache.set(cacheKey, { timestamp: Date.now(), payload });
-    return payload;
-  } catch (err) {
-    // Graceful offline fallback to local RHS reference catalogue if network is unavailable
-    const fallbackPlants = searchRhsPlantCatalog(cleanQuery, categoryFilter).slice(
-      safeOffset,
-      safeOffset + safeLimit
-    );
-    return {
-      source: 'LOCAL_FALLBACK',
-      totalHits: fallbackPlants.length,
-      count: fallbackPlants.length,
-      plants: fallbackPlants
-    };
-  }
+        return {
+          source: 'RHS_LIVE_API' as const,
+          totalHits,
+          count: enrichedPlants.length,
+          plants: enrichedPlants
+        };
+      } catch {
+        // Graceful offline fallback to local RHS reference catalogue if network is unavailable
+        const fallbackPlants = searchRhsPlantCatalog(cleanQuery, categoryFilter).slice(
+          safeOffset,
+          safeOffset + safeLimit
+        );
+        return {
+          source: 'LOCAL_FALLBACK' as const,
+          totalHits: fallbackPlants.length,
+          count: fallbackPlants.length,
+          plants: fallbackPlants
+        };
+      }
+    },
+    (payload) => payload.source === 'RHS_LIVE_API'
+  );
 }

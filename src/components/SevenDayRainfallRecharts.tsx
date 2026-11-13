@@ -10,7 +10,7 @@ import {
   Cell,
   CartesianGrid
 } from 'recharts';
-import { CloudRain, Droplets, Info, Clock } from 'lucide-react';
+import { Droplets, Info } from 'lucide-react';
 
 export interface DailyRainfallForecastItem {
   date: string;

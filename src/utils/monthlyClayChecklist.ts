@@ -1,7 +1,6 @@
 import {
-  RHS_PLANT_CATALOG,
-  RhsCatalogPlant,
-  getPlantMonthlyCareStatus
+  getPlantMonthlyCareStatus,
+  matchRhsCatalogPlant
 } from './rhsPlantCatalog';
 
 /**
@@ -167,31 +166,6 @@ export const MONTHLY_CLAY_PROFILES: MonthClayProfile[] = [
   }
 ];
 
-const CATALOG_LOOKUP_BY_ID = new Map<string, RhsCatalogPlant>();
-const CATALOG_LOOKUP_BY_NAME = new Map<string, RhsCatalogPlant>();
-for (const cp of RHS_PLANT_CATALOG) {
-  CATALOG_LOOKUP_BY_ID.set(cp.catalogId.toLowerCase(), cp);
-  CATALOG_LOOKUP_BY_NAME.set(cp.name.toLowerCase(), cp);
-  CATALOG_LOOKUP_BY_NAME.set(cp.name.replace(/^#\d+\s+/, '').toLowerCase(), cp);
-  if (cp.commonName) {
-    CATALOG_LOOKUP_BY_NAME.set(cp.commonName.toLowerCase(), cp);
-  }
-}
-
-function matchInventoryPlant(plant: any): RhsCatalogPlant | null {
-  if (!plant) return null;
-  if (plant.id) {
-    const byId = CATALOG_LOOKUP_BY_ID.get(String(plant.id).toLowerCase());
-    if (byId) return byId;
-  }
-  const rawName = String(plant.name || '').trim();
-  const cleanName = rawName.replace(/^#\d+\s+/, '').toLowerCase();
-  return (
-    CATALOG_LOOKUP_BY_NAME.get(rawName.toLowerCase()) ||
-    CATALOG_LOOKUP_BY_NAME.get(cleanName) ||
-    null
-  );
-}
 
 /**
  * Returns the 0-indexed month (0 = Jan ... 9 = Oct ... 11 = Dec) in UK time ('Europe/London').
@@ -231,7 +205,7 @@ export function getMonthlyClayChecklist(
   }
 
   const resolvedPlants = safeInventory.map((gp) => {
-    const cat = matchInventoryPlant(gp);
+    const cat = matchRhsCatalogPlant(gp);
     const displayName =
       gp.commonName ||
       cat?.commonName ||

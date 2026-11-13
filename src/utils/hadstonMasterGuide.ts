@@ -4,10 +4,8 @@
  */
 
 import {
-  HADSTON_GARDEN_COLLECTION_32,
-  RHS_PLANT_CATALOG,
-  RhsCatalogPlant,
-  getPlantMonthlyCareStatus
+  getPlantMonthlyCareStatus,
+  matchRhsCatalogPlant
 } from './rhsPlantCatalog';
 
 export interface WeeklyTaskCategoryBlock {
@@ -455,31 +453,6 @@ export function getDynamicRiskMitigation(
   });
 }
 
-const CATALOG_LOOKUP_BY_ID = new Map<string, RhsCatalogPlant>();
-const CATALOG_LOOKUP_BY_NAME = new Map<string, RhsCatalogPlant>();
-for (const cp of RHS_PLANT_CATALOG) {
-  CATALOG_LOOKUP_BY_ID.set(cp.catalogId.toLowerCase(), cp);
-  CATALOG_LOOKUP_BY_NAME.set(cp.name.toLowerCase(), cp);
-  CATALOG_LOOKUP_BY_NAME.set(cp.name.replace(/^#\d+\s+/, '').toLowerCase(), cp);
-  if (cp.commonName) {
-    CATALOG_LOOKUP_BY_NAME.set(cp.commonName.toLowerCase(), cp);
-  }
-}
-
-function matchInventoryPlantToCatalog(plant: any): RhsCatalogPlant | null {
-  if (!plant) return null;
-  if (plant.id) {
-    const byId = CATALOG_LOOKUP_BY_ID.get(String(plant.id).toLowerCase());
-    if (byId) return byId;
-  }
-  const rawName = String(plant.name || '').trim();
-  const cleanName = rawName.replace(/^#\d+\s+/, '').toLowerCase();
-  return (
-    CATALOG_LOOKUP_BY_NAME.get(rawName.toLowerCase()) ||
-    CATALOG_LOOKUP_BY_NAME.get(cleanName) ||
-    null
-  );
-}
 
 /**
  * Generates the structured 5-Section Markdown Master Guide strictly from the user's selected plants in `plantInventory`.
@@ -510,7 +483,7 @@ export function generateHadstonMasterGuideMarkdown(
       '| :--- | :--- | :--- | :--- | :--- |'
     );
     safeInventory.forEach((gp) => {
-      const cat = matchInventoryPlantToCatalog(gp);
+      const cat = matchRhsCatalogPlant(gp);
       const name = String(gp.commonName || gp.name || 'Garden Plant').replace(/^#\d+\s+/, '').trim();
       const bot = gp.botanicalName || cat?.botanicalName || '—';
       const rhs = gp.rhsRating || cat?.rhsRating || 'H4';
@@ -544,7 +517,7 @@ export function generateHadstonMasterGuideMarkdown(
     lines.push('| Plant | Specific Feed Type & NPK Ratio | Application Window | Frequency & Method |');
     lines.push('| :--- | :--- | :--- | :--- |');
     safeInventory.forEach((gp) => {
-      const cat = matchInventoryPlantToCatalog(gp);
+      const cat = matchRhsCatalogPlant(gp);
       const name = String(gp.commonName || gp.name || 'Garden Plant').replace(/^#\d+\s+/, '').trim();
       lines.push(
         `| **${name}** | ${gp.feedTypeNpk || cat?.feedTypeNpk || 'Balanced organic feed'} | ${
@@ -562,7 +535,7 @@ export function generateHadstonMasterGuideMarkdown(
     lines.push('| Plant | Optimal Month(s) | Pruning Type | Step-by-Step Technique | What to Avoid |');
     lines.push('| :--- | :--- | :--- | :--- | :--- |');
     safeInventory.forEach((gp) => {
-      const cat = matchInventoryPlantToCatalog(gp);
+      const cat = matchRhsCatalogPlant(gp);
       const name = String(gp.commonName || gp.name || 'Garden Plant').replace(/^#\d+\s+/, '').trim();
       lines.push(
         `| **${name}** | **${gp.pruneMonthsUk || cat?.pruneMonthsUk || 'Seasonal'}** | ${
@@ -843,7 +816,7 @@ export function getDynamicFortnightlyCareSchedule(
   }
 
   const resolvedPlants = plantInventory.map((gp) => {
-    const catalogMatch = matchInventoryPlantToCatalog(gp);
+    const catalogMatch = matchRhsCatalogPlant(gp);
     const displayName =
       gp.commonName ||
       catalogMatch?.commonName ||

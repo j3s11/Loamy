@@ -1142,6 +1142,109 @@ test('Pl@ntNet resolvePlantNetPrefixes, rankPlantNetSpecies, and convertPlantNet
   assert.equal(mergedPlant.photoUrl, 'https://apps.rhs.org.uk/plantselectorimages/detail/WSY0034978_4302.jpg');
 });
 
+test('TtlCache enforces bounded LRU eviction, TTL expiry, and concurrent getOrFetch deduplication', async () => {
+  const { TtlCache, setBoundedMap, mapWithConcurrency } = await import('./ttlCache');
+
+  const cache = new TtlCache<string, number>({ ttlMs: 5000, maxEntries: 2 });
+  cache.set('a', 1);
+  cache.set('b', 2);
+  // Touch 'a' so 'b' becomes least-recently-used
+  assert.equal(cache.get('a'), 1);
+  cache.set('c', 3);
+  assert.equal(cache.size, 2);
+  assert.equal(cache.get('b'), undefined);
+  assert.equal(cache.get('a'), 1);
+  assert.equal(cache.get('c'), 3);
+
+  // Concurrent getOrFetch calls share one in-flight request
+  let fetchCalls = 0;
+  const fetcher = async () => {
+    fetchCalls += 1;
+    await new Promise((r) => setTimeout(r, 15));
+    return 42;
+  };
+  const [v1, v2, v3] = await Promise.all([
+    cache.getOrFetch('shared', fetcher),
+    cache.getOrFetch('shared', fetcher),
+    cache.getOrFetch('shared', fetcher),
+  ]);
+  assert.equal(fetchCalls, 1);
+  assert.deepEqual([v1, v2, v3], [42, 42, 42]);
+
+  // Bounded map caps size via FIFO/LRU
+  const m = new Map<string, number>();
+  setBoundedMap(m, 'k1', 1, 2);
+  setBoundedMap(m, 'k2', 2, 2);
+  setBoundedMap(m, 'k3', 3, 2);
+  assert.equal(m.size, 2);
+  assert.equal(m.has('k1'), false);
+
+  // mapWithConcurrency caps active workers and preserves input order
+  let inFlight = 0;
+  let maxSeen = 0;
+  const out = await mapWithConcurrency([10, 20, 30, 40, 50], 2, async (n) => {
+    inFlight += 1;
+    maxSeen = Math.max(maxSeen, inFlight);
+    await new Promise((r) => setTimeout(r, 8));
+    inFlight -= 1;
+    return n * 2;
+  });
+  assert.equal(maxSeen <= 2, true);
+  assert.deepEqual(out, [20, 40, 60, 80, 100]);
+});
+
+test('matchRhsCatalogPlant and findRhsCatalogBySpeciesOrGenus resolve live, persisted, id, ref, and genus records in O(1)', async () => {
+  const { matchRhsCatalogPlant, findRhsCatalogBySpeciesOrGenus } = await import('./rhsPlantCatalog');
+
+  // 1. Persisted live metadata synthesis when synthesizePersisted is enabled
+  const customPersisted = {
+    id: 'plt-custom-live',
+    name: 'Japanese Anemone',
+    rhsRating: 'H7',
+    location: 'Partial Shade Border',
+    growthStage: 'Budding / Flowering',
+    vulnerabilities: ['Powdery mildew'],
+    soilAndSun: 'Moist, humus-rich loam in partial shade',
+    pruneMonthsUk: 'November or March',
+  };
+  const synthesized = matchRhsCatalogPlant(customPersisted, { synthesizePersisted: true });
+  assert.ok(synthesized);
+  assert.equal(synthesized.soilAndSun, 'Moist, humus-rich loam in partial shade');
+  assert.equal(matchRhsCatalogPlant(customPersisted, { synthesizePersisted: false }), null);
+
+  // 2. Numeric #N ref & catalog id lookups
+  const byNumRef = matchRhsCatalogPlant({ id: 'x', name: '#3 Fuchsia' });
+  assert.ok(byNumRef);
+  assert.equal(byNumRef.photoRef, 3);
+
+  const byIdRef = matchRhsCatalogPlant({ id: 'hadston-05', name: 'Unknown Alias' });
+  assert.ok(byIdRef);
+  assert.equal(byIdRef.photoRef, 5);
+
+  // 3. Genus fallback via CATALOG_BY_GENUS
+  const roseFallback = findRhsCatalogBySpeciesOrGenus('Rosa rubiginosa', 'Rosa');
+  assert.ok(roseFallback);
+  assert.ok((roseFallback.botanicalName || '').toLowerCase().includes('rosa'));
+});
+
+test('ADVISOR_CONFIG.GARDEN_LOCATION_PRESETS reuses core UK directory entries without divergence', () => {
+  assert.equal(ADVISOR_CONFIG.GARDEN_LOCATION_PRESETS.length, 8);
+  const firstEightCoreFields = UK_GARDEN_LOCATION_DIRECTORY.slice(0, 8).map(
+    ({ id, locationName, shortLabel, latitude, longitude, regionCode, rhsHardinessZone, soilProfile, microclimateNotes }) => ({
+      id,
+      locationName,
+      shortLabel,
+      latitude,
+      longitude,
+      regionCode,
+      rhsHardinessZone,
+      soilProfile,
+      microclimateNotes,
+    })
+  );
+  assert.deepEqual(ADVISOR_CONFIG.GARDEN_LOCATION_PRESETS, firstEightCoreFields);
+});
+
 
 
 

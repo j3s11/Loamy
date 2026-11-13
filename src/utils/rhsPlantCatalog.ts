@@ -5,6 +5,7 @@
  */
 
 import { EXTENDED_RHS_CATALOG_PLANTS } from './rhsExtendedCatalogData';
+import { setBoundedMap } from './ttlCache';
 
 export interface RhsCatalogPlant {
   catalogId: string;
@@ -1192,15 +1193,33 @@ export const PLANT_CATEGORY_DEFINITIONS: PlantCategoryDefinition[] = [
   }
 ];
 
-const CATALOG_BY_REF = new Map<number, RhsCatalogPlant>();
-const CATALOG_BY_ID = new Map<string, RhsCatalogPlant>();
-const CATALOG_BY_NAME = new Map<string, RhsCatalogPlant>();
+export const CATALOG_BY_REF = new Map<number, RhsCatalogPlant>();
+export const CATALOG_BY_ID = new Map<string, RhsCatalogPlant>();
+export const CATALOG_BY_NAME = new Map<string, RhsCatalogPlant>();
+export const CATALOG_BY_GENUS = new Map<string, RhsCatalogPlant[]>();
 const CATEGORY_DEF_BY_ID = new Map<PlantGroupCategoryId, PlantCategoryDefinition>();
-const CATEGORY_SEARCH_LABEL_BY_ID = new Map<PlantGroupCategoryId, string>();
+export const CATEGORY_SEARCH_LABEL_BY_ID = new Map<PlantGroupCategoryId, string>();
 
 for (const def of PLANT_CATEGORY_DEFINITIONS) {
   CATEGORY_DEF_BY_ID.set(def.id, def);
   CATEGORY_SEARCH_LABEL_BY_ID.set(def.id, `${def.label} ${def.shortLabel}`.toLowerCase());
+}
+
+function addGenusIndexEntry(genusRaw: string | undefined, item: RhsCatalogPlant) {
+  if (!genusRaw) return;
+  const clean = genusRaw
+    .replace(/^×\s*/, '')
+    .trim()
+    .split(/\s+/)[0]
+    ?.replace(/[^A-Za-z]/g, '')
+    .toLowerCase();
+  if (!clean || clean.length < 3) return;
+  const list = CATALOG_BY_GENUS.get(clean);
+  if (list) {
+    if (!list.includes(item)) list.push(item);
+  } else {
+    CATALOG_BY_GENUS.set(clean, [item]);
+  }
 }
 
 for (const item of RHS_PLANT_CATALOG) {
@@ -1209,10 +1228,13 @@ for (const item of RHS_PLANT_CATALOG) {
   }
   CATALOG_BY_ID.set(item.catalogId.toLowerCase(), item);
   CATALOG_BY_NAME.set(item.name.toLowerCase(), item);
+  CATALOG_BY_NAME.set(item.name.replace(/^#\d+\s+/, '').toLowerCase(), item);
   CATALOG_BY_NAME.set(item.commonName.toLowerCase(), item);
   if (item.botanicalName) {
     CATALOG_BY_NAME.set(item.botanicalName.toLowerCase(), item);
+    addGenusIndexEntry(item.botanicalName, item);
   }
+  addGenusIndexEntry(item.commonName, item);
 }
 
 const FOLIAGE_REGEX =
@@ -1309,7 +1331,7 @@ export function resolvePlantGroupCategory(plant: {
     result = 'SHRUBS';
   }
 
-  RESOLVED_CATEGORY_CACHE.set(cacheKey, result);
+  setBoundedMap(RESOLVED_CATEGORY_CACHE, cacheKey, result, 600);
   return result;
 }
 
@@ -1491,7 +1513,7 @@ export function doesTextMentionUkMonth(scheduleText?: string | null, monthIndex:
   const targetMeta = UK_MONTH_METADATA[targetIdx];
 
   if (targetMeta.directRegex.test(lower)) {
-    MONTH_MENTION_CACHE.set(cacheKey, true);
+    setBoundedMap(MONTH_MENTION_CACHE, cacheKey, true, 600);
     return true;
   }
 
@@ -1506,13 +1528,13 @@ export function doesTextMentionUkMonth(scheduleText?: string | null, monthIndex:
           ? targetIdx >= startIdx && targetIdx <= endIdx
           : targetIdx >= startIdx || targetIdx <= endIdx;
       if (inRange) {
-        MONTH_MENTION_CACHE.set(cacheKey, true);
+        setBoundedMap(MONTH_MENTION_CACHE, cacheKey, true, 600);
         return true;
       }
     }
   }
 
-  MONTH_MENTION_CACHE.set(cacheKey, false);
+  setBoundedMap(MONTH_MENTION_CACHE, cacheKey, false, 600);
   return false;
 }
 
@@ -1952,17 +1974,152 @@ export const LIVE_RHS_PLANT_CACHE = new Map<string, RhsCatalogPlant>();
 export function registerLiveRhsPlant(plant: RhsCatalogPlant) {
   if (!plant) return;
   if (plant.catalogId) {
-    LIVE_RHS_PLANT_CACHE.set(plant.catalogId.toLowerCase(), plant);
+    setBoundedMap(LIVE_RHS_PLANT_CACHE, plant.catalogId.toLowerCase(), plant, 600);
   }
   if (plant.name) {
-    LIVE_RHS_PLANT_CACHE.set(plant.name.toLowerCase(), plant);
+    setBoundedMap(LIVE_RHS_PLANT_CACHE, plant.name.toLowerCase(), plant, 600);
   }
   if (plant.commonName) {
-    LIVE_RHS_PLANT_CACHE.set(plant.commonName.toLowerCase(), plant);
+    setBoundedMap(LIVE_RHS_PLANT_CACHE, plant.commonName.toLowerCase(), plant, 600);
   }
   if (plant.botanicalName) {
-    LIVE_RHS_PLANT_CACHE.set(plant.botanicalName.toLowerCase(), plant);
+    setBoundedMap(LIVE_RHS_PLANT_CACHE, plant.botanicalName.toLowerCase(), plant, 600);
   }
+}
+
+/**
+ * Shared O(1)-indexed matcher that resolves an inventory plant record to its
+ * cached Live RHS profile or reference catalog entry.
+ */
+export function matchRhsCatalogPlant(
+  plant: any,
+  options?: { synthesizePersisted?: boolean }
+): RhsCatalogPlant | null {
+  if (!plant) return null;
+
+  const rawId = plant.id ? String(plant.id) : '';
+  const lowerId = rawId.toLowerCase();
+  const rawName = String(plant.name || '').trim();
+  const lowerName = rawName.toLowerCase();
+  const strippedLowerName = lowerName.replace(/^#\d+\s+/, '');
+  const lowerCommon = plant.commonName ? String(plant.commonName).trim().toLowerCase() : '';
+  const lowerBot = plant.botanicalName ? String(plant.botanicalName).trim().toLowerCase() : '';
+
+  const fromLiveCache =
+    (lowerId && LIVE_RHS_PLANT_CACHE.get(lowerId)) ||
+    (lowerName && LIVE_RHS_PLANT_CACHE.get(lowerName)) ||
+    (strippedLowerName && LIVE_RHS_PLANT_CACHE.get(strippedLowerName)) ||
+    (lowerCommon && LIVE_RHS_PLANT_CACHE.get(lowerCommon)) ||
+    (lowerBot && LIVE_RHS_PLANT_CACHE.get(lowerBot));
+  if (fromLiveCache) return fromLiveCache;
+
+  if (
+    options?.synthesizePersisted &&
+    (plant.soilAndSun || plant.photoUrl || plant.rhsUrl || plant.pruneTechnique)
+  ) {
+    return {
+      catalogId: rawId || `plant-${strippedLowerName.replace(/[^a-z0-9]+/g, '-')}`,
+      name: rawName || plant.commonName || 'Garden Plant',
+      commonName: plant.commonName || rawName,
+      botanicalName: plant.botanicalName,
+      category: plant.category || 'SHRUBS',
+      rhsRating: plant.rhsRating || 'H4',
+      recommendedLocation: plant.location || 'Main Border',
+      defaultOctGrowthStage: plant.growthStage || 'Established',
+      vulnerabilities: Array.isArray(plant.vulnerabilities) ? plant.vulnerabilities : [],
+      photoUrl: plant.photoUrl,
+      rhsUrl: plant.rhsUrl,
+      isAgm: plant.isAgm,
+      isPollinatorFriendly: plant.isPollinatorFriendly,
+      soilAndSun: plant.soilAndSun,
+      feedWindowUk: plant.feedWindowUk,
+      feedTypeNpk: plant.feedTypeNpk,
+      feedFrequencyDosage: plant.feedFrequencyDosage,
+      pruneMonthsUk: plant.pruneMonthsUk,
+      pruneType: plant.pruneType,
+      pruneTechnique: plant.pruneTechnique,
+      pruneAvoid: plant.pruneAvoid,
+      overwinteringProtocol: plant.overwinteringProtocol,
+      idDisambiguationNote: plant.idDisambiguationNote
+    };
+  }
+
+  if (typeof plant.photoRef === 'number') {
+    const byNumRef = CATALOG_BY_REF.get(plant.photoRef);
+    if (byNumRef) return byNumRef;
+  }
+
+  const refFromName = rawName.match(/^#(\d+)\b/);
+  if (refFromName) {
+    const byRef = CATALOG_BY_REF.get(Number(refFromName[1]));
+    if (byRef) return byRef;
+  }
+
+  const refFromId = rawId.match(/hadston-(?:plt-)?0*(\d+)/i);
+  if (refFromId) {
+    const byIdRef = CATALOG_BY_REF.get(Number(refFromId[1]));
+    if (byIdRef) return byIdRef;
+  }
+
+  if (lowerId) {
+    const byId = CATALOG_BY_ID.get(lowerId);
+    if (byId) return byId;
+  }
+
+  const directHit =
+    (lowerName && CATALOG_BY_NAME.get(lowerName)) ||
+    (strippedLowerName && CATALOG_BY_NAME.get(strippedLowerName)) ||
+    (lowerCommon && CATALOG_BY_NAME.get(lowerCommon)) ||
+    (lowerBot && CATALOG_BY_NAME.get(lowerBot));
+  if (directHit) return directHit;
+
+  if (strippedLowerName) {
+    const bySubstring = RHS_PLANT_CATALOG.find(
+      (c) =>
+        strippedLowerName.includes(c.name.toLowerCase()) ||
+        strippedLowerName.includes(c.commonName.toLowerCase())
+    );
+    if (bySubstring) return bySubstring;
+  }
+
+  return null;
+}
+
+/**
+ * O(1) indexed lookup by scientific binomial or genus for Pl@ntNet -> RHS fallback enrichment.
+ */
+export function findRhsCatalogBySpeciesOrGenus(
+  sciName?: string | null,
+  genus?: string | null
+): RhsCatalogPlant | undefined {
+  const cleanSci = (sciName || '').trim().toLowerCase();
+  if (cleanSci) {
+    const exact = CATALOG_BY_NAME.get(cleanSci);
+    if (exact) return exact;
+  }
+
+  const derivedGenus = (
+    genus ||
+    cleanSci.replace(/^×\s*/, '').split(/\s+/)[0] ||
+    ''
+  )
+    .replace(/[^a-z]/gi, '')
+    .toLowerCase();
+
+  if (derivedGenus.length >= 3) {
+    const genusMatches = CATALOG_BY_GENUS.get(derivedGenus);
+    if (genusMatches && genusMatches.length > 0) {
+      if (cleanSci) {
+        const prefixHit = genusMatches.find((item) =>
+          (item.botanicalName || '').toLowerCase().startsWith(cleanSci)
+        );
+        if (prefixHit) return prefixHit;
+      }
+      return genusMatches[0];
+    }
+  }
+
+  return undefined;
 }
 
 export async function fetchLiveRhsCatalogPlants(

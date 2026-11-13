@@ -17,14 +17,14 @@ import {
   ChevronUp
 } from 'lucide-react';
 import {
-  RHS_PLANT_CATALOG,
   RhsCatalogPlant,
   PLANT_CATEGORY_DEFINITIONS,
   resolvePlantGroupCategory,
   getPlantMonthlyCareStatus,
   PlantMonthlyCareStatus,
   calculatePlantHealthScore,
-  PlantHealthAssessment
+  PlantHealthAssessment,
+  matchRhsCatalogPlant
 } from '../utils/rhsPlantCatalog';
 import {
   getDynamicRiskMitigation,
@@ -120,7 +120,7 @@ function cleanDisplayPlantName(name: string): string {
   return name.replace(/^#\d+\s+/, '').trim();
 }
 
-export default function HadstonMasterGuidePanel({
+const HadstonMasterGuidePanel = React.memo(function HadstonMasterGuidePanel({
   locationName,
   rhsHardinessZone = 'H4–H5',
   plantInventory = [],
@@ -147,28 +147,10 @@ export default function HadstonMasterGuidePanel({
 
   // Build guide entries exclusively from the plants selected in the user's My Garden Plants (plantInventory)
   const unifiedPlants = useMemo<UnifiedGuidePlantEntry[]>(() => {
-    const catalogById = new Map<string, RhsCatalogPlant>();
-    const catalogByLowerName = new Map<string, RhsCatalogPlant>();
-
-    for (const cp of RHS_PLANT_CATALOG) {
-      catalogById.set(cp.catalogId.toLowerCase(), cp);
-      catalogByLowerName.set(cp.name.toLowerCase(), cp);
-      catalogByLowerName.set(cp.commonName.toLowerCase(), cp);
-      if (cp.botanicalName) {
-        catalogByLowerName.set(cp.botanicalName.toLowerCase(), cp);
-      }
-    }
-
     const entries: UnifiedGuidePlantEntry[] = [];
 
     for (const gp of plantInventory) {
-      const cleanedLower = cleanDisplayPlantName(gp.name).toLowerCase();
-      const matchedCatalog =
-        catalogById.get(gp.id.toLowerCase()) ||
-        catalogByLowerName.get(cleanedLower) ||
-        catalogByLowerName.get(gp.name.toLowerCase()) ||
-        (gp.commonName ? catalogByLowerName.get(gp.commonName.toLowerCase()) : undefined) ||
-        (gp.botanicalName ? catalogByLowerName.get(gp.botanicalName.toLowerCase()) : undefined);
+      const matchedCatalog = matchRhsCatalogPlant(gp) ?? undefined;
 
       const careLogKey = matchedCatalog ? matchedCatalog.catalogId : gp.id;
       const careLog = plantCareLogs[gp.id] || plantCareLogs[careLogKey];
@@ -284,6 +266,11 @@ export default function HadstonMasterGuidePanel({
   const dueThisMonthCount = useMemo(
     () => unifiedPlants.filter((p) => p.inGarden && p.monthlyCare.isDueThisMonth).length,
     [unifiedPlants]
+  );
+
+  const dynamicRiskMitigations = useMemo(
+    () => getDynamicRiskMitigation(plantInventory),
+    [plantInventory]
   );
 
   const filteredEntries = useMemo(() => {
@@ -946,7 +933,7 @@ export default function HadstonMasterGuidePanel({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {getDynamicRiskMitigation(plantInventory).map((risk) => (
+              {dynamicRiskMitigations.map((risk) => (
                 <div
                   key={risk.id}
                   className="p-3.5 rounded-xl bg-white border border-stone-200/90 space-y-1.5"
@@ -973,4 +960,6 @@ export default function HadstonMasterGuidePanel({
       </div>
     </section>
   );
-}
+});
+
+export default HadstonMasterGuidePanel;

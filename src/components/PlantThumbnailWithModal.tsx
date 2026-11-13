@@ -48,18 +48,11 @@ const PlantThumbnailWithModal = React.memo(function PlantThumbnailWithModal({
 
   return (
     <>
-      <div
-        role="button"
-        tabIndex={0}
+      <button
+        type="button"
         aria-label={`View larger photo of ${plantName}`}
         onClick={handleClick}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            handleClick(e as any);
-          }
-        }}
-        className={`group relative overflow-hidden shrink-0 cursor-pointer border border-stone-200/90 shadow-2xs hover:border-emerald-600 active:scale-95 transition-transform ${dimensionClasses} ${className}`}
+        className={`group relative block overflow-hidden shrink-0 cursor-pointer border border-stone-200/90 shadow-2xs hover:border-emerald-600 active:scale-95 transition-transform p-0 ${dimensionClasses} ${className}`}
         style={{ backgroundColor: imageInfo.accentColor + '15' }}
       >
         {!imageError ? (
@@ -73,16 +66,16 @@ const PlantThumbnailWithModal = React.memo(function PlantThumbnailWithModal({
             className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-xs font-bold font-mono text-emerald-800">
+          <span className="w-full h-full flex items-center justify-center text-xs font-bold font-mono text-emerald-800">
             {photoRef ? `#${photoRef}` : plantName.slice(0, 2).toUpperCase()}
-          </div>
+          </span>
         )}
 
         {/* Hover zoom badge overlay */}
-        <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+        <span className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
           <Maximize2 className="w-3.5 h-3.5 text-white drop-shadow-md" />
-        </div>
-      </div>
+        </span>
+      </button>
 
       {/* Internal Modal when not using shared modal state */}
       {isModalOpen && (

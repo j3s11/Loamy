@@ -5,6 +5,8 @@
  * and served from verified local image assets (/public/assets/plants/).
  */
 
+import { setBoundedMap } from './ttlCache';
+
 export interface PlantImageInfo {
   name: string;
   photoUrl: string;
@@ -366,7 +368,7 @@ export function registerLivePlantImage(plant: {
 
   for (const rawKey of [plant.catalogId, plant.id, plant.name, plant.commonName, plant.botanicalName]) {
     if (rawKey && typeof rawKey === 'string') {
-      LIVE_RHS_IMAGE_MAP.set(rawKey.trim().toLowerCase(), info);
+      setBoundedMap(LIVE_RHS_IMAGE_MAP, rawKey.trim().toLowerCase(), info, 500);
     }
   }
   PLANT_IMAGE_LOOKUP_CACHE.clear();
@@ -497,7 +499,7 @@ export function getPlantImageInfo(
     accentColor: '#059669'
   };
 
-  PLANT_IMAGE_LOOKUP_CACHE.set(cacheKey, finalInfo);
+  setBoundedMap(PLANT_IMAGE_LOOKUP_CACHE, cacheKey, finalInfo, 500);
   return finalInfo;
 }
 
